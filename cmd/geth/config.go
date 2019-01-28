@@ -25,6 +25,8 @@ import (
 	"reflect"
 	"unicode"
 
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/statediff"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -149,6 +151,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		cfg.Eth.Diffing = true
+	}
 
 	return stack, cfg
 }
@@ -159,6 +164,11 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.GlobalIsSet(utils.OverrideLondonFlag.Name) {
 		cfg.Eth.OverrideLondon = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideLondonFlag.Name))
 	}
+
+	if cfg.Eth.SyncMode == downloader.LightSync {
+		return makeLightNode(ctx, stack, cfg)
+	}
+
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Configure catalyst.
@@ -171,6 +181,34 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		}
 	}
 
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		var dbParams *statediff.DBParams
+		if ctx.GlobalIsSet(utils.StateDiffDBFlag.Name) {
+			dbParams = new(statediff.DBParams)
+			dbParams.ConnectionURL = ctx.GlobalString(utils.StateDiffDBFlag.Name)
+			if ctx.GlobalIsSet(utils.StateDiffDBNodeIDFlag.Name) {
+				dbParams.ID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
+			} else {
+				utils.Fatalf("Must specify node ID for statediff DB output")
+			}
+			if ctx.GlobalIsSet(utils.StateDiffDBClientNameFlag.Name) {
+				dbParams.ClientName = ctx.GlobalString(utils.StateDiffDBClientNameFlag.Name)
+			} else {
+				utils.Fatalf("Must specify client name for statediff DB output")
+			}
+		} else {
+			if ctx.GlobalBool(utils.StateDiffWritingFlag.Name) {
+				utils.Fatalf("Must pass DB parameters if enabling statediff write loop")
+			}
+		}
+		p := statediff.ServiceParams{
+			DBParams:        dbParams,
+			EnableWriteLoop: ctx.GlobalBool(utils.StateDiffWritingFlag.Name),
+			NumWorkers:      ctx.GlobalUint(utils.StateDiffWorkersFlag.Name),
+		}
+		utils.RegisterStateDiffService(stack, eth, &cfg.Eth, p)
+	}
+
 	// Configure GraphQL if requested
 	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
 		utils.RegisterGraphQLService(stack, backend, cfg.Node)
@@ -180,6 +218,20 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
 	}
 	return stack, backend
+}
+
+func makeLightNode(ctx *cli.Context, stack *node.Node, cfg gethConfig) (*node.Node, ethapi.Backend) {
+	backend := utils.RegisterLesEthService(stack, &cfg.Eth)
+
+	// Configure GraphQL if requested
+	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
+		utils.RegisterGraphQLService(stack, backend.ApiBackend, cfg.Node)
+	}
+	// Add the Ethereum Stats daemon if requested.
+	if cfg.Ethstats.URL != "" {
+		utils.RegisterEthStatsService(stack, backend.ApiBackend, cfg.Ethstats.URL)
+	}
+	return stack, backend.ApiBackend
 }
 
 // dumpConfig is the dumpconfig command.
