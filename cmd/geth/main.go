@@ -151,6 +151,12 @@ var (
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
 		utils.MinerNotifyFullFlag,
+		utils.StateDiffFlag,
+		utils.StateDiffDBFlag,
+		utils.StateDiffDBNodeIDFlag,
+		utils.StateDiffDBClientNameFlag,
+		utils.StateDiffWritingFlag,
+		utils.StateDiffWorkersFlag,
 		configFileFlag,
 		utils.CatalystFlag,
 	}
