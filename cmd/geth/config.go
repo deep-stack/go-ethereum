@@ -27,6 +27,8 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
+	"github.com/naoina/toml"
+
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
@@ -38,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/naoina/toml"
 )
 
 var (
@@ -148,6 +149,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		cfg.Eth.Diffing = true
+	}
 
 	return stack, cfg
 }
