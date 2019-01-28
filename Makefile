@@ -4,9 +4,30 @@
 
 .PHONY: geth android ios evm all test clean
 
+BIN = $(GOPATH)/bin
+
+## Migration tool
+GOOSE = $(BIN)/goose
+$(BIN)/goose:
+	go get -u github.com/pressly/goose/cmd/goose
+
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
+
+#Database
+HOST_NAME = localhost
+PORT = 5432
+USER = vdbm
+PASSWORD = password
+
+# Set env variable
+# `PGPASSWORD` is used by `createdb` and `dropdb`
+export PGPASSWORD=$(PASSWORD)
+
+#Test
+TEST_DB = vulcanize_public
+TEST_CONNECT_STRING = postgresql://$(USER):$(PASSWORD)@$(HOST_NAME):$(PORT)/$(TEST_DB)?sslmode=disable
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -49,3 +70,11 @@ devtools:
 	env GOBIN= go install ./cmd/abigen
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
+
+.PHONY: statedifftest
+statedifftest: | $(GOOSE)
+	MODE=statediff go test -p 1 ./statediff/... -v
+
+.PHONY: statediff_filewriting_test
+statediff_filetest: | $(GOOSE)
+	MODE=statediff STATEDIFF_DB=file go test -p 1 ./statediff/... -v
