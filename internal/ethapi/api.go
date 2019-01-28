@@ -944,7 +944,12 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, vm.Config{}, 5*time.Second, s.b.RPCGasCap())
+	timeout := 5 * time.Second
+	d, ok := ctx.Deadline()
+	if ok {
+		timeout = time.Until(d)
+	}
+	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, vm.Config{}, timeout, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
