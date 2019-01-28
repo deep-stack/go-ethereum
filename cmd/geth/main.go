@@ -149,6 +149,12 @@ var (
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
+		utils.StateDiffFlag,
+		utils.StateDiffDBFlag,
+		utils.StateDiffDBNodeIDFlag,
+		utils.StateDiffDBClientNameFlag,
+		utils.StateDiffWritingFlag,
+		utils.StateDiffWorkersFlag,
 		configFileFlag,
 		utils.CatalystFlag,
 	}
