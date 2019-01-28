@@ -27,6 +27,8 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
+	"github.com/naoina/toml"
+
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
@@ -38,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/naoina/toml"
+	"github.com/ethereum/go-ethereum/statediff"
 )
 
 var (
@@ -148,6 +150,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		cfg.Eth.Diffing = true
+	}
 
 	return stack, cfg
 }
@@ -161,7 +166,35 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.GlobalIsSet(utils.OverrideTerminalTotalDifficulty.Name) {
 		cfg.Eth.OverrideTerminalTotalDifficulty = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideTerminalTotalDifficulty.Name))
 	}
-	backend, _ := utils.RegisterEthService(stack, &cfg.Eth, ctx.GlobalBool(utils.CatalystFlag.Name))
+	backend, eth := utils.RegisterEthService(stack, &cfg.Eth, ctx.GlobalBool(utils.CatalystFlag.Name))
+
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		var dbParams *statediff.DBParams
+		if ctx.GlobalIsSet(utils.StateDiffDBFlag.Name) {
+			dbParams = new(statediff.DBParams)
+			dbParams.ConnectionURL = ctx.GlobalString(utils.StateDiffDBFlag.Name)
+			if ctx.GlobalIsSet(utils.StateDiffDBNodeIDFlag.Name) {
+				dbParams.ID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
+			} else {
+				utils.Fatalf("Must specify node ID for statediff DB output")
+			}
+			if ctx.GlobalIsSet(utils.StateDiffDBClientNameFlag.Name) {
+				dbParams.ClientName = ctx.GlobalString(utils.StateDiffDBClientNameFlag.Name)
+			} else {
+				utils.Fatalf("Must specify client name for statediff DB output")
+			}
+		} else {
+			if ctx.GlobalBool(utils.StateDiffWritingFlag.Name) {
+				utils.Fatalf("Must pass DB parameters if enabling statediff write loop")
+			}
+		}
+		p := statediff.ServiceParams{
+			DBParams:        dbParams,
+			EnableWriteLoop: ctx.GlobalBool(utils.StateDiffWritingFlag.Name),
+			NumWorkers:      ctx.GlobalUint(utils.StateDiffWorkersFlag.Name),
+		}
+		utils.RegisterStateDiffService(stack, eth, &cfg.Eth, p)
+	}
 
 	// Configure GraphQL if requested
 	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {

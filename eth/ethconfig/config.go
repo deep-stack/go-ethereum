@@ -208,6 +208,10 @@ type Config struct {
 
 	// OverrideTerminalTotalDifficulty (TODO: remove after the fork)
 	OverrideTerminalTotalDifficulty *big.Int `toml:",omitempty"`
+
+	// Signify whether or not we are producing statediffs
+	// If we are, do not dereference state roots until the statediffing service is done with them
+	Diffing bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

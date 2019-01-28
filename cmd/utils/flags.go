@@ -67,6 +67,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/statediff"
+
 	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
@@ -794,6 +796,31 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+
+	StateDiffFlag = cli.BoolFlag{
+		Name:  "statediff",
+		Usage: "Enables the processing of state diffs between each block",
+	}
+	StateDiffDBFlag = cli.StringFlag{
+		Name:  "statediff.db",
+		Usage: "PostgreSQL database connection string for writing state diffs",
+	}
+	StateDiffDBNodeIDFlag = cli.StringFlag{
+		Name:  "statediff.dbnodeid",
+		Usage: "Node ID to use when writing state diffs to database",
+	}
+	StateDiffDBClientNameFlag = cli.StringFlag{
+		Name:  "statediff.dbclientname",
+		Usage: "Client name to use when writing state diffs to database",
+	}
+	StateDiffWritingFlag = cli.BoolFlag{
+		Name:  "statediff.writing",
+		Usage: "Activates progressive writing of state diffs to database as new block are synced",
+	}
+	StateDiffWorkersFlag = cli.UintFlag{
+		Name:  "statediff.workers",
+		Usage: "Number of concurrent workers to use during statediff processing (0 = 1)",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1009,6 +1036,10 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(WSPathPrefixFlag.Name) {
 		cfg.WSPathPrefix = ctx.GlobalString(WSPathPrefixFlag.Name)
+	}
+
+	if ctx.GlobalBool(StateDiffFlag.Name) {
+		cfg.WSModules = append(cfg.WSModules, "statediff")
 	}
 }
 
@@ -1743,6 +1774,15 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config, isCatalyst bool
 	return backend.APIBackend, backend
 }
 
+// RegisterLesEthService adds an Ethereum les client to the stack.
+func RegisterLesEthService(stack *node.Node, cfg *eth.Config) *les.LightEthereum {
+	backend, err := les.New(stack, cfg)
+	if err != nil {
+		Fatalf("Failed to register the Ethereum service: %v", err)
+	}
+	return backend
+}
+
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
 // the given node.
 func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
@@ -1755,6 +1795,13 @@ func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url strin
 func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, cfg node.Config) {
 	if err := graphql.New(stack, backend, cfg.GraphQLCors, cfg.GraphQLVirtualHosts); err != nil {
 		Fatalf("Failed to register the GraphQL service: %v", err)
+	}
+}
+
+// RegisterStateDiffService configures and registers a service to stream state diff data over RPC
+func RegisterStateDiffService(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params statediff.ServiceParams) {
+	if err := statediff.New(stack, ethServ, cfg, params); err != nil {
+		Fatalf("Failed to register the Statediff service: %v", err)
 	}
 }
 
