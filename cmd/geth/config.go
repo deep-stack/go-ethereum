@@ -18,13 +18,16 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"reflect"
+	"time"
 	"unicode"
 
+	"github.com/naoina/toml"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -38,7 +41,12 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/naoina/toml"
+	"github.com/ethereum/go-ethereum/statediff"
+	dumpdb "github.com/ethereum/go-ethereum/statediff/indexer/database/dump"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
 var (
@@ -148,6 +156,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		cfg.Eth.Diffing = true
+	}
 
 	return stack, cfg
 }
@@ -161,7 +172,95 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.GlobalIsSet(utils.OverrideTerminalTotalDifficulty.Name) {
 		cfg.Eth.OverrideTerminalTotalDifficulty = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideTerminalTotalDifficulty.Name))
 	}
-	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
+
+	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
+
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		var indexerConfig interfaces.Config
+		var clientName, nodeID string
+		if ctx.GlobalIsSet(utils.StateDiffWritingFlag.Name) {
+			clientName = ctx.GlobalString(utils.StateDiffDBClientNameFlag.Name)
+			if ctx.GlobalIsSet(utils.StateDiffDBNodeIDFlag.Name) {
+				nodeID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
+			} else {
+				utils.Fatalf("Must specify node ID for statediff DB output")
+			}
+
+			dbTypeStr := ctx.GlobalString(utils.StateDiffDBTypeFlag.Name)
+			dbType, err := shared.ResolveDBType(dbTypeStr)
+			if err != nil {
+				utils.Fatalf("%v", err)
+			}
+			switch dbType {
+			case shared.FILE:
+				indexerConfig = file.Config{
+					FilePath: ctx.GlobalString(utils.StateDiffFilePath.Name),
+				}
+			case shared.POSTGRES:
+				driverTypeStr := ctx.GlobalString(utils.StateDiffDBDriverTypeFlag.Name)
+				driverType, err := postgres.ResolveDriverType(driverTypeStr)
+				if err != nil {
+					utils.Fatalf("%v", err)
+				}
+				pgConfig := postgres.Config{
+					Hostname:     ctx.GlobalString(utils.StateDiffDBHostFlag.Name),
+					Port:         ctx.GlobalInt(utils.StateDiffDBPortFlag.Name),
+					DatabaseName: ctx.GlobalString(utils.StateDiffDBNameFlag.Name),
+					Username:     ctx.GlobalString(utils.StateDiffDBUserFlag.Name),
+					Password:     ctx.GlobalString(utils.StateDiffDBPasswordFlag.Name),
+					ID:           nodeID,
+					ClientName:   clientName,
+					Driver:       driverType,
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMinConns.Name) {
+					pgConfig.MinConns = ctx.GlobalInt(utils.StateDiffDBMinConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMaxConns.Name) {
+					pgConfig.MaxConns = ctx.GlobalInt(utils.StateDiffDBMaxConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMaxIdleConns.Name) {
+					pgConfig.MaxIdle = ctx.GlobalInt(utils.StateDiffDBMaxIdleConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMaxConnLifetime.Name) {
+					pgConfig.MaxConnLifetime = ctx.GlobalDuration(utils.StateDiffDBMaxConnLifetime.Name) * time.Second
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMaxConnIdleTime.Name) {
+					pgConfig.MaxConnIdleTime = ctx.GlobalDuration(utils.StateDiffDBMaxConnIdleTime.Name) * time.Second
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBConnTimeout.Name) {
+					pgConfig.ConnTimeout = ctx.GlobalDuration(utils.StateDiffDBConnTimeout.Name) * time.Second
+				}
+				indexerConfig = pgConfig
+			case shared.DUMP:
+				dumpTypeStr := ctx.GlobalString(utils.StateDiffDBDumpDst.Name)
+				dumpType, err := dumpdb.ResolveDumpType(dumpTypeStr)
+				if err != nil {
+					utils.Fatalf("%v", err)
+				}
+				switch dumpType {
+				case dumpdb.STDERR:
+					indexerConfig = dumpdb.Config{Dump: os.Stdout}
+				case dumpdb.STDOUT:
+					indexerConfig = dumpdb.Config{Dump: os.Stderr}
+				case dumpdb.DISCARD:
+					indexerConfig = dumpdb.Config{Dump: dumpdb.NewDiscardWriterCloser()}
+				default:
+					utils.Fatalf("unrecognized dump destination: %s", dumpType)
+				}
+			default:
+				utils.Fatalf("unrecognized database type: %s", dbType)
+			}
+		}
+		p := statediff.Config{
+			IndexerConfig:   indexerConfig,
+			ID:              nodeID,
+			ClientName:      clientName,
+			Context:         context.Background(),
+			EnableWriteLoop: ctx.GlobalBool(utils.StateDiffWritingFlag.Name),
+			NumWorkers:      ctx.GlobalUint(utils.StateDiffWorkersFlag.Name),
+		}
+		utils.RegisterStateDiffService(stack, eth, &cfg.Eth, p)
+	}
 
 	// Configure GraphQL if requested
 	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
@@ -172,6 +271,20 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
 	}
 	return stack, backend
+}
+
+func makeLightNode(ctx *cli.Context, stack *node.Node, cfg gethConfig) (*node.Node, ethapi.Backend) {
+	backend := utils.RegisterLesEthService(stack, &cfg.Eth)
+
+	// Configure GraphQL if requested
+	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
+		utils.RegisterGraphQLService(stack, backend.ApiBackend, cfg.Node)
+	}
+	// Add the Ethereum Stats daemon if requested.
+	if cfg.Ethstats.URL != "" {
+		utils.RegisterEthStatsService(stack, backend.ApiBackend, cfg.Ethstats.URL)
+	}
+	return stack, backend.ApiBackend
 }
 
 // dumpConfig is the dumpconfig command.
