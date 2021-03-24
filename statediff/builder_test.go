@@ -1375,11 +1375,13 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 							{
 								Path:      []byte{'\x0b'},
 								NodeType:  sdtypes.Removed,
+								LeafKey:   slot1StorageKey.Bytes(),
 								NodeValue: []byte{},
 							},
 							{
 								Path:      []byte{'\x0c'},
 								NodeType:  sdtypes.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
 								NodeValue: []byte{},
 							},
 						},
@@ -1434,11 +1436,13 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 							{
 								Path:      []byte{'\x02'},
 								NodeType:  sdtypes.Removed,
+								LeafKey:   slot0StorageKey.Bytes(),
 								NodeValue: []byte{},
 							},
 							{
 								Path:      []byte{'\x04'},
 								NodeType:  sdtypes.Removed,
+								LeafKey:   slot2StorageKey.Bytes(),
 								NodeValue: []byte{},
 							},
 						},
@@ -1474,6 +1478,7 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  sdtypes.Removed,
+						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
 					},
 					{
@@ -1571,11 +1576,13 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 							{
 								Path:      []byte{'\x0b'},
 								NodeType:  sdtypes.Removed,
+								LeafKey:   slot1StorageKey.Bytes(),
 								NodeValue: []byte{},
 							},
 							{
 								Path:      []byte{'\x0c'},
 								NodeType:  sdtypes.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
 								NodeValue: []byte{},
 							},
 						},
@@ -1618,17 +1625,19 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 							{
 								Path:      []byte{},
 								NodeType:  sdtypes.Leaf,
-								NodeValue: slot0StorageLeafRootNode,
 								LeafKey:   slot0StorageKey.Bytes(),
+								NodeValue: slot0StorageLeafRootNode,
 							},
 							{
 								Path:      []byte{'\x02'},
 								NodeType:  sdtypes.Removed,
+								LeafKey:   slot0StorageKey.Bytes(),
 								NodeValue: []byte{},
 							},
 							{
 								Path:      []byte{'\x04'},
 								NodeType:  sdtypes.Removed,
+								LeafKey:   slot2StorageKey.Bytes(),
 								NodeValue: []byte{},
 							},
 						},
@@ -1658,6 +1667,7 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  sdtypes.Removed,
+						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
 					},
 					{
@@ -1881,11 +1891,13 @@ func TestBuilderWithMovedAccount(t *testing.T) {
 					{
 						Path:      []byte{'\x01'},
 						NodeType:  sdtypes.Removed,
+						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
 					},
 					{
 						Path:      []byte{'\x00'},
 						NodeType:  sdtypes.Removed,
+						LeafKey:   testhelpers.BankLeafKey,
 						NodeValue: []byte{},
 					},
 				},
@@ -2003,11 +2015,13 @@ func TestBuilderWithMovedAccountOnlyLeafs(t *testing.T) {
 					{
 						Path:      []byte{'\x01'},
 						NodeType:  sdtypes.Removed,
+						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
 					},
 					{
 						Path:      []byte{'\x00'},
 						NodeType:  sdtypes.Removed,
+						LeafKey:   testhelpers.BankLeafKey,
 						NodeValue: []byte{},
 					},
 				},

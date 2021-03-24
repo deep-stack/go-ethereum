@@ -31,7 +31,13 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
-var DBParams postgres.ConnectionParams
+var DBParams = postgres.ConnectionParams{
+	Name:     "vulcanize_testing",
+	Password: "",
+	Port:     5432,
+	Hostname: "localhost",
+	User:     "postgres",
+}
 
 func expectContainsSubstring(t *testing.T, full string, sub string) {
 	if !strings.Contains(full, sub) {
@@ -49,7 +55,7 @@ func TestPostgresDB(t *testing.T) {
 		sqlxdb, err = sqlx.Connect("postgres", pgConfig)
 
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("failed to connect to db with connection string: %s err: %v", pgConfig, err)
 		}
 		if sqlxdb == nil {
 			t.Fatal("DB is nil")
