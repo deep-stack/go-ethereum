@@ -1,10 +1,16 @@
+# Statediff
+
 This package provides an auxiliary service that asynchronously processes state diff objects from chain events,
-either relaying the state objects to rpc subscribers or writing them directly to Postgres.
+either relaying the state objects to RPC subscribers or writing them directly to Postgres as IPLD objects.
 
-It also exposes RPC endpoints for fetching or writing to Postgres the state diff `StateObject` at a specific block height
-or for a specific block hash, this operates on historic block and state data and so is dependent on having a complete state archive.
+It also exposes RPC endpoints for fetching or writing to Postgres the state diff at a specific block height
+or for a specific block hash, this operates on historical block and state data and so depends on a complete state archive.
 
-# Statediff Object
+Data is emitted in this differential format in order to make it feasible to IPLD-ize and index the *entire* Ethereum state
+(including intermediate state and storage trie nodes). If this state diff process is ran continuously from genesis,
+the entire state at any block can be materialized from the cumulative differentials up to that point.
+
+## Statediff object
 A state diff `StateObject` is the collection of all the state and storage trie nodes that have been updated in a given block.
 For convenience, we also associate these nodes with the block number and hash, and optionally the set of code hashes and code for any
 contracts deployed in this block.
@@ -24,31 +30,31 @@ type StateObject struct {
 
 // StateNode holds the data for a single state diff node
 type StateNode struct {
-    NodeType     NodeType      `json:"nodeType"        gencodec:"required"`
-    Path         []byte        `json:"path"            gencodec:"required"`
-    NodeValue    []byte        `json:"value"           gencodec:"required"`
-    StorageNodes []StorageNode `json:"storage"`
-    LeafKey      []byte        `json:"leafKey"`
+	NodeType     NodeType      `json:"nodeType"        gencodec:"required"`
+	Path         []byte        `json:"path"            gencodec:"required"`
+	NodeValue    []byte        `json:"value"           gencodec:"required"`
+	StorageNodes []StorageNode `json:"storage"`
+	LeafKey      []byte        `json:"leafKey"`
 }
 
 // StorageNode holds the data for a single storage diff node
 type StorageNode struct {
-    NodeType  NodeType `json:"nodeType"        gencodec:"required"`
-    Path      []byte   `json:"path"            gencodec:"required"`
-    NodeValue []byte   `json:"value"           gencodec:"required"`
-    LeafKey   []byte   `json:"leafKey"`
+	NodeType  NodeType `json:"nodeType"        gencodec:"required"`
+	Path      []byte   `json:"path"            gencodec:"required"`
+	NodeValue []byte   `json:"value"           gencodec:"required"`
+	LeafKey   []byte   `json:"leafKey"`
 }
 
 // CodeAndCodeHash struct for holding codehash => code mappings
 // we can't use an actual map because they are not rlp serializable
 type CodeAndCodeHash struct {
-    Hash common.Hash `json:"codeHash"`
-    Code []byte      `json:"code"`
+	Hash common.Hash `json:"codeHash"`
+	Code []byte      `json:"code"`
 }
 ```
-These objects are packed into a `Payload` structure which additionally associates the StateObject
+These objects are packed into a `Payload` structure which can additionally associate the `StateObject`
 with the block (header, uncles, and transactions), receipts, and total difficulty.
-This `Payload` encapsulates all the block and state data at a given block, and allows us to index the entire Ethereum data structure
+This `Payload` encapsulates all of the differential data at a given block, and allows us to index the entire Ethereum data structure
 as hash-linked IPLD objects.
 
 ```go
@@ -64,11 +70,11 @@ type Payload struct {
 }
 ```
 
-# Usage
+## Usage
 This state diffing service runs as an auxiliary service concurrent to the regular syncing process of the geth node.
 
 
-## CLI configuration
+### CLI configuration
 This service introduces a CLI flag namespace `statediff`
 
 `--statediff` flag is used to turn on the service
@@ -84,7 +90,7 @@ e.g.
 ./build/bin/geth --syncmode=full --gcmode=archive --statediff --statediff.writing --statediff.db=postgres://localhost:5432/vulcanize_testing?sslmode=disable --statediff.dbnodeid={nodeId} --statediff.dbclientname={dbClientName}
 `
 
-## RPC endpoints
+### RPC endpoints
 The state diffing service exposes both a WS subscription endpoint, and a number of HTTP unary endpoints.
 
 Each of these endpoints requires a set of parameters provided by the caller
@@ -105,11 +111,11 @@ type Params struct {
 
 Using these params we can tell the service whether to include state and/or storage intermediate nodes; whether
 to include the associated block (header, uncles, and transactions); whether to include the associated receipts;
-whether to include the total difficult for this block; whether to include the set of code hashes and code for
+whether to include the total difficulty for this block; whether to include the set of code hashes and code for
 contracts deployed in this block; whether to limit the diffing process to a list of specific addresses; and/or
 whether to limit the diffing process to a list of specific storage slot keys.
 
-### Subscription endpoint
+#### Subscription endpoint
 A websocket supporting RPC endpoint is exposed for subscribing to state diff `StateObjects` that come off the head of the chain while the geth node syncs.
 
 ```go
@@ -154,7 +160,7 @@ for {
 }
 ```
 
-### Unary endpoints
+#### Unary endpoints
 The service also exposes unary RPC endpoints for retrieving the state diff `StateObject` for a specific block height/hash.
 ```go
 // StateDiffAt returns a state diff payload at the specific blockheight
@@ -167,13 +173,13 @@ StateDiffFor(ctx context.Context, blockHash common.Hash, params Params) (*Payloa
 To expose this endpoint the node needs to have the HTTP server turned on (`--http`),
 and the `statediff` namespace exposed (`--http.api=statediff`).
 
-## Direct indexing into Postgres
+### Direct indexing into Postgres
 If `--statediff.writing` is set, the service will convert the state diff `StateObject` data into IPLD objects, persist them directly to Postgres,
 and generate secondary indexes around the IPLD data.
 
 The schema and migrations for this Postgres database are provided in `statediff/db/`.
 
-### Postgres setup
+#### Postgres setup
 We use [pressly/goose](https://github.com/pressly/goose) as our Postgres migration manager.
 You can also load the Postgres schema directly into a database using
 
@@ -181,27 +187,29 @@ You can also load the Postgres schema directly into a database using
 
 This will only work on a version 12.4 Postgres database.
 
-### Schema overview 
+#### Schema overview
 Our Postgres schemas are built around a single IPFS backing Postgres IPLD blockstore table (`public.blocks`) that conforms with [go-ds-sql](https://github.com/ipfs/go-ds-sql/blob/master/postgres/postgres.go).
-All IPLD objects are stored in this table, where `key` is blockstore-prefixed multihash key for the IPLD object and `data` contains
+All IPLD objects are stored in this table, where `key` is the blockstore-prefixed multihash key for the IPLD object and `data` contains
 the bytes for the IPLD block (in the case of all Ethereum IPLDs, this is the RLP byte encoding of the Ethereum object).
 
 The IPLD objects in this table can be traversed using an IPLD DAG interface, but since this table only maps multihash to raw IPLD object
-it is not particularly useful for searching through the data or and does not allow us to look up Ethereum objects by their constituent fields
-(e.g. by block number, tx source/recipient, state/storage trie node path). To improve the accessibility of these Ethereum IPLD objects
-we generate secondary indexes on top of the raw IPLDs in other Postgres tables. This collection of tables encapsulates an Ethereum [advanced data layout](https://github.com/ipld/specs#schemas-and-advanced-data-layouts) (ADL).
+it is not particularly useful for searching through the data by looking up Ethereum objects by their constituent fields
+(e.g. by block number, tx source/recipient, state/storage trie node path). To improve the accessibility of these objects
+we create an Ethereum [advanced data layout](https://github.com/ipld/specs#schemas-and-advanced-data-layouts) (ADL) by generating secondary
+indexes on top of the raw IPLDs in other Postgres tables.
 
 These secondary index tables fall under the `eth` schema and follow an `{objectType}_cids` naming convention.
-Each of these tables provides a view into the individual fields of the underlying Ethereum IPLD object and references the raw IPLD object stored in `public.blocks` by multihash foreign key.
-Additionally, these tables link up to their parent object tables. E.g. the `storage_cids` table contains a `state_id` foreign key which references the `id`
-for the `state_cids` entry that contains the state leaf node for the contract the storage node belongs to, and in turn that `state_cids` entry contains a `header_id`
-foreign key which references the `id` of the `header_cids` entry that contains the header for the block these state and storage nodes were updated (diffed).
+These tables provide a view into individual fields of the underlying Ethereum IPLD objects, allowing lookups on these fields, and reference the raw IPLD objects stored in `public.blocks`
+by foreign keys to their multihash keys.
+Additionally, these tables maintain the hash-linked nature of Ethereum objects to one another. E.g. a storage trie node entry in the `storage_cids`
+table contains a `state_id` foreign key which references the `id` for the `state_cids` entry that contains the state leaf node for the contract that storage node belongs to,
+and in turn that `state_cids` entry contains a `header_id` foreign key which references the `id` of the `header_cids` entry that contains the header for the block these state and storage nodes were updated (diffed).
 
-## Optimization
+### Optimization
 On mainnet this process is extremely IO intensive and requires significant resources to allow it to keep up with the head of the chain.
 The state diff processing time for a specific block is dependent on the number and complexity of the state changes that occur in a block and
 the number of updated state nodes that are available in the in-memory cache vs must be retrieved from disc.
 
-If memory permits, one means of improving the efficiency of this process is to increase the trie cache allocation.
+If memory permits, one means of improving the efficiency of this process is to increase the in-memory trie cache allocation.
 This can be done by increasing the overall `--cache` allocation and/or by increasing the % of the cache allocated to trie
 usage with `--cache.trie`.
