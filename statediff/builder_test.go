@@ -32,7 +32,6 @@ import (
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
 
-// TODO: add test that filters on address
 var (
 	contractLeafKey                                        []byte
 	emptyDiffs                                             = make([]sdtypes.StateNode, 0)
