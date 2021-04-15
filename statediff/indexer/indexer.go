@@ -73,8 +73,7 @@ type BlockTx struct {
 	dbtx        *sqlx.Tx
 	BlockNumber uint64
 	headerID    int64
-	err         error
-	Close       func() error
+	Close       func(err error) error
 }
 
 // Reporting function to run as goroutine
@@ -128,11 +127,12 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	blocktx := BlockTx{
 		dbtx: tx,
 		// handle transaction commit or rollback for any return case
-		Close: func() error {
-			var err error
+		Close: func(err error) error {
 			if p := recover(); p != nil {
 				shared.Rollback(tx)
 				panic(p)
+			} else if err != nil {
+				shared.Rollback(tx)
 			} else {
 				tDiff := time.Since(t)
 				indexerMetrics.tStateStoreCodeProcessing.Update(tDiff)

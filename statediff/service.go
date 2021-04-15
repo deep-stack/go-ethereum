@@ -23,14 +23,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -626,18 +625,20 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 	// log.Info("Writing state diff", "block height", block.Number().Uint64())
 	var totalDifficulty *big.Int
 	var receipts types.Receipts
+	var err error
+	var tx *ind.BlockTx
 	if params.IncludeTD {
 		totalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
 	}
 	if params.IncludeReceipts {
 		receipts = sds.BlockChain.GetReceiptsByHash(block.Hash())
 	}
-	tx, err := sds.indexer.PushBlock(block, receipts, totalDifficulty)
+	tx, err = sds.indexer.PushBlock(block, receipts, totalDifficulty)
+	// defer handling of commit/rollback for any return case
+	defer tx.Close(err)
 	if err != nil {
 		return err
 	}
-	// defer handling of commit/rollback for any return case
-	defer tx.Close()
 	output := func(node StateNode) error {
 		return sds.indexer.PushStateNode(tx, node)
 	}
