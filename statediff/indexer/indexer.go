@@ -111,7 +111,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	// Generate the block iplds
 	headerNode, uncleNodes, txNodes, txTrieNodes, rctNodes, rctTrieNodes, err := ipld.FromBlockAndReceipts(block, receipts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating IPLD nodes from block and receipts: %v", err)
 	}
 	if len(txNodes) != len(txTrieNodes) && len(rctNodes) != len(rctTrieNodes) && len(txNodes) != len(rctNodes) {
 		return nil, fmt.Errorf("expected number of transactions (%d), transaction trie nodes (%d), receipts (%d), and receipt trie nodes (%d)to be equal", len(txNodes), len(txTrieNodes), len(rctNodes), len(rctTrieNodes))
@@ -124,7 +124,15 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	if err != nil {
 		return nil, err
 	}
-	blocktx := BlockTx{
+	defer func() {
+		if p := recover(); p != nil {
+			shared.Rollback(tx)
+			panic(p)
+		} else if err != nil {
+			shared.Rollback(tx)
+		}
+	}()
+	blockTx := &BlockTx{
 		dbtx: tx,
 		// handle transaction commit or rollback for any return case
 		Close: func(err error) error {
@@ -164,7 +172,8 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	traceMsg += fmt.Sprintf("header processing time: %s\r\n", tDiff.String())
 	t = time.Now()
 	// Publish and index uncles
-	if err := sdi.processUncles(tx, headerID, height, uncleNodes); err != nil {
+	err = sdi.processUncles(tx, headerID, height, uncleNodes)
+	if err != nil {
 		return nil, err
 	}
 	tDiff = time.Since(t)
@@ -172,7 +181,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	traceMsg += fmt.Sprintf("uncle processing time: %s\r\n", tDiff.String())
 	t = time.Now()
 	// Publish and index receipts and txs
-	if err := sdi.processReceiptsAndTxs(tx, processArgs{
+	err = sdi.processReceiptsAndTxs(tx, processArgs{
 		headerID:     headerID,
 		blockNumber:  block.Number(),
 		receipts:     receipts,
@@ -181,7 +190,8 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		rctTrieNodes: rctTrieNodes,
 		txNodes:      txNodes,
 		txTrieNodes:  txTrieNodes,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 	tDiff = time.Since(t)
@@ -189,9 +199,9 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	traceMsg += fmt.Sprintf("tx and receipt processing time: %s\r\n", tDiff.String())
 	t = time.Now()
 
-	blocktx.BlockNumber = height
-	blocktx.headerID = headerID
-	return &blocktx, err
+	blockTx.BlockNumber = height
+	blockTx.headerID = headerID
+	return blockTx, err
 }
 
 // processHeader publishes and indexes a header IPLD in Postgres
@@ -199,7 +209,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 func (sdi *StateDiffIndexer) processHeader(tx *sqlx.Tx, header *types.Header, headerNode node.Node, reward, td *big.Int) (int64, error) {
 	// publish header
 	if err := shared.PublishIPLD(tx, headerNode); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("error publishing header IPLD: %v", err)
 	}
 	// index header
 	return sdi.dbWriter.upsertHeaderCID(tx, models.HeaderModel{
@@ -223,7 +233,7 @@ func (sdi *StateDiffIndexer) processUncles(tx *sqlx.Tx, headerID int64, blockNum
 	// publish and index uncles
 	for _, uncleNode := range uncleNodes {
 		if err := shared.PublishIPLD(tx, uncleNode); err != nil {
-			return err
+			return fmt.Errorf("error publishing uncle IPLD: %v", err)
 		}
 		uncleReward := CalcUncleMinerReward(blockNumber, uncleNode.Number.Uint64())
 		uncle := models.UncleModel{
@@ -261,24 +271,24 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 		trx := args.txs[i]
 		from, err := types.Sender(signer, trx)
 		if err != nil {
-			return err
+			return fmt.Errorf("error deriving tx sender: %v", err)
 		}
 
 		// Publishing
 		// publish trie nodes, these aren't indexed directly
 		if err := shared.PublishIPLD(tx, args.txTrieNodes[i]); err != nil {
-			return err
+			return fmt.Errorf("error publishing tx trie node IPLD: %v", err)
 		}
 		if err := shared.PublishIPLD(tx, args.rctTrieNodes[i]); err != nil {
-			return err
+			return fmt.Errorf("error publishing rct trie node IPLD: %v", err)
 		}
 		// publish the txs and receipts
 		txNode, rctNode := args.txNodes[i], args.rctNodes[i]
 		if err := shared.PublishIPLD(tx, txNode); err != nil {
-			return err
+			return fmt.Errorf("error publishing tx IPLD: %v", err)
 		}
 		if err := shared.PublishIPLD(tx, rctNode); err != nil {
-			return err
+			return fmt.Errorf("error publishing rct IPLD: %v", err)
 		}
 
 		// Indexing
@@ -344,7 +354,7 @@ func (sdi *StateDiffIndexer) PushStateNode(tx *BlockTx, stateNode sdtypes.StateN
 	// publish the state node
 	stateCIDStr, err := shared.PublishRaw(tx.dbtx, ipld.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
 	if err != nil {
-		return err
+		return fmt.Errorf("error publishing state node IPLD: %v", err)
 	}
 	mhKey, _ := shared.MultihashKeyFromCIDString(stateCIDStr)
 	stateModel := models.StateNodeModel{
@@ -386,7 +396,7 @@ func (sdi *StateDiffIndexer) PushStateNode(tx *BlockTx, stateNode sdtypes.StateN
 	for _, storageNode := range stateNode.StorageNodes {
 		storageCIDStr, err := shared.PublishRaw(tx.dbtx, ipld.MEthStorageTrie, multihash.KECCAK_256, storageNode.NodeValue)
 		if err != nil {
-			return err
+			return fmt.Errorf("error publishing storage node IPLD: %v", err)
 		}
 		mhKey, _ := shared.MultihashKeyFromCIDString(storageCIDStr)
 		storageModel := models.StorageNodeModel{
@@ -409,10 +419,10 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sd
 	// codec doesn't matter since db key is multihash-based
 	mhKey, err := shared.MultihashKeyFromKeccak256(codeAndCodeHash.Hash)
 	if err != nil {
-		return err
+		return fmt.Errorf("error deriving multihash key from codehash: %v", err)
 	}
 	if err := shared.PublishDirect(tx.dbtx, mhKey, codeAndCodeHash.Code); err != nil {
-		return err
+		return fmt.Errorf("error publishing code IPLD: %v", err)
 	}
 	return nil
 }
