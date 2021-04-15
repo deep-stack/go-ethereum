@@ -634,11 +634,11 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 		receipts = sds.BlockChain.GetReceiptsByHash(block.Hash())
 	}
 	tx, err = sds.indexer.PushBlock(block, receipts, totalDifficulty)
-	// defer handling of commit/rollback for any return case
-	defer tx.Close(err)
 	if err != nil {
 		return err
 	}
+	// defer handling of commit/rollback for any return case
+	defer tx.Close(err)
 	output := func(node StateNode) error {
 		return sds.indexer.PushStateNode(tx, node)
 	}

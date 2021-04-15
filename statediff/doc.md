@@ -79,6 +79,7 @@ This service introduces a CLI flag namespace `statediff`
 
 `--statediff` flag is used to turn on the service
 `--statediff.writing` is used to tell the service to write state diff objects it produces from synced ChainEvents directly to a configured Postgres database
+`--statediff.workers` is used to set the number of concurrent workers to process state diff objects and write them into the database
 `--statediff.db` is the connection string for the Postgres database to write to
 `--statediff.dbnodeid` is the node id to use in the Postgres database
 `--statediff.dbclientname` is the client name to use in the Postgres database
