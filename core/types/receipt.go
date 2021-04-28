@@ -41,6 +41,9 @@ var (
 // This error is returned when a typed receipt is decoded, but the string is empty.
 var errEmptyTypedReceipt = errors.New("empty typed receipt bytes")
 
+// This error is returned when a typed receipt has an unsupported type
+var errRctTypeNotSupported = errors.New("receipt type not supported")
+
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
 	ReceiptStatusFailed = uint64(0)
@@ -155,6 +158,24 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, buf.Bytes())
 }
 
+// MarshalBinary returns the canonical encoding of the receipt.
+// For legacy receipts, it returns the RLP encoding. For EIP-2718 typed
+// receipts, it returns the type and payload.
+func (r *Receipt) MarshalBinary() ([]byte, error) {
+	if r.Type == LegacyTxType {
+		return rlp.EncodeToBytes(r)
+	}
+	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	buf.WriteByte(r.Type)
+	if err := rlp.Encode(buf, data); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
@@ -190,6 +211,42 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		return ErrTxTypeNotSupported
 	default:
 		return rlp.ErrExpectedList
+	}
+}
+
+// UnmarshalBinary decodes the canonical encoding of receipts.
+// It supports legacy RLP receipts and EIP2718 typed receipts.
+func (r *Receipt) UnmarshalBinary(b []byte) error {
+	if len(b) > 0 && b[0] > 0x7f {
+		// It's a legacy receipt decode the RLP
+		var data receiptRLP
+		err := rlp.DecodeBytes(b, &data)
+		if err != nil {
+			return err
+		}
+		r.Type = LegacyTxType
+		return r.setFromRLP(data)
+	}
+	// It's an EIP2718 typed transaction envelope.
+	return r.decodeTyped(b)
+}
+
+// decodeTyped decodes a typed receipt from the canonical format.
+func (r *Receipt) decodeTyped(b []byte) error {
+	if len(b) == 0 {
+		return errEmptyTypedReceipt
+	}
+	switch b[0] {
+	case AccessListTxType:
+		var data receiptRLP
+		err := rlp.DecodeBytes(b[1:], &data)
+		if err != nil {
+			return err
+		}
+		r.Type = AccessListTxType
+		return r.setFromRLP(data)
+	default:
+		return ErrTxTypeNotSupported
 	}
 }
 
