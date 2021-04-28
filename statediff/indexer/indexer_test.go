@@ -43,11 +43,11 @@ var (
 	ind       *indexer.StateDiffIndexer
 	ipfsPgGet = `SELECT data FROM public.blocks
 					WHERE key = $1`
-	tx1, tx2, tx3, rct1, rct2, rct3      []byte
-	mockBlock                            *types.Block
-	headerCID, trx1CID, trx2CID, trx3CID cid.Cid
-	rct1CID, rct2CID, rct3CID            cid.Cid
-	state1CID, state2CID, storageCID     cid.Cid
+	tx1, tx2, tx3, tx4, rct1, rct2, rct3, rct4    []byte
+	mockBlock                                     *types.Block
+	headerCID, trx1CID, trx2CID, trx3CID, trx4CID cid.Cid
+	rct1CID, rct2CID, rct3CID, rct4CID            cid.Cid
+	state1CID, state2CID, storageCID              cid.Cid
 )
 
 func expectTrue(t *testing.T, value bool) {
@@ -76,6 +76,11 @@ func init() {
 	copy(tx3, buf.Bytes())
 	buf.Reset()
 
+	txs.EncodeIndex(3, buf)
+	tx4 = make([]byte, buf.Len())
+	copy(tx4, buf.Bytes())
+	buf.Reset()
+
 	rcts.EncodeIndex(0, buf)
 	rct1 = make([]byte, buf.Len())
 	copy(rct1, buf.Bytes())
@@ -91,13 +96,20 @@ func init() {
 	copy(rct3, buf.Bytes())
 	buf.Reset()
 
+	rcts.EncodeIndex(3, buf)
+	rct4 = make([]byte, buf.Len())
+	copy(rct4, buf.Bytes())
+	buf.Reset()
+
 	headerCID, _ = ipld.RawdataToCid(ipld.MEthHeader, mocks.MockHeaderRlp, multihash.KECCAK_256)
 	trx1CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx1, multihash.KECCAK_256)
 	trx2CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx2, multihash.KECCAK_256)
 	trx3CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx3, multihash.KECCAK_256)
+	trx4CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx4, multihash.KECCAK_256)
 	rct1CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct1, multihash.KECCAK_256)
 	rct2CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct2, multihash.KECCAK_256)
 	rct3CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct3, multihash.KECCAK_256)
+	rct4CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct4, multihash.KECCAK_256)
 	state1CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.ContractLeafNode, multihash.KECCAK_256)
 	state2CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.AccountLeafNode, multihash.KECCAK_256)
 	storageCID, _ = ipld.RawdataToCid(ipld.MEthStorageTrie, mocks.StorageLeafNode, multihash.KECCAK_256)
@@ -147,13 +159,13 @@ func TestPublishAndIndexer(t *testing.T) {
 			ID     int
 		}
 		header := new(res)
-		err = db.QueryRowx(pgStr, 1).StructScan(header)
+		err = db.QueryRowx(pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
 		if err != nil {
 			t.Fatal(err)
 		}
 		shared.ExpectEqual(t, header.CID, headerCID.String())
 		shared.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
-		shared.ExpectEqual(t, header.Reward, "5000000000000011250")
+		shared.ExpectEqual(t, header.Reward, "2000000000000021250")
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
@@ -175,14 +187,15 @@ func TestPublishAndIndexer(t *testing.T) {
 		trxs := make([]string, 0)
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.id)
 				WHERE header_cids.block_number = $1`
-		err = db.Select(&trxs, pgStr, 1)
+		err = db.Select(&trxs, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
-		shared.ExpectEqual(t, len(trxs), 3)
+		shared.ExpectEqual(t, len(trxs), 4)
 		expectTrue(t, shared.ListContainsString(trxs, trx1CID.String()))
 		expectTrue(t, shared.ListContainsString(trxs, trx2CID.String()))
 		expectTrue(t, shared.ListContainsString(trxs, trx3CID.String()))
+		expectTrue(t, shared.ListContainsString(trxs, trx4CID.String()))
 		// and published
 		for _, c := range trxs {
 			dc, err := cid.Decode(c)
@@ -203,6 +216,8 @@ func TestPublishAndIndexer(t *testing.T) {
 				shared.ExpectEqual(t, data, tx2)
 			case trx3CID.String():
 				shared.ExpectEqual(t, data, tx3)
+			case trx4CID.String():
+				shared.ExpectEqual(t, data, tx4)
 			}
 		}
 	})
@@ -216,14 +231,15 @@ func TestPublishAndIndexer(t *testing.T) {
 				WHERE receipt_cids.tx_id = transaction_cids.id
 				AND transaction_cids.header_id = header_cids.id
 				AND header_cids.block_number = $1`
-		err = db.Select(&rcts, pgStr, 1)
+		err = db.Select(&rcts, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
-		shared.ExpectEqual(t, len(rcts), 3)
+		shared.ExpectEqual(t, len(rcts), 4)
 		expectTrue(t, shared.ListContainsString(rcts, rct1CID.String()))
 		expectTrue(t, shared.ListContainsString(rcts, rct2CID.String()))
 		expectTrue(t, shared.ListContainsString(rcts, rct3CID.String()))
+		expectTrue(t, shared.ListContainsString(rcts, rct4CID.String()))
 		// and published
 		for _, c := range rcts {
 			dc, err := cid.Decode(c)
@@ -265,6 +281,15 @@ func TestPublishAndIndexer(t *testing.T) {
 					t.Fatal(err)
 				}
 				shared.ExpectEqual(t, postState, mocks.ExpectedPostState2)
+			case rct4CID.String():
+				shared.ExpectEqual(t, data, rct4)
+				var postState string
+				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE cid = $1`
+				err = db.Get(&postState, pgStr, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				shared.ExpectEqual(t, postState, mocks.ExpectedPostState3)
 			}
 		}
 	})
@@ -277,7 +302,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		pgStr := `SELECT state_cids.id, state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.id)
 				WHERE header_cids.block_number = $1`
-		err = db.Select(&stateNodes, pgStr, 1)
+		err = db.Select(&stateNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -341,7 +366,7 @@ func TestPublishAndIndexer(t *testing.T) {
 				WHERE storage_cids.state_id = state_cids.id
 				AND state_cids.header_id = header_cids.id
 				AND header_cids.block_number = $1`
-		err = db.Select(&storageNodes, pgStr, 1)
+		err = db.Select(&storageNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
