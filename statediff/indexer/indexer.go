@@ -324,7 +324,10 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 			Data:   trx.Data(),
 			CID:    txNode.Cid().String(),
 			MhKey:  shared.MultihashKeyFromCID(txNode.Cid()),
-			Type:   trx.Type(),
+		}
+		txType := trx.Type()
+		if txType != types.LegacyTxType {
+			txModel.Type = &txType
 		}
 		txID, err := sdi.dbWriter.upsertTransactionCID(tx, txModel, args.headerID)
 		if err != nil {

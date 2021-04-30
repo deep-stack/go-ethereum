@@ -60,7 +60,7 @@ type TxModel struct {
 	Dst      string `db:"dst"`
 	Src      string `db:"src"`
 	Data     []byte `db:"tx_data"`
-	Type     uint8  `db:"tx_type"`
+	Type     *uint8 `db:"tx_type"`
 }
 
 // AccessListEntryModel is the db model for eth.access_list_entry

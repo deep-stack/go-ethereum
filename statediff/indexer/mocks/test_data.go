@@ -22,6 +22,8 @@ import (
 	"crypto/rand"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+
 	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -74,12 +76,32 @@ var (
 		Data:    []byte{},
 	}
 
+	// access list entries
+	AccessListEntry1 = types.AccessTuple{
+		Address: Address,
+	}
+	AccessListEntry2 = types.AccessTuple{
+		Address:     AnotherAddress,
+		StorageKeys: []common.Hash{common.BytesToHash(StorageLeafKey), common.BytesToHash(MockStorageLeafKey)},
+	}
+	AccessListEntry1Model = models.AccessListElementModel{
+		Index:   0,
+		Address: Address.Hex(),
+	}
+	AccessListEntry2Model = models.AccessListElementModel{
+		Index:       1,
+		Address:     AnotherAddress.Hex(),
+		StorageKeys: []string{common.BytesToHash(StorageLeafKey).Hex(), common.BytesToHash(MockStorageLeafKey).Hex()},
+	}
+
 	// statediff data
-	storageLocation    = common.HexToHash("0")
-	StorageLeafKey     = crypto.Keccak256Hash(storageLocation[:]).Bytes()
-	StorageValue       = common.Hex2Bytes("01")
-	StoragePartialPath = common.Hex2Bytes("20290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
-	StorageLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	storageLocation     = common.HexToHash("0")
+	StorageLeafKey      = crypto.Keccak256Hash(storageLocation[:]).Bytes()
+	mockStorageLocation = common.HexToHash("1")
+	MockStorageLeafKey  = crypto.Keccak256Hash(mockStorageLocation[:]).Bytes()
+	StorageValue        = common.Hex2Bytes("01")
+	StoragePartialPath  = common.Hex2Bytes("20290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
+	StorageLeafNode, _  = rlp.EncodeToBytes([]interface{}{
 		StoragePartialPath,
 		StorageValue,
 	})
@@ -172,9 +194,8 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 		Value:    big.NewInt(1000),
 		Data:     []byte{},
 		AccessList: types.AccessList{
-			types.AccessTuple{
-				Address: AnotherAddress,
-			},
+			AccessListEntry1,
+			AccessListEntry2,
 		},
 	})
 

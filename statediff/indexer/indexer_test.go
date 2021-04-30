@@ -212,12 +212,68 @@ func TestPublishAndIndexer(t *testing.T) {
 			switch c {
 			case trx1CID.String():
 				shared.ExpectEqual(t, data, tx1)
+				var txType *uint8
+				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
+				err = db.Get(&txType, pgStr, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if txType != nil {
+					t.Fatalf("expected nil tx_type, got %d", *txType)
+				}
 			case trx2CID.String():
 				shared.ExpectEqual(t, data, tx2)
+				var txType *uint8
+				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
+				err = db.Get(&txType, pgStr, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if txType != nil {
+					t.Fatalf("expected nil tx_type, got %d", *txType)
+				}
 			case trx3CID.String():
 				shared.ExpectEqual(t, data, tx3)
+				var txType *uint8
+				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
+				err = db.Get(&txType, pgStr, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if txType != nil {
+					t.Fatalf("expected nil tx_type, got %d", *txType)
+				}
 			case trx4CID.String():
 				shared.ExpectEqual(t, data, tx4)
+				var txType *uint8
+				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
+				err = db.Get(&txType, pgStr, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if *txType != types.AccessListTxType {
+					t.Fatalf("expected AccessListTxType (1), got %d", *txType)
+				}
+				accessListElementModels := make([]models.AccessListElementModel, 0)
+				pgStr = `SELECT access_list_element.* FROM eth.access_list_element INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.id) WHERE cid = $1 ORDER BY access_list_element.index ASC`
+				err = db.Select(&accessListElementModels, pgStr, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(accessListElementModels) != 2 {
+					t.Fatalf("expected two access list entries, got %d", len(accessListElementModels))
+				}
+				model1 := models.AccessListElementModel{
+					Index:   accessListElementModels[0].Index,
+					Address: accessListElementModels[0].Address,
+				}
+				model2 := models.AccessListElementModel{
+					Index:       accessListElementModels[1].Index,
+					Address:     accessListElementModels[1].Address,
+					StorageKeys: accessListElementModels[1].StorageKeys,
+				}
+				shared.ExpectEqual(t, model1, mocks.AccessListEntry1Model)
+				shared.ExpectEqual(t, model2, mocks.AccessListEntry2Model)
 			}
 		}
 	})
