@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -186,9 +187,30 @@ func (t *EthTx) Stat() (*node.NodeStat, error) {
 	return &node.NodeStat{}, nil
 }
 
-// Size will go away. It is here to comply with the interface.
+// Size will go away. It is here to comply with the interface. It returns the byte size for the transaction
 func (t *EthTx) Size() (uint64, error) {
-	return strconv.ParseUint(t.Transaction.Size().String(), 10, 64)
+	spl := strings.Split(t.Transaction.Size().String(), " ")
+	size, units := spl[0], spl[1]
+	floatSize, err := strconv.ParseFloat(size, 64)
+	if err != nil {
+		return 0, err
+	}
+	var byteSize uint64
+	switch units {
+	case "B":
+		byteSize = uint64(floatSize)
+	case "KB":
+		byteSize = uint64(floatSize * 1000)
+	case "MB":
+		byteSize = uint64(floatSize * 1000000)
+	case "GB":
+		byteSize = uint64(floatSize * 1000000000)
+	case "TB":
+		byteSize = uint64(floatSize * 1000000000000)
+	default:
+		return 0, fmt.Errorf("unreconginized units %s", units)
+	}
+	return byteSize, nil
 }
 
 /*

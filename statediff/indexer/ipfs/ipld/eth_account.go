@@ -141,7 +141,7 @@ func (as *EthAccountSnapshot) ResolveLink(p []string) (*node.Link, []string, err
 
 // Copy will go away. It is here to comply with the interface.
 func (as *EthAccountSnapshot) Copy() node.Node {
-	panic("dont use this yet")
+	panic("implement me")
 }
 
 // Links is a helper function that returns all links within this object

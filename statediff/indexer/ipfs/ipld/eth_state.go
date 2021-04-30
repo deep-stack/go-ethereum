@@ -18,6 +18,8 @@ package ipld
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 
 	"github.com/ipfs/go-cid"
 	node "github.com/ipfs/go-ipld-format"
@@ -38,6 +40,16 @@ var _ node.Node = (*EthStateTrie)(nil)
 /*
   INPUT
 */
+
+// FromStateTrieRLPFile takes the RLP representation of an ethereum
+// state trie node to return it as an IPLD node for further processing.
+func FromStateTrieRLPFile(r io.Reader) (*EthStateTrie, error) {
+	raw, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return FromStateTrieRLP(raw)
+}
 
 // FromStateTrieRLP takes the RLP representation of an ethereum
 // state trie node to return it as an IPLD node for further processing.

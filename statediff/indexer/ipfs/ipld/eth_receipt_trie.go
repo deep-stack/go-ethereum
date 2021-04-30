@@ -125,13 +125,13 @@ func newRctTrie() *rctTrie {
 // getNodes invokes the localTrie, which computes the root hash of the
 // transaction trie and returns its database keys, to return a slice
 // of EthRctTrie nodes.
-func (rt *rctTrie) getNodes() []*EthRctTrie {
-	keys := rt.getKeys()
-	var out []*EthRctTrie
-	it := rt.trie.NodeIterator([]byte{})
-	for it.Next(true) {
-
+func (rt *rctTrie) getNodes() ([]*EthRctTrie, error) {
+	keys, err := rt.getKeys()
+	if err != nil {
+		return nil, err
 	}
+	var out []*EthRctTrie
+
 	for _, k := range keys {
 		rawdata, err := rt.db.Get(k)
 		if err != nil {
@@ -139,7 +139,7 @@ func (rt *rctTrie) getNodes() []*EthRctTrie {
 		}
 		c, err := RawdataToCid(MEthTxReceiptTrie, rawdata, multihash.KECCAK_256)
 		if err != nil {
-			return nil
+			return nil, err
 		}
 		tn := &TrieNode{
 			cid:     c,
@@ -148,5 +148,5 @@ func (rt *rctTrie) getNodes() []*EthRctTrie {
 		out = append(out, &EthRctTrie{TrieNode: tn})
 	}
 
-	return out
+	return out, nil
 }

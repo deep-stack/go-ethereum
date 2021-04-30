@@ -125,13 +125,13 @@ func newTxTrie() *txTrie {
 // getNodes invokes the localTrie, which computes the root hash of the
 // transaction trie and returns its database keys, to return a slice
 // of EthTxTrie nodes.
-func (tt *txTrie) getNodes() []*EthTxTrie {
-	keys := tt.getKeys()
-	var out []*EthTxTrie
-	it := tt.trie.NodeIterator([]byte{})
-	for it.Next(true) {
-
+func (tt *txTrie) getNodes() ([]*EthTxTrie, error) {
+	keys, err := tt.getKeys()
+	if err != nil {
+		return nil, err
 	}
+	var out []*EthTxTrie
+
 	for _, k := range keys {
 		rawdata, err := tt.db.Get(k)
 		if err != nil {
@@ -139,7 +139,7 @@ func (tt *txTrie) getNodes() []*EthTxTrie {
 		}
 		c, err := RawdataToCid(MEthTxTrie, rawdata, multihash.KECCAK_256)
 		if err != nil {
-			return nil
+			return nil, err
 		}
 		tn := &TrieNode{
 			cid:     c,
@@ -148,5 +148,5 @@ func (tt *txTrie) getNodes() []*EthTxTrie {
 		out = append(out, &EthTxTrie{TrieNode: tn})
 	}
 
-	return out
+	return out, nil
 }

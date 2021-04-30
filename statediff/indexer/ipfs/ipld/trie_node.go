@@ -208,7 +208,7 @@ func (t *TrieNode) Tree(p string, depth int) []string {
 		return []string{val}
 	case branch:
 		for i, elem := range t.elements {
-			if _, ok := elem.(*cid.Cid); ok {
+			if _, ok := elem.(cid.Cid); ok {
 				out = append(out, fmt.Sprintf("%x", i))
 			}
 		}
@@ -237,7 +237,7 @@ func (t *TrieNode) ResolveLink(p []string) (*node.Link, []string, error) {
 
 // Copy will go away. It is here to comply with the interface.
 func (t *TrieNode) Copy() node.Node {
-	panic("dont use this yet")
+	panic("implement me")
 }
 
 // Links is a helper function that returns all links within this object

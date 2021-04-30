@@ -17,13 +17,16 @@
 package ipld
 
 import (
+	"bytes"
+
+	"github.com/ipfs/go-cid"
+	mh "github.com/multiformats/go-multihash"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ipfs/go-cid"
-	mh "github.com/multiformats/go-multihash"
 )
 
 // IPLD Codecs for Ethereum
@@ -40,6 +43,10 @@ const (
 	MEthStateTrie       = 0x96
 	MEthAccountSnapshot = 0x97
 	MEthStorageTrie     = 0x98
+)
+
+var (
+	nullHashBytes = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
 )
 
 // RawdataToCid takes the desired codec and a slice of bytes
@@ -82,9 +89,9 @@ func commonHashToCid(codec uint64, h common.Hash) cid.Cid {
 // localTrie wraps a go-ethereum trie and its underlying memory db.
 // It contributes to the creation of the trie node objects.
 type localTrie struct {
-	keys [][]byte
-	db   ethdb.Database
-	trie *trie.Trie
+	db     ethdb.Database
+	trieDB *trie.Database
+	trie   *trie.Trie
 }
 
 // newLocalTrie initializes and returns a localTrie object
@@ -92,7 +99,8 @@ func newLocalTrie() *localTrie {
 	var err error
 	lt := &localTrie{}
 	lt.db = rawdb.NewMemoryDatabase()
-	lt.trie, err = trie.New(common.Hash{}, trie.NewDatabase(lt.db))
+	lt.trieDB = trie.NewDatabase(lt.db)
+	lt.trie, err = trie.New(common.Hash{}, lt.trieDB)
 	if err != nil {
 		panic(err)
 	}
@@ -101,16 +109,12 @@ func newLocalTrie() *localTrie {
 
 // add receives the index of an object and its rawdata value
 // and includes it into the localTrie
-func (lt *localTrie) add(idx int, rawdata []byte) {
+func (lt *localTrie) add(idx int, rawdata []byte) error {
 	key, err := rlp.EncodeToBytes(uint(idx))
 	if err != nil {
 		panic(err)
 	}
-	lt.keys = append(lt.keys, key)
-	if err := lt.db.Put(key, rawdata); err != nil {
-		panic(err)
-	}
-	lt.trie.Update(key, rawdata)
+	return lt.trie.TryUpdate(key, rawdata)
 }
 
 // rootHash returns the computed trie root.
@@ -121,6 +125,35 @@ func (lt *localTrie) rootHash() []byte {
 
 // getKeys returns the stored keys of the memory database
 // of the localTrie for further processing.
-func (lt *localTrie) getKeys() [][]byte {
-	return lt.keys
+func (lt *localTrie) getKeys() ([][]byte, error) {
+	// commit trie nodes to trieDB
+	var err error
+	_, err = lt.trie.Commit(nil)
+	if err != nil {
+		return nil, err
+	}
+	// commit trieDB to the underlying ethdb.Database
+	if err := lt.trieDB.Commit(lt.trie.Hash(), false, nil); err != nil {
+		return nil, err
+	}
+	// collect all of the node keys
+	it := lt.trie.NodeIterator([]byte{})
+	keyBytes := make([][]byte, 0)
+	for it.Next(true) {
+		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
+			continue
+		}
+		keyBytes = append(keyBytes, it.Hash().Bytes())
+	}
+	return keyBytes, nil
+}
+
+// getRLP encodes the given object to RLP returning its bytes.
+func getRLP(object interface{}) []byte {
+	buf := new(bytes.Buffer)
+	if err := rlp.Encode(buf, object); err != nil {
+		panic(err)
+	}
+
+	return buf.Bytes()
 }
