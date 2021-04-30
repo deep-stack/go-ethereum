@@ -60,6 +60,16 @@ type TxModel struct {
 	Dst      string `db:"dst"`
 	Src      string `db:"src"`
 	Data     []byte `db:"tx_data"`
+	Type     uint8  `db:"tx_type"`
+}
+
+// AccessListEntryModel is the db model for eth.access_list_entry
+type AccessListElementModel struct {
+	ID          int64          `db:"id"`
+	Index       int64          `db:"index"`
+	TxID        int64          `db:"tx_id"`
+	Address     string         `db:"address"`
+	StorageKeys pq.StringArray `db:"storage_keys"`
 }
 
 // ReceiptModel is the db model for eth.receipt_cids
