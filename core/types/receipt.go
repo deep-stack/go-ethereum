@@ -41,9 +41,6 @@ var (
 // This error is returned when a typed receipt is decoded, but the string is empty.
 var errEmptyTypedReceipt = errors.New("empty typed receipt bytes")
 
-// This error is returned when a typed receipt has an unsupported type
-var errRctTypeNotSupported = errors.New("receipt type not supported")
-
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
 	ReceiptStatusFailed = uint64(0)
