@@ -23,6 +23,8 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/lib/pq"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -163,7 +165,8 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	t = time.Now()
 
 	// Publish and index header, collect headerID
-	headerID, err := sdi.processHeader(tx, block.Header(), headerNode, reward, totalDifficulty)
+	var headerID int64
+	headerID, err = sdi.processHeader(tx, block.Header(), headerNode, reward, totalDifficulty)
 	if err != nil {
 		return nil, err
 	}
@@ -322,9 +325,37 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 			CID:    txNode.Cid().String(),
 			MhKey:  shared.MultihashKeyFromCID(txNode.Cid()),
 		}
+		txType := trx.Type()
+		if txType != types.LegacyTxType {
+			txModel.Type = &txType
+		}
 		txID, err := sdi.dbWriter.upsertTransactionCID(tx, txModel, args.headerID)
 		if err != nil {
 			return err
+		}
+
+		// AccessListEntryModel is the db model for eth.access_list_entry
+		type AccessListElementModel struct {
+			ID          int64          `db:"id"`
+			Index       int64          `db:"index"`
+			TxID        int64          `db:"tx_id"`
+			Address     string         `db:"address"`
+			StorageKeys pq.StringArray `db:"storage_keys"`
+		}
+		// index access list if this is one
+		for j, accessListElement := range trx.AccessList() {
+			storageKeys := make([]string, len(accessListElement.StorageKeys))
+			for k, storageKey := range accessListElement.StorageKeys {
+				storageKeys[k] = storageKey.Hex()
+			}
+			accessListElementModel := models.AccessListElementModel{
+				Index:       int64(j),
+				Address:     accessListElement.Address.Hex(),
+				StorageKeys: storageKeys,
+			}
+			if err := sdi.dbWriter.upsertAccessListElement(tx, accessListElementModel, txID); err != nil {
+				return err
+			}
 		}
 		// index the receipt
 		rctModel := models.ReceiptModel{

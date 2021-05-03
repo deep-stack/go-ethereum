@@ -20,10 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ipfs/go-cid"
 	node "github.com/ipfs/go-ipld-format"
 	mh "github.com/multiformats/go-multihash"
@@ -46,18 +46,18 @@ var _ node.Node = (*EthTx)(nil)
 
 // NewEthTx converts a *types.Transaction to an EthTx IPLD node
 func NewEthTx(tx *types.Transaction) (*EthTx, error) {
-	txRLP, err := rlp.EncodeToBytes(tx)
+	txRaw, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
-	c, err := RawdataToCid(MEthTx, txRLP, mh.KECCAK_256)
+	c, err := RawdataToCid(MEthTx, txRaw, mh.KECCAK_256)
 	if err != nil {
 		return nil, err
 	}
 	return &EthTx{
 		Transaction: tx,
 		cid:         c,
-		rawdata:     txRLP,
+		rawdata:     txRaw,
 	}, nil
 }
 
@@ -68,8 +68,8 @@ func NewEthTx(tx *types.Transaction) (*EthTx, error) {
 // DecodeEthTx takes a cid and its raw binary data
 // from IPFS and returns an EthTx object for further processing.
 func DecodeEthTx(c cid.Cid, b []byte) (*EthTx, error) {
-	var t *types.Transaction
-	if err := rlp.DecodeBytes(b, t); err != nil {
+	t := new(types.Transaction)
+	if err := t.UnmarshalBinary(b); err != nil {
 		return nil, err
 	}
 	return &EthTx{
@@ -187,9 +187,30 @@ func (t *EthTx) Stat() (*node.NodeStat, error) {
 	return &node.NodeStat{}, nil
 }
 
-// Size will go away. It is here to comply with the interface.
+// Size will go away. It is here to comply with the interface. It returns the byte size for the transaction
 func (t *EthTx) Size() (uint64, error) {
-	return strconv.ParseUint(t.Transaction.Size().String(), 10, 64)
+	spl := strings.Split(t.Transaction.Size().String(), " ")
+	size, units := spl[0], spl[1]
+	floatSize, err := strconv.ParseFloat(size, 64)
+	if err != nil {
+		return 0, err
+	}
+	var byteSize uint64
+	switch units {
+	case "B":
+		byteSize = uint64(floatSize)
+	case "KB":
+		byteSize = uint64(floatSize * 1000)
+	case "MB":
+		byteSize = uint64(floatSize * 1000000)
+	case "GB":
+		byteSize = uint64(floatSize * 1000000000)
+	case "TB":
+		byteSize = uint64(floatSize * 1000000000000)
+	default:
+		return 0, fmt.Errorf("unreconginized units %s", units)
+	}
+	return byteSize, nil
 }
 
 /*

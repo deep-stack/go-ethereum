@@ -22,6 +22,8 @@ import (
 	"crypto/rand"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+
 	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,7 +40,7 @@ import (
 // Test variables
 var (
 	// block data
-	BlockNumber = big.NewInt(1)
+	BlockNumber = big.NewInt(12244001)
 	MockHeader  = types.Header{
 		Time:        0,
 		Number:      new(big.Int).Set(BlockNumber),
@@ -62,6 +64,7 @@ var (
 	ExpectedPostStatus                         uint64 = 1
 	ExpectedPostState1                                = common.Bytes2Hex(common.HexToHash("0x1").Bytes())
 	ExpectedPostState2                                = common.Bytes2Hex(common.HexToHash("0x2").Bytes())
+	ExpectedPostState3                                = common.Bytes2Hex(common.HexToHash("0x3").Bytes())
 	MockLog1                                          = &types.Log{
 		Address: Address,
 		Topics:  []common.Hash{mockTopic11, mockTopic12},
@@ -73,12 +76,32 @@ var (
 		Data:    []byte{},
 	}
 
+	// access list entries
+	AccessListEntry1 = types.AccessTuple{
+		Address: Address,
+	}
+	AccessListEntry2 = types.AccessTuple{
+		Address:     AnotherAddress,
+		StorageKeys: []common.Hash{common.BytesToHash(StorageLeafKey), common.BytesToHash(MockStorageLeafKey)},
+	}
+	AccessListEntry1Model = models.AccessListElementModel{
+		Index:   0,
+		Address: Address.Hex(),
+	}
+	AccessListEntry2Model = models.AccessListElementModel{
+		Index:       1,
+		Address:     AnotherAddress.Hex(),
+		StorageKeys: []string{common.BytesToHash(StorageLeafKey).Hex(), common.BytesToHash(MockStorageLeafKey).Hex()},
+	}
+
 	// statediff data
-	storageLocation    = common.HexToHash("0")
-	StorageLeafKey     = crypto.Keccak256Hash(storageLocation[:]).Bytes()
-	StorageValue       = common.Hex2Bytes("01")
-	StoragePartialPath = common.Hex2Bytes("20290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
-	StorageLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	storageLocation     = common.HexToHash("0")
+	StorageLeafKey      = crypto.Keccak256Hash(storageLocation[:]).Bytes()
+	mockStorageLocation = common.HexToHash("1")
+	MockStorageLeafKey  = crypto.Keccak256Hash(mockStorageLocation[:]).Bytes()
+	StorageValue        = common.Hex2Bytes("01")
+	StoragePartialPath  = common.Hex2Bytes("20290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
+	StorageLeafNode, _  = rlp.EncodeToBytes([]interface{}{
 		StoragePartialPath,
 		StorageValue,
 	})
@@ -140,13 +163,43 @@ var (
 	}
 )
 
+/*
+// AccessListTx is the data of EIP-2930 access list transactions.
+type AccessListTx struct {
+	ChainID    *big.Int        // destination chain ID
+	Nonce      uint64          // nonce of sender account
+	GasPrice   *big.Int        // wei per gas
+	Gas        uint64          // gas limit
+	To         *common.Address `rlp:"nil"` // nil means contract creation
+	Value      *big.Int        // wei amount
+	Data       []byte          // contract invocation input data
+	AccessList AccessList      // EIP-2930 access list
+	V, R, S    *big.Int        // signature values
+}
+
+*/
+
 // createTransactionsAndReceipts is a helper function to generate signed mock transactions and mock receipts with mock logs
 func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common.Address) {
 	// make transactions
 	trx1 := types.NewTransaction(0, Address, big.NewInt(1000), 50, big.NewInt(100), []byte{})
 	trx2 := types.NewTransaction(1, AnotherAddress, big.NewInt(2000), 100, big.NewInt(200), []byte{})
 	trx3 := types.NewContractCreation(2, big.NewInt(1500), 75, big.NewInt(150), MockContractByteCode)
-	transactionSigner := types.MakeSigner(params.MainnetChainConfig, new(big.Int).Set(BlockNumber))
+	trx4 := types.NewTx(&types.AccessListTx{
+		ChainID:  big.NewInt(1),
+		Nonce:    0,
+		GasPrice: big.NewInt(100),
+		Gas:      50,
+		To:       &AnotherAddress,
+		Value:    big.NewInt(1000),
+		Data:     []byte{},
+		AccessList: types.AccessList{
+			AccessListEntry1,
+			AccessListEntry2,
+		},
+	})
+
+	transactionSigner := types.NewEIP2930Signer(params.MainnetChainConfig.ChainID)
 	mockCurve := elliptic.P256()
 	mockPrvKey, err := ecdsa.GenerateKey(mockCurve, rand.Reader)
 	if err != nil {
@@ -164,7 +217,12 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 	if err != nil {
 		log.Crit(err.Error())
 	}
-	SenderAddr, err := types.Sender(transactionSigner, signedTrx1) // same for both trx
+	signedTrx4, err := types.SignTx(trx4, transactionSigner, mockPrvKey)
+	if err != nil {
+		println(err.Error())
+		log.Crit(err.Error())
+	}
+	senderAddr, err := types.Sender(transactionSigner, signedTrx1) // same for both trx
 	if err != nil {
 		log.Crit(err.Error())
 	}
@@ -178,6 +236,14 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 	mockReceipt3 := types.NewReceipt(common.HexToHash("0x2").Bytes(), false, 75)
 	mockReceipt3.Logs = []*types.Log{}
 	mockReceipt3.TxHash = signedTrx3.Hash()
+	mockReceipt4 := &types.Receipt{
+		Type:              types.AccessListTxType,
+		PostState:         common.HexToHash("0x3").Bytes(),
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 175,
+		Logs:              []*types.Log{},
+		TxHash:            signedTrx4.Hash(),
+	}
 
-	return types.Transactions{signedTrx1, signedTrx2, signedTrx3}, types.Receipts{mockReceipt1, mockReceipt2, mockReceipt3}, SenderAddr
+	return types.Transactions{signedTrx1, signedTrx2, signedTrx3, signedTrx4}, types.Receipts{mockReceipt1, mockReceipt2, mockReceipt3, mockReceipt4}, senderAddr
 }

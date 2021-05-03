@@ -18,10 +18,107 @@ package ipld
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+
+	"github.com/multiformats/go-multihash"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
+
+// FromBlockRLP takes an RLP message representing
+// an ethereum block header or body (header, ommers and txs)
+// to return it as a set of IPLD nodes for further processing.
+func FromBlockRLP(r io.Reader) (*EthHeader, []*EthTx, []*EthTxTrie, error) {
+	// We may want to use this stream several times
+	rawdata, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Let's try to decode the received element as a block body
+	var decodedBlock types.Block
+	err = rlp.Decode(bytes.NewBuffer(rawdata), &decodedBlock)
+	if err != nil {
+		if err.Error()[:41] != "rlp: expected input list for types.Header" {
+			return nil, nil, nil, err
+		}
+
+		// Maybe it is just a header... (body sans ommers and txs)
+		var decodedHeader types.Header
+		err := rlp.Decode(bytes.NewBuffer(rawdata), &decodedHeader)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		c, err := RawdataToCid(MEthHeader, rawdata, multihash.KECCAK_256)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		// It was a header
+		return &EthHeader{
+			Header:  &decodedHeader,
+			cid:     c,
+			rawdata: rawdata,
+		}, nil, nil, nil
+	}
+
+	// This is a block body (header + ommers + txs)
+	// We'll extract the header bits here
+	headerRawData := getRLP(decodedBlock.Header())
+	c, err := RawdataToCid(MEthHeader, headerRawData, multihash.KECCAK_256)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	ethBlock := &EthHeader{
+		Header:  decodedBlock.Header(),
+		cid:     c,
+		rawdata: headerRawData,
+	}
+
+	// Process the found eth-tx objects
+	ethTxNodes, ethTxTrieNodes, err := processTransactions(decodedBlock.Transactions(),
+		decodedBlock.Header().TxHash[:])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return ethBlock, ethTxNodes, ethTxTrieNodes, nil
+}
+
+// FromBlockJSON takes the output of an ethereum client JSON API
+// (i.e. parity or geth) and returns a set of IPLD nodes.
+func FromBlockJSON(r io.Reader) (*EthHeader, []*EthTx, []*EthTxTrie, error) {
+	var obj objJSONHeader
+	dec := json.NewDecoder(r)
+	err := dec.Decode(&obj)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	headerRawData := getRLP(obj.Result.Header)
+	c, err := RawdataToCid(MEthHeader, headerRawData, multihash.KECCAK_256)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	ethBlock := &EthHeader{
+		Header:  &obj.Result.Header,
+		cid:     c,
+		rawdata: headerRawData,
+	}
+
+	// Process the found eth-tx objects
+	ethTxNodes, ethTxTrieNodes, err := processTransactions(obj.Result.Transactions,
+		obj.Result.Header.TxHash[:])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return ethBlock, ethTxNodes, ethTxTrieNodes, nil
+}
 
 // FromBlockAndReceipts takes a block and processes it
 // to return it a set of IPLD nodes for further processing.
@@ -64,14 +161,16 @@ func processTransactions(txs []*types.Transaction, expectedTxRoot []byte) ([]*Et
 			return nil, nil, err
 		}
 		ethTxNodes = append(ethTxNodes, ethTx)
-		transactionTrie.add(idx, ethTx.RawData())
+		if err := transactionTrie.add(idx, ethTx.RawData()); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	if !bytes.Equal(transactionTrie.rootHash(), expectedTxRoot) {
 		return nil, nil, fmt.Errorf("wrong transaction hash computed")
 	}
-
-	return ethTxNodes, transactionTrie.getNodes(), nil
+	txTrieNodes, err := transactionTrie.getNodes()
+	return ethTxNodes, txTrieNodes, err
 }
 
 // processReceipts will take in receipts
@@ -86,12 +185,14 @@ func processReceipts(rcts []*types.Receipt, expectedRctRoot []byte) ([]*EthRecei
 			return nil, nil, err
 		}
 		ethRctNodes = append(ethRctNodes, ethRct)
-		receiptTrie.add(idx, ethRct.RawData())
+		if err := receiptTrie.add(idx, ethRct.RawData()); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	if !bytes.Equal(receiptTrie.rootHash(), expectedRctRoot) {
 		return nil, nil, fmt.Errorf("wrong receipt hash computed")
 	}
-
-	return ethRctNodes, receiptTrie.getNodes(), nil
+	rctTrieNodes, err := receiptTrie.getNodes()
+	return ethRctNodes, rctTrieNodes, err
 }
