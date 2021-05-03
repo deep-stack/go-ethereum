@@ -139,6 +139,9 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
+// For a legacy Receipt this returns RLP([PostStateOrStatus, CumulativeGasUsed, Bloom, Logs])
+// For a EIP-2718 Receipt this returns RLP(TxType || ReceiptPayload)
+// For a EIP-2930 Receipt, TxType == 0x01 and ReceiptPayload == RLP([PostStateOrStatus, CumulativeGasUsed, Bloom, Logs])
 func (r *Receipt) EncodeRLP(w io.Writer) error {
 	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
 	if r.Type == LegacyTxType {
@@ -151,16 +154,22 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
-	buf.WriteByte(r.Type)
-	if err := rlp.Encode(buf, data); err != nil {
+	if err := r.encodeTyped(data, buf); err != nil {
 		return err
 	}
 	return rlp.Encode(w, buf.Bytes())
 }
 
-// MarshalBinary returns the canonical encoding of the receipt.
-// For legacy receipts, it returns the RLP encoding. For EIP-2718 typed
-// receipts, it returns the `type || RLP encoding`.
+// encodeTyped writes the canonical encoding of a typed receipt to w.
+func (r *Receipt) encodeTyped(data *receiptRLP, w *bytes.Buffer) error {
+	w.WriteByte(r.Type)
+	return rlp.Encode(w, data)
+}
+
+// MarshalBinary returns the canonical consensus encoding of the receipt.
+// For a legacy Receipt this returns RLP([PostStateOrStatus, CumulativeGasUsed, Bloom, Logs])
+// For a EIP-2718 Receipt this returns TxType || ReceiptPayload
+// For a EIP-2930, TxType == 0x01 and ReceiptPayload == RLP([PostStateOrStatus, CumulativeGasUsed, Bloom, Logs])
 func (r *Receipt) MarshalBinary() ([]byte, error) {
 	if r.Type == LegacyTxType {
 		return rlp.EncodeToBytes(r)
@@ -169,11 +178,8 @@ func (r *Receipt) MarshalBinary() ([]byte, error) {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
-	buf.WriteByte(r.Type)
-	if err := rlp.Encode(buf, data); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	err := r.encodeTyped(data, buf)
+	return buf.Bytes(), err
 }
 
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
