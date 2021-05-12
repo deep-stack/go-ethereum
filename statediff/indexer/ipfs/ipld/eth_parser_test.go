@@ -1,7 +1,6 @@
 package ipld
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -73,8 +72,7 @@ func loadBlockData(t *testing.T) []testCase {
 
 func TestFromBlockAndReceipts(t *testing.T) {
 	testCases := loadBlockData(t)
-	for i, tc := range testCases {
-		fmt.Printf("testing %d\r\n", i)
+	for _, tc := range testCases {
 		_, _, _, _, _, _, err := FromBlockAndReceipts(tc.block, tc.receipts)
 		if err != nil {
 			t.Fatalf("error generating IPLDs from block and receipts, err %v, kind %s, block hash %s", err, tc.kind, tc.block.Hash())
