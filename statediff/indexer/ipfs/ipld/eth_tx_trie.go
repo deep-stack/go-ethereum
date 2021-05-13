@@ -24,7 +24,6 @@ import (
 	"github.com/multiformats/go-multihash"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // EthTxTrie (eth-tx-trie codec 0x92) represents
@@ -61,9 +60,8 @@ func DecodeEthTxTrie(c cid.Cid, b []byte) (*EthTxTrie, error) {
 // decodeEthTxTrieLeaf parses a eth-tx-trie leaf
 //from decoded RLP elements
 func decodeEthTxTrieLeaf(i []interface{}) ([]interface{}, error) {
-	var t types.Transaction
-	err := rlp.DecodeBytes(i[1].([]byte), &t)
-	if err != nil {
+	t := new(types.Transaction)
+	if err := t.UnmarshalBinary(i[1].([]byte)); err != nil {
 		return nil, err
 	}
 	c, err := RawdataToCid(MEthTx, i[1].([]byte), multihash.KECCAK_256)
@@ -73,7 +71,7 @@ func decodeEthTxTrieLeaf(i []interface{}) ([]interface{}, error) {
 	return []interface{}{
 		i[0].([]byte),
 		&EthTx{
-			Transaction: &t,
+			Transaction: t,
 			cid:         c,
 			rawdata:     i[1].([]byte),
 		},
@@ -135,7 +133,7 @@ func (tt *txTrie) getNodes() ([]*EthTxTrie, error) {
 	for _, k := range keys {
 		rawdata, err := tt.db.Get(k)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		c, err := RawdataToCid(MEthTxTrie, rawdata, multihash.KECCAK_256)
 		if err != nil {
