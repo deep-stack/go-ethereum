@@ -46,6 +46,7 @@ import (
 )
 
 const chainEventChanSize = 20000
+const genesisBlockNumber = 0
 
 var writeLoopParams = Params{
 	IntermediateStateNodes:   true,
@@ -259,6 +260,18 @@ func (sds *Service) WriteLoop(chainEventCh chan core.ChainEvent) {
 	wg.Wait()
 }
 
+func (sds *Service) writeGenesisStateDiff(currBlock *types.Block, workerId uint) {
+	// For genesis block we need to return the entire state trie hence we diff it with an empty trie.
+	log.Info("Writing state diff", "block height", genesisBlockNumber, "worker", workerId)
+	err := sds.writeStateDiff(currBlock, common.Hash{}, writeLoopParams)
+	if err != nil {
+		log.Error("statediff.Service.WriteLoop: processing error", "block height",
+			genesisBlockNumber, "error", err.Error(), "worker", workerId)
+		return
+	}
+	statediffMetrics.lastStatediffHeight.Update(genesisBlockNumber)
+}
+
 func (sds *Service) writeLoopWorker(params workerParams) {
 	defer params.wg.Done()
 	for {
@@ -272,6 +285,12 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 				log.Error("Parent block is nil, skipping this block", "block height", currentBlock.Number())
 				continue
 			}
+
+			// chainEvent streams block from block 1, but we also need to include data from the genesis block.
+			if parentBlock.Number().Uint64() == genesisBlockNumber {
+				sds.writeGenesisStateDiff(parentBlock, params.id)
+			}
+
 			log.Info("Writing state diff", "block height", currentBlock.Number().Uint64(), "worker", params.id)
 			err := sds.writeStateDiff(currentBlock, parentBlock.Root(), writeLoopParams)
 			if err != nil {
@@ -310,10 +329,18 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 			}
 			currentBlock := chainEvent.Block
 			parentBlock := sds.BlockCache.getParentBlock(currentBlock, sds.BlockChain)
+
 			if parentBlock == nil {
 				log.Error("Parent block is nil, skipping this block", "block height", currentBlock.Number())
 				continue
 			}
+
+			// chainEvent streams block from block 1, but we also need to include data from the genesis block.
+			if parentBlock.Number().Uint64() == genesisBlockNumber {
+				// For genesis block we need to return the entire state trie hence we diff it with an empty trie.
+				sds.streamStateDiff(parentBlock, common.Hash{})
+			}
+
 			sds.streamStateDiff(currentBlock, parentBlock.Root())
 		case err := <-errCh:
 			log.Warn("Error from chain event subscription", "error", err)
