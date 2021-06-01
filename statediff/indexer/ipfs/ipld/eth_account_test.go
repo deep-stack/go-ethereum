@@ -105,7 +105,7 @@ func TestAccountSnapshotResolve(t *testing.T) {
 		if rest != nil {
 			t.Fatal("rest should be nil")
 		}
-		if err.Error() != fmt.Sprintf("no such link") {
+		if err != ErrInvalidLink {
 			t.Fatal("wrong error")
 		}
 	}
@@ -175,7 +175,7 @@ func TestAccountSnapshotResolveLink(t *testing.T) {
 	if rest != nil {
 		t.Fatal("Expected rest to be nil")
 	}
-	if err.Error() != "no such link" {
+	if err != ErrInvalidLink {
 		t.Fatal("Wrong error")
 	}
 

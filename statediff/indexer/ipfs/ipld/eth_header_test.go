@@ -192,8 +192,8 @@ func TestEthBlockResolveNoSuchLink(t *testing.T) {
 		t.Fatal("Should have failed with unknown field")
 	}
 
-	if err.Error() != "no such link" {
-		t.Fatalf("Wrong error message\r\nexpected %s\r\ngot %s", "no such link", err.Error())
+	if err != ErrInvalidLink {
+		t.Fatalf("Wrong error message\r\nexpected %s\r\ngot %s", ErrInvalidLink, err.Error())
 	}
 }
 
@@ -393,8 +393,8 @@ func TestEthBlockResolveLinksBadLink(t *testing.T) {
 	if rest != nil {
 		t.Fatal("Expected rest to be nil")
 	}
-	if err.Error() != "no such link" {
-		t.Fatalf("Expected error\r\nexpected %s\r\ngot %s", "no such link", err.Error())
+	if err != ErrInvalidLink {
+		t.Fatalf("Expected error\r\nexpected %s\r\ngot %s", ErrInvalidLink, err)
 	}
 }
 

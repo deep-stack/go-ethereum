@@ -144,7 +144,7 @@ func (t *EthTx) Resolve(p []string) (interface{}, []string, error) {
 	case "value":
 		return hexutil.EncodeBig(t.Value()), nil, nil
 	default:
-		return nil, nil, fmt.Errorf("no such link")
+		return nil, nil, ErrInvalidLink
 	}
 }
 

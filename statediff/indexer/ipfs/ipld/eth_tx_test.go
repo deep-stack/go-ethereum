@@ -164,8 +164,8 @@ func TestEthTxResolve(t *testing.T) {
 		if rest != nil {
 			t.Fatal("rest should be nil")
 		}
-		if err.Error() != "no such link" {
-			t.Fatalf("wrong error\r\nexpected %s\r\ngot %s", "no such link", err.Error())
+		if err != ErrInvalidLink {
+			t.Fatalf("wrong error\r\nexpected %s\r\ngot %s", ErrInvalidLink, err.Error())
 		}
 	}
 
@@ -245,8 +245,8 @@ func TestEthTxResolveLink(t *testing.T) {
 	if rest != nil {
 		t.Fatal("Expected rest to be nil")
 	}
-	if err.Error() != "no such link" {
-		t.Fatalf("Wrong error\r\nexpected %s\r\ngot %s", "no such link", err.Error())
+	if err != ErrInvalidLink {
+		t.Fatalf("Wrong error\r\nexpected %s\r\ngot %s", ErrInvalidLink, err.Error())
 	}
 
 	// good case

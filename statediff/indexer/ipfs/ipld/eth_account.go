@@ -111,7 +111,7 @@ func (as *EthAccountSnapshot) Resolve(p []string) (interface{}, []string, error)
 	case "root":
 		return &node.Link{Cid: keccak256ToCid(MEthStorageTrie, as.Root)}, nil, nil
 	default:
-		return nil, nil, fmt.Errorf("no such link")
+		return nil, nil, ErrInvalidLink
 	}
 }
 

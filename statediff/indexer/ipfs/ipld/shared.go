@@ -18,6 +18,7 @@ package ipld
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
@@ -46,7 +47,8 @@ const (
 )
 
 var (
-	nullHashBytes = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	nullHashBytes  = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	ErrInvalidLink = errors.New("no such link")
 )
 
 // RawdataToCid takes the desired codec and a slice of bytes
