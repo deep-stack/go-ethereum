@@ -25,6 +25,9 @@ PORT = 5432
 USER = postgres
 PASSWORD = password
 
+# Set env variable
+export PGPASSWORD=$(PASSWORD)
+
 #Test
 TEST_DB = vulcanize_testing
 TEST_CONNECT_STRING = postgresql://$(USER):$(PASSWORD)@$(HOST_NAME):$(PORT)/$(TEST_DB)?sslmode=disable

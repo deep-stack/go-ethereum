@@ -63,4 +63,4 @@ jobs:
 
       - name: Run unit tests
         run:
-          PGPASSWORD=password make statedifftest
+          make statedifftest
