@@ -8,9 +8,26 @@
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
 
+BIN = $(GOPATH)/bin
+
+## Migration tool
+GOOSE = $(BIN)/goose
+$(BIN)/goose:
+	go get -u github.com/pressly/goose/cmd/goose
+
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
+
+#Database
+HOST_NAME = localhost
+PORT = 5432
+USER = postgres
+PASSWORD = password
+
+#Test
+TEST_DB = vulcanize_testing
+TEST_CONNECT_STRING = postgresql://$(USER):$(PASSWORD)@$(HOST_NAME):$(PORT)/$(TEST_DB)?sslmode=disable
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -31,6 +48,15 @@ ios:
 	$(GORUN) build/ci.go xcode --local
 	@echo "Done building."
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
+
+
+.PHONY: statedifftest
+statedifftest: | $(GOOSE)
+	dropdb -h $(HOST_NAME) -p $(PORT) -U $(USER) --if-exists $(TEST_DB)
+	createdb -h $(HOST_NAME) -p $(PORT) -U $(USER) $(TEST_DB)
+	$(GOOSE) -dir ./statediff/db/migrations postgres "$(TEST_CONNECT_STRING)" up
+	@echo "  >  \033[32mRunning StateDiff Tests...\033[0m "
+	MODE=statediff go test ./statediff/... -v
 
 test: all
 	$(GORUN) build/ci.go test

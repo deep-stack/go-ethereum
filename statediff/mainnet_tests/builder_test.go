@@ -18,6 +18,7 @@ package statediff_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -414,6 +415,10 @@ var (
 )
 
 func init() {
+	if os.Getenv("MODE") != "statediff" {
+		fmt.Println("Skipping statediff test")
+		os.Exit(0)
+	}
 	db = rawdb.NewMemoryDatabase()
 	genesisBlock = core.DefaultGenesisBlock().MustCommit(db)
 	genBy, err := rlp.EncodeToBytes(genesisBlock)

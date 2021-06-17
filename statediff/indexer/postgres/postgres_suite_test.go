@@ -17,9 +17,17 @@
 package postgres_test
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/ethereum/go-ethereum/log"
 )
 
 func init() {
+	if os.Getenv("MODE") != "statediff" {
+		fmt.Println("Skipping statediff test")
+		os.Exit(0)
+	}
+
 	log.Root().SetHandler(log.DiscardHandler())
 }

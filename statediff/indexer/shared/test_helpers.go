@@ -37,7 +37,7 @@ func ExpectEqual(t *testing.T, got interface{}, want interface{}) {
 func SetupDB() (*postgres.DB, error) {
 	uri := postgres.DbConnectionString(postgres.ConnectionParams{
 		User:     "postgres",
-		Password: "",
+		Password: "password",
 		Hostname: "localhost",
 		Name:     "vulcanize_testing",
 		Port:     5432,

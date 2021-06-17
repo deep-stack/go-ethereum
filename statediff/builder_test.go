@@ -18,7 +18,9 @@ package statediff_test
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
+	"os"
 	"sort"
 	"testing"
 
@@ -462,6 +464,13 @@ var (
 		[]byte{},
 	})
 )
+
+func init() {
+	if os.Getenv("MODE") != "statediff" {
+		fmt.Println("Skipping statediff test")
+		os.Exit(0)
+	}
+}
 
 func TestBuilder(t *testing.T) {
 	blocks, chain := testhelpers.MakeChain(3, testhelpers.Genesis, testhelpers.TestChainGen)

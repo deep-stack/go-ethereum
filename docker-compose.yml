@@ -1,0 +1,17 @@
+version: '3.2'
+
+services:
+  db:
+    restart: always
+    image: postgres:10.12-alpine
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_DB: "vulcanize_testing"
+      POSTGRES_PASSWORD: "password"
+    volumes:
+      - geth_node:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+
+volumes:
+  geth_node:

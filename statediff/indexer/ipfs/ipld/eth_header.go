@@ -158,7 +158,7 @@ func (b *EthHeader) Resolve(p []string) (interface{}, []string, error) {
 	case "time":
 		return b.Time, nil, nil
 	default:
-		return nil, nil, fmt.Errorf("no such link")
+		return nil, nil, ErrInvalidLink
 	}
 }
 
