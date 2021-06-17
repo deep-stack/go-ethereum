@@ -26,6 +26,7 @@ USER = postgres
 PASSWORD = password
 
 # Set env variable
+# `PGPASSWORD` is used by `createdb` and `dropdb`
 export PGPASSWORD=$(PASSWORD)
 
 #Test
