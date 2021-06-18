@@ -11,6 +11,12 @@ import (
 /*
   Block INTERFACE
 */
+func init() {
+	if os.Getenv("MODE") != "statediff" {
+		fmt.Println("Skipping statediff test")
+		os.Exit(0)
+	}
+}
 
 func TestAccountSnapshotBlockElements(t *testing.T) {
 	eas := prepareEthAccountSnapshot(t)

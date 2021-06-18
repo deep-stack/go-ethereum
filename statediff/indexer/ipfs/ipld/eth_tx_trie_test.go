@@ -133,7 +133,6 @@ func TestEthTxTrieString(t *testing.T) {
 }
 
 func TestEthTxTrieLoggable(t *testing.T) {
-
 	ethTxTrie := prepareDecodedEthTxTrieExtension(t)
 	l := ethTxTrie.Loggable()
 	if _, ok := l["type"]; !ok {

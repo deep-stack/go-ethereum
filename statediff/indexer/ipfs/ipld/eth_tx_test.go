@@ -165,7 +165,7 @@ func TestEthTxResolve(t *testing.T) {
 			t.Fatal("rest should be nil")
 		}
 		if err != ErrInvalidLink {
-			t.Fatalf("wrong error\r\nexpected %s\r\ngot %s", ErrInvalidLink, err.Error())
+			t.Fatalf("wrong error\r\nexpected %s\r\ngot %s", ErrInvalidLink, err)
 		}
 	}
 
