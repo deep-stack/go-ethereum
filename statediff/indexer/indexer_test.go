@@ -18,6 +18,8 @@ package indexer_test
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -57,6 +59,11 @@ func expectTrue(t *testing.T, value bool) {
 }
 
 func init() {
+	if os.Getenv("MODE") != "statediff" {
+		fmt.Println("Skipping statediff test")
+		os.Exit(0)
+	}
+
 	mockBlock = mocks.MockBlock
 	txs, rcts := mocks.MockBlock.Transactions(), mocks.MockReceipts
 

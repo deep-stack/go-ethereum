@@ -1,0 +1,11 @@
+name: checks
+
+on: [pull_request]
+
+jobs:
+  linter-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run linter
+        run:  go run build/ci.go lint

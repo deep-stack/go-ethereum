@@ -18,7 +18,9 @@ package mocks
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
+	"os"
 	"sort"
 	"sync"
 	"testing"
@@ -75,6 +77,13 @@ var (
 		IncludeReceipts:        true,
 	}
 )
+
+func init() {
+	if os.Getenv("MODE") != "statediff" {
+		fmt.Println("Skipping statediff test")
+		os.Exit(0)
+	}
+}
 
 func TestAPI(t *testing.T) {
 	testSubscriptionAPI(t)

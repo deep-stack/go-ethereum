@@ -133,7 +133,6 @@ func TestEthTxTrieString(t *testing.T) {
 }
 
 func TestEthTxTrieLoggable(t *testing.T) {
-
 	ethTxTrie := prepareDecodedEthTxTrieExtension(t)
 	l := ethTxTrie.Loggable()
 	if _, ok := l["type"]; !ok {
@@ -216,7 +215,7 @@ func TestTxTrieResolveBranch(t *testing.T) {
 			t.Fatalf("Returned object is not a link")
 		}
 
-		for j, _ := range expectedRest {
+		for j := range expectedRest {
 			if rest[j] != expectedRest[j] {
 				t.Fatalf("Wrong rest of the path returned\r\nexpected %s\r\ngot %s", expectedRest[j], rest[j])
 			}

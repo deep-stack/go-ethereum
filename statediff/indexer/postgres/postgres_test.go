@@ -18,10 +18,9 @@ package postgres_test
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 	"testing"
-
-	"math/big"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -33,7 +32,7 @@ import (
 
 var DBParams = postgres.ConnectionParams{
 	Name:     "vulcanize_testing",
-	Password: "",
+	Password: "password",
 	Port:     5432,
 	Hostname: "localhost",
 	User:     "postgres",

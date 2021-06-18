@@ -11,6 +11,12 @@ import (
 /*
   Block INTERFACE
 */
+func init() {
+	if os.Getenv("MODE") != "statediff" {
+		fmt.Println("Skipping statediff test")
+		os.Exit(0)
+	}
+}
 
 func TestAccountSnapshotBlockElements(t *testing.T) {
 	eas := prepareEthAccountSnapshot(t)
@@ -105,7 +111,7 @@ func TestAccountSnapshotResolve(t *testing.T) {
 		if rest != nil {
 			t.Fatal("rest should be nil")
 		}
-		if err.Error() != fmt.Sprintf("no such link") {
+		if err != ErrInvalidLink {
 			t.Fatal("wrong error")
 		}
 	}
@@ -175,7 +181,7 @@ func TestAccountSnapshotResolveLink(t *testing.T) {
 	if rest != nil {
 		t.Fatal("Expected rest to be nil")
 	}
-	if err.Error() != "no such link" {
+	if err != ErrInvalidLink {
 		t.Fatal("Wrong error")
 	}
 
