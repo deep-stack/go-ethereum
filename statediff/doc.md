@@ -214,3 +214,51 @@ the number of updated state nodes that are available in the in-memory cache vs m
 If memory permits, one means of improving the efficiency of this process is to increase the in-memory trie cache allocation.
 This can be done by increasing the overall `--cache` allocation and/or by increasing the % of the cache allocated to trie
 usage with `--cache.trie`.
+
+## Versioning, Branches, Rebasing, and Releasing
+Internal tagged releases are maintained for building the latest version of statediffing geth or using it as a go mod dependency.
+When a new core go-ethereum version is released, statediffing geth is rebased onto and adjusted to work with the new tag.
+
+We want to maintain a complete record of our git history, but in order to make frequent and timely rebases feasible we also
+need to be able to squash our work before performing a rebase. To this end we retain multiple branches with partial incremental history that culminate in
+the full incremental history.
+
+### Versioning
+Versioning for of statediffing geth follows the below format:
+
+`{Root Version}-statediff-{Statediff Version}`
+
+Where "root version" is the version of the tagged release from the core go-ethereum repository that our release is rebased on top of
+and "statediff version" is the version tracking the state of the statediffing service code.
+
+E.g. the version at the time of writing this is v1.10.3-statediff-0.0.23, v0.0.23 of the statediffing code rebased on top of the v1.10.3 core tag.
+
+The statediff version is included in the `VersionMeta` in params/version.go
+
+### Branches
+We maintain two official kinds of branches:
+
+Major Branch: `{Root Version}-statediff`
+Major branches retain the cumulative state of all changes made before the latest root version rebase and track the full incremental history of changes made between the latest root version rebase and the next.
+Aside from creating the branch by performing the rebase described in the section below, these branches are never worked off of or committed to directly.
+
+Feature Branch: `{Root Version}-statediff-{Statediff Version}`
+Feature branches are checked out from a major branch in order to work on a new feature or fix for the statediffing code.
+The statediff version of a feature branch is the new version it affects on the major branch when merged. Internal tagged releases
+are cut against these branches after they are merged back to the major branch.
+
+If a developer is unsure what version their patch should affect, they should remain working on an unofficial branch. From there
+they can open a PR against the targeted root branch and be directed to the appropriate feature version and branch.
+
+### Rebasing
+When a new root tagged release comes out we rebase our statediffing code on top of the new tag using the following process:
+1. Checkout a new major branch for the tag from the current major branch
+2. On the new major branch, squash all our commits since the last major rebase
+3. On the new major branch, perform the rebase against the new tag
+4. Push the new major branch to the remote
+5. From the new major branch, checkout a new feature branch based on the new major version and the last statediff version
+6. On this new feature branch, add the new major branch to the .github/workflows/on-master.yml list of "on push" branches
+7. On this new feature branch, make any fixes/adjustments required for all statediffing geth tests to pass
+8. PR this feature branch into the new major branch, this PR will trigger CI tests and builds.
+9. After merging PR, rebase feature branch onto major branch
+10. Cut a new release targeting the feature branch, this release should have the new root version but the same statediff version as the last release
