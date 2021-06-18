@@ -393,6 +393,7 @@ func TestEthBlockResolveLinksBadLink(t *testing.T) {
 	if rest != nil {
 		t.Fatal("Expected rest to be nil")
 	}
+
 	if err != ErrInvalidLink {
 		t.Fatalf("Expected error\r\nexpected %s\r\ngot %s", ErrInvalidLink, err.Error())
 	}
