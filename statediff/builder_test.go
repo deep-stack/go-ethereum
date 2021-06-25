@@ -40,7 +40,6 @@ var (
 	emptyStorage                                           = make([]sdtypes.StorageNode, 0)
 	block0, block1, block2, block3, block4, block5, block6 *types.Block
 	builder                                                statediff.Builder
-	miningReward                                           = int64(2000000000000000000)
 	minerAddress                                           = common.HexToAddress("0x0")
 	minerLeafKey                                           = testhelpers.AddressToLeafKey(minerAddress)
 
