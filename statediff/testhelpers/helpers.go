@@ -44,7 +44,7 @@ func TestSelfDestructChainGen(i int, block *core.BlockGen) {
 		// Block 1 is mined by Account1Addr
 		// Account1Addr creates a new contract
 		block.SetCoinbase(TestBankAddress)
-		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 1000000, big.NewInt(0), ContractCode), signer, TestBankKey)
+		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 1000000, big.NewInt(params.GWei), ContractCode), signer, TestBankKey)
 		ContractAddr = crypto.CreateAddress(TestBankAddress, 0)
 		block.AddTx(tx)
 	case 1:
@@ -52,7 +52,7 @@ func TestSelfDestructChainGen(i int, block *core.BlockGen) {
 		// Account1Addr self-destructs the contract
 		block.SetCoinbase(TestBankAddress)
 		data := common.Hex2Bytes("43D726D6")
-		tx, _ := types.SignTx(types.NewTransaction(1, ContractAddr, big.NewInt(0), 100000, nil, data), signer, TestBankKey)
+		tx, _ := types.SignTx(types.NewTransaction(1, ContractAddr, big.NewInt(0), 100000, big.NewInt(params.GWei), data), signer, TestBankKey)
 		block.AddTx(tx)
 	}
 }
@@ -62,17 +62,17 @@ func TestChainGen(i int, block *core.BlockGen) {
 	switch i {
 	case 0:
 		// In block 1, the test bank sends account #1 some ether.
-		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), Account1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, TestBankKey)
+		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), Account1Addr, big.NewInt(BalanceChange10000), params.TxGas, big.NewInt(params.GWei), nil), signer, TestBankKey)
 		block.AddTx(tx)
 	case 1:
 		// In block 2, the test bank sends some more ether to account #1.
 		// Account1Addr passes it on to account #2.
 		// Account1Addr creates a test contract.
-		tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), Account1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, TestBankKey)
+		tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), Account1Addr, big.NewInt(BalanceChange1Ether), params.TxGas, big.NewInt(params.GWei), nil), signer, TestBankKey)
 		nonce := block.TxNonce(Account1Addr)
-		tx2, _ := types.SignTx(types.NewTransaction(nonce, Account2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, Account1Key)
+		tx2, _ := types.SignTx(types.NewTransaction(nonce, Account2Addr, big.NewInt(BalanceChange1000), params.TxGas, big.NewInt(params.GWei), nil), signer, Account1Key)
 		nonce++
-		tx3, _ := types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 1000000, big.NewInt(0), ContractCode), signer, Account1Key)
+		tx3, _ := types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), ContractGasLimit, big.NewInt(params.GWei), ContractCode), signer, Account1Key)
 		ContractAddr = crypto.CreateAddress(Account1Addr, nonce)
 		block.AddTx(tx1)
 		block.AddTx(tx2)
@@ -84,7 +84,7 @@ func TestChainGen(i int, block *core.BlockGen) {
 		//put function: c16431b9
 		//close function: 43d726d6
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003")
-		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), ContractAddr, big.NewInt(0), 100000, nil, data), signer, TestBankKey)
+		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), ContractAddr, big.NewInt(0), params.TxGasContractCreation, big.NewInt(params.GWei), data), signer, TestBankKey)
 		block.AddTx(tx)
 	case 3:
 		// Block 4 has three txs from bankAccount to the contract, that transfer no value
@@ -96,11 +96,11 @@ func TestChainGen(i int, block *core.BlockGen) {
 		data3 := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000009")
 
 		nonce := block.TxNonce(TestBankAddress)
-		tx1, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, nil, data1), signer, TestBankKey)
+		tx1, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data1), signer, TestBankKey)
 		nonce++
-		tx2, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, nil, data2), signer, TestBankKey)
+		tx2, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data2), signer, TestBankKey)
 		nonce++
-		tx3, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, nil, data3), signer, TestBankKey)
+		tx3, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data3), signer, TestBankKey)
 		block.AddTx(tx1)
 		block.AddTx(tx2)
 		block.AddTx(tx3)
@@ -111,14 +111,14 @@ func TestChainGen(i int, block *core.BlockGen) {
 		block.SetCoinbase(Account1Addr)
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000")
 		nonce := block.TxNonce(TestBankAddress)
-		tx, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, nil, data), signer, TestBankKey)
+		tx, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data), signer, TestBankKey)
 		block.AddTx(tx)
 	case 5:
 		// Block 6 has a tx from Account1Key which self-destructs the contract, it transfers no value
 		// Block 6 is mined by Account2Addr
 		block.SetCoinbase(Account2Addr)
 		data := common.Hex2Bytes("43D726D6")
-		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(Account1Addr), ContractAddr, big.NewInt(0), 100000, nil, data), signer, Account1Key)
+		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(Account1Addr), ContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data), signer, Account1Key)
 		block.AddTx(tx)
 	}
 }

@@ -44,12 +44,6 @@ var (
 	minerAddress                                           = common.HexToAddress("0x0")
 	minerLeafKey                                           = testhelpers.AddressToLeafKey(minerAddress)
 
-	balanceChange10000    = int64(10000)
-	balanceChange1000     = int64(1000)
-	block1BankBalance     = int64(99990000)
-	block1Account1Balance = int64(10000)
-	block2Account2Balance = int64(1000)
-
 	slot0 = common.HexToHash("0")
 	slot1 = common.HexToHash("1")
 	slot2 = common.HexToHash("2")
@@ -129,7 +123,7 @@ var (
 
 	minerAccountAtBlock1, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    0,
-		Balance:  big.NewInt(miningReward),
+		Balance:  big.NewInt(2000002625000000000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -139,7 +133,7 @@ var (
 	})
 	minerAccountAtBlock2, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    0,
-		Balance:  big.NewInt(miningReward + miningReward),
+		Balance:  big.NewInt(4000111203461610525),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -150,7 +144,7 @@ var (
 
 	account1AtBlock1, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    0,
-		Balance:  big.NewInt(balanceChange10000),
+		Balance:  testhelpers.Block1Account1Balance,
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -160,7 +154,7 @@ var (
 	})
 	account1AtBlock2, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    2,
-		Balance:  big.NewInt(block1Account1Balance - balanceChange1000 + balanceChange1000),
+		Balance:  big.NewInt(999555797000009000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -170,7 +164,7 @@ var (
 	})
 	account1AtBlock5, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    2,
-		Balance:  big.NewInt(block1Account1Balance - balanceChange1000 + balanceChange1000 + miningReward),
+		Balance:  big.NewInt(2999566008847709960),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -180,7 +174,7 @@ var (
 	})
 	account1AtBlock6, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    3,
-		Balance:  big.NewInt(block1Account1Balance - balanceChange1000 + balanceChange1000 + miningReward),
+		Balance:  big.NewInt(2999537516847709960),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -191,7 +185,7 @@ var (
 
 	account2AtBlock2, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    0,
-		Balance:  big.NewInt(balanceChange1000),
+		Balance:  big.NewInt(1000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -201,7 +195,7 @@ var (
 	})
 	account2AtBlock3, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    0,
-		Balance:  big.NewInt(block2Account2Balance + miningReward),
+		Balance:  big.NewInt(2000013574009435976),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -211,7 +205,7 @@ var (
 	})
 	account2AtBlock4, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    0,
-		Balance:  big.NewInt(block2Account2Balance + miningReward*2),
+		Balance:  big.NewInt(4000048088163070348),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -221,7 +215,7 @@ var (
 	})
 	account2AtBlock6, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    0,
-		Balance:  big.NewInt(block2Account2Balance + miningReward*3),
+		Balance:  big.NewInt(6000063293259748636),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -240,9 +234,11 @@ var (
 		common.Hex2Bytes("2000bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock0,
 	})
+
+	block1BankBalance      = big.NewInt(testhelpers.TestBankFunds.Int64() - testhelpers.BalanceChange10000 - testhelpers.GasFees)
 	bankAccountAtBlock1, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    1,
-		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64() - balanceChange10000),
+		Balance:  block1BankBalance,
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -250,9 +246,11 @@ var (
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock1,
 	})
+
+	block2BankBalance      = block1BankBalance.Int64() - testhelpers.BalanceChange1Ether - testhelpers.GasFees
 	bankAccountAtBlock2, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    2,
-		Balance:  big.NewInt(block1BankBalance - balanceChange1000),
+		Balance:  big.NewInt(block2BankBalance),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -262,7 +260,7 @@ var (
 	})
 	bankAccountAtBlock3, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    3,
-		Balance:  big.NewInt(99989000),
+		Balance:  big.NewInt(999914255999990000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -272,7 +270,7 @@ var (
 	})
 	bankAccountAtBlock4, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    6,
-		Balance:  big.NewInt(99989000),
+		Balance:  big.NewInt(999826859999990000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -282,7 +280,7 @@ var (
 	})
 	bankAccountAtBlock5, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    7,
-		Balance:  big.NewInt(99989000),
+		Balance:  big.NewInt(999805027999990000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -1706,10 +1704,12 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 		if err != nil {
 			t.Error(err)
 		}
+
 		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
 		if err != nil {
 			t.Error(err)
 		}
+
 		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
 		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
 		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
@@ -1740,7 +1740,7 @@ var (
 
 	bankAccountAtBlock01, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    1,
-		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64() + miningReward),
+		Balance:  big.NewInt(3999629697375000000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -1750,7 +1750,7 @@ var (
 	})
 	bankAccountAtBlock02, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    2,
-		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64() + miningReward*2),
+		Balance:  big.NewInt(5999607323457344852),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
 	})
@@ -1926,6 +1926,7 @@ func TestBuilderWithMovedAccount(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+
 		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
 		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
 		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {

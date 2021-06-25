@@ -51,7 +51,7 @@ var (
 	})
 	minerAccount, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    uint64(0),
-		Balance:  big.NewInt(2000000000000000000),
+		Balance:  big.NewInt(2000002625000000000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
 		Root:     common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	})
@@ -61,7 +61,7 @@ var (
 	})
 	bankAccount, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    uint64(1),
-		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64() - 10000),
+		Balance:  big.NewInt(1999978999999990000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
 		Root:     common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	})
@@ -129,6 +129,7 @@ func testSubscriptionAPI(t *testing.T) {
 		},
 	}
 	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
+
 	blockChan := make(chan *types.Block)
 	parentBlockChain := make(chan *types.Block)
 	serviceQuitChan := make(chan bool)
@@ -145,6 +146,7 @@ func testSubscriptionAPI(t *testing.T) {
 		Subscriptions:     make(map[common.Hash]map[rpc.ID]statediff.Subscription),
 		SubscriptionTypes: make(map[common.Hash]statediff.Params),
 	}
+
 	mockService.Start()
 	id := rpc.NewID()
 	payloadChan := make(chan statediff.Payload)
