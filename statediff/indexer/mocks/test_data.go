@@ -40,7 +40,9 @@ import (
 // Test variables
 var (
 	// block data
-	BlockNumber = big.NewInt(12244001)
+	// TODO: Update this to `MainnetChainConfig` when `LondonBlock` is added
+	TestConfig  = params.RinkebyChainConfig
+	BlockNumber = TestConfig.LondonBlock
 	MockHeader  = types.Header{
 		Time:        0,
 		Number:      new(big.Int).Set(BlockNumber),
@@ -49,6 +51,7 @@ var (
 		ReceiptHash: common.HexToHash("0x0"),
 		Difficulty:  big.NewInt(5000000),
 		Extra:       []byte{},
+		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
 	MockTransactions, MockReceipts, SenderAddr        = createTransactionsAndReceipts()
 	MockBlock                                         = types.NewBlock(&MockHeader, MockTransactions, nil, MockReceipts, new(trie.Trie))
@@ -186,7 +189,7 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 	trx2 := types.NewTransaction(1, AnotherAddress, big.NewInt(2000), 100, big.NewInt(200), []byte{})
 	trx3 := types.NewContractCreation(2, big.NewInt(1500), 75, big.NewInt(150), MockContractByteCode)
 	trx4 := types.NewTx(&types.AccessListTx{
-		ChainID:  big.NewInt(1),
+		ChainID:  TestConfig.ChainID,
 		Nonce:    0,
 		GasPrice: big.NewInt(100),
 		Gas:      50,
@@ -198,8 +201,22 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 			AccessListEntry2,
 		},
 	})
+	trx5 := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   TestConfig.ChainID,
+		Nonce:     0,
+		GasTipCap: big.NewInt(100),
+		GasFeeCap: big.NewInt(100),
+		Gas:       50,
+		To:        &AnotherAddress,
+		Value:     big.NewInt(1000),
+		Data:      []byte{},
+		AccessList: types.AccessList{
+			AccessListEntry1,
+			AccessListEntry2,
+		},
+	})
 
-	transactionSigner := types.NewEIP2930Signer(params.MainnetChainConfig.ChainID)
+	transactionSigner := types.MakeSigner(TestConfig, BlockNumber)
 	mockCurve := elliptic.P256()
 	mockPrvKey, err := ecdsa.GenerateKey(mockCurve, rand.Reader)
 	if err != nil {
@@ -219,13 +236,18 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 	}
 	signedTrx4, err := types.SignTx(trx4, transactionSigner, mockPrvKey)
 	if err != nil {
-		println(err.Error())
 		log.Crit(err.Error())
 	}
+	signedTrx5, err := types.SignTx(trx5, transactionSigner, mockPrvKey)
+	if err != nil {
+		log.Crit(err.Error())
+	}
+
 	senderAddr, err := types.Sender(transactionSigner, signedTrx1) // same for both trx
 	if err != nil {
 		log.Crit(err.Error())
 	}
+
 	// make receipts
 	mockReceipt1 := types.NewReceipt(nil, false, 50)
 	mockReceipt1.Logs = []*types.Log{MockLog1}
@@ -244,6 +266,14 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 		Logs:              []*types.Log{},
 		TxHash:            signedTrx4.Hash(),
 	}
+	mockReceipt5 := &types.Receipt{
+		Type:              types.DynamicFeeTxType,
+		PostState:         common.HexToHash("0x3").Bytes(),
+		Status:            types.ReceiptStatusSuccessful,
+		CumulativeGasUsed: 175,
+		Logs:              []*types.Log{},
+		TxHash:            signedTrx5.Hash(),
+	}
 
-	return types.Transactions{signedTrx1, signedTrx2, signedTrx3, signedTrx4}, types.Receipts{mockReceipt1, mockReceipt2, mockReceipt3, mockReceipt4}, senderAddr
+	return types.Transactions{signedTrx1, signedTrx2, signedTrx3, signedTrx4, signedTrx5}, types.Receipts{mockReceipt1, mockReceipt2, mockReceipt3, mockReceipt4, mockReceipt5}, senderAddr
 }

@@ -229,6 +229,7 @@ func (sdi *StateDiffIndexer) processHeader(tx *sqlx.Tx, header *types.Header, he
 		TxRoot:          header.TxHash.String(),
 		UncleRoot:       header.UncleHash.String(),
 		Timestamp:       header.Time,
+		BaseFee:         header.BaseFee.String(),
 	})
 }
 
