@@ -22,9 +22,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/types"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipfs/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
@@ -166,15 +165,16 @@ func TestPublishAndIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, id
+		pgStr := `SELECT cid, td, reward, id, base_fee
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
 		type res struct {
-			CID    string
-			TD     string
-			Reward string
-			ID     int
+			CID     string
+			TD      string
+			Reward  string
+			ID      int
+			BaseFee string `db:"base_fee"`
 		}
 		header := new(res)
 		err = db.QueryRowx(pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
@@ -184,6 +184,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		shared.ExpectEqual(t, header.CID, headerCID.String())
 		shared.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		shared.ExpectEqual(t, header.Reward, "2000000000000021250")
+		shared.ExpectEqual(t, header.BaseFee, mocks.MockHeader.BaseFee.String())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
