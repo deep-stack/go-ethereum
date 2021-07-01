@@ -41,7 +41,7 @@ import (
 var (
 	// block data
 	// TODO: Update this to `MainnetChainConfig` when `LondonBlock` is added
-	TestConfig  = params.RinkebyChainConfig
+	TestConfig  = params.RopstenChainConfig
 	BlockNumber = TestConfig.LondonBlock
 	MockHeader  = types.Header{
 		Time:        0,
