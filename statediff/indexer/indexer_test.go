@@ -22,10 +22,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/types"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipfs/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
@@ -45,11 +43,11 @@ var (
 	ind       *indexer.StateDiffIndexer
 	ipfsPgGet = `SELECT data FROM public.blocks
 					WHERE key = $1`
-	tx1, tx2, tx3, tx4, rct1, rct2, rct3, rct4    []byte
-	mockBlock                                     *types.Block
-	headerCID, trx1CID, trx2CID, trx3CID, trx4CID cid.Cid
-	rct1CID, rct2CID, rct3CID, rct4CID            cid.Cid
-	state1CID, state2CID, storageCID              cid.Cid
+	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5  []byte
+	mockBlock                                              *types.Block
+	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID cid.Cid
+	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID            cid.Cid
+	state1CID, state2CID, storageCID                       cid.Cid
 )
 
 func expectTrue(t *testing.T, value bool) {
@@ -88,6 +86,11 @@ func init() {
 	copy(tx4, buf.Bytes())
 	buf.Reset()
 
+	txs.EncodeIndex(4, buf)
+	tx5 = make([]byte, buf.Len())
+	copy(tx5, buf.Bytes())
+	buf.Reset()
+
 	rcts.EncodeIndex(0, buf)
 	rct1 = make([]byte, buf.Len())
 	copy(rct1, buf.Bytes())
@@ -108,15 +111,22 @@ func init() {
 	copy(rct4, buf.Bytes())
 	buf.Reset()
 
+	rcts.EncodeIndex(4, buf)
+	rct5 = make([]byte, buf.Len())
+	copy(rct5, buf.Bytes())
+	buf.Reset()
+
 	headerCID, _ = ipld.RawdataToCid(ipld.MEthHeader, mocks.MockHeaderRlp, multihash.KECCAK_256)
 	trx1CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx1, multihash.KECCAK_256)
 	trx2CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx2, multihash.KECCAK_256)
 	trx3CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx3, multihash.KECCAK_256)
 	trx4CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx4, multihash.KECCAK_256)
+	trx5CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx5, multihash.KECCAK_256)
 	rct1CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct1, multihash.KECCAK_256)
 	rct2CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct2, multihash.KECCAK_256)
 	rct3CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct3, multihash.KECCAK_256)
 	rct4CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct4, multihash.KECCAK_256)
+	rct5CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct5, multihash.KECCAK_256)
 	state1CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.ContractLeafNode, multihash.KECCAK_256)
 	state2CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.AccountLeafNode, multihash.KECCAK_256)
 	storageCID, _ = ipld.RawdataToCid(ipld.MEthStorageTrie, mocks.StorageLeafNode, multihash.KECCAK_256)
@@ -127,7 +137,7 @@ func setup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ind = indexer.NewStateDiffIndexer(params.MainnetChainConfig, db)
+	ind = indexer.NewStateDiffIndexer(mocks.TestConfig, db)
 	var tx *indexer.BlockTx
 	tx, err = ind.PushBlock(
 		mockBlock,
@@ -155,15 +165,16 @@ func TestPublishAndIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, id
+		pgStr := `SELECT cid, td, reward, id, base_fee
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
 		type res struct {
-			CID    string
-			TD     string
-			Reward string
-			ID     int
+			CID     string
+			TD      string
+			Reward  string
+			ID      int
+			BaseFee int64 `db:"base_fee"`
 		}
 		header := new(res)
 		err = db.QueryRowx(pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
@@ -173,6 +184,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		shared.ExpectEqual(t, header.CID, headerCID.String())
 		shared.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		shared.ExpectEqual(t, header.Reward, "2000000000000021250")
+		shared.ExpectEqual(t, header.BaseFee, mocks.MockHeader.BaseFee.Int64())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
@@ -198,11 +210,12 @@ func TestPublishAndIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		shared.ExpectEqual(t, len(trxs), 4)
+		shared.ExpectEqual(t, len(trxs), 5)
 		expectTrue(t, shared.ListContainsString(trxs, trx1CID.String()))
 		expectTrue(t, shared.ListContainsString(trxs, trx2CID.String()))
 		expectTrue(t, shared.ListContainsString(trxs, trx3CID.String()))
 		expectTrue(t, shared.ListContainsString(trxs, trx4CID.String()))
+		expectTrue(t, shared.ListContainsString(trxs, trx5CID.String()))
 		// and published
 		for _, c := range trxs {
 			dc, err := cid.Decode(c)
@@ -281,6 +294,17 @@ func TestPublishAndIndexer(t *testing.T) {
 				}
 				shared.ExpectEqual(t, model1, mocks.AccessListEntry1Model)
 				shared.ExpectEqual(t, model2, mocks.AccessListEntry2Model)
+			case trx5CID.String():
+				shared.ExpectEqual(t, data, tx5)
+				var txType *uint8
+				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
+				err = db.Get(&txType, pgStr, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if *txType != types.DynamicFeeTxType {
+					t.Fatalf("expected DynamicFeeTxType (2), got %d", *txType)
+				}
 			}
 		}
 	})
@@ -298,11 +322,12 @@ func TestPublishAndIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		shared.ExpectEqual(t, len(rcts), 4)
+		shared.ExpectEqual(t, len(rcts), 5)
 		expectTrue(t, shared.ListContainsString(rcts, rct1CID.String()))
 		expectTrue(t, shared.ListContainsString(rcts, rct2CID.String()))
 		expectTrue(t, shared.ListContainsString(rcts, rct3CID.String()))
 		expectTrue(t, shared.ListContainsString(rcts, rct4CID.String()))
+		expectTrue(t, shared.ListContainsString(rcts, rct5CID.String()))
 		// and published
 		for _, c := range rcts {
 			dc, err := cid.Decode(c)
@@ -346,6 +371,15 @@ func TestPublishAndIndexer(t *testing.T) {
 				shared.ExpectEqual(t, postState, mocks.ExpectedPostState2)
 			case rct4CID.String():
 				shared.ExpectEqual(t, data, rct4)
+				var postState string
+				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE cid = $1`
+				err = db.Get(&postState, pgStr, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				shared.ExpectEqual(t, postState, mocks.ExpectedPostState3)
+			case rct5CID.String():
+				shared.ExpectEqual(t, data, rct5)
 				var postState string
 				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE cid = $1`
 				err = db.Get(&postState, pgStr, c)

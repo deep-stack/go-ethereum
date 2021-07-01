@@ -36,6 +36,7 @@ type HeaderModel struct {
 	Bloom           []byte `db:"bloom"`
 	Timestamp       uint64 `db:"timestamp"`
 	TimesValidated  int64  `db:"times_validated"`
+	BaseFee         int64  `db:"base_fee"`
 }
 
 // UncleModel is the db model for eth.uncle_cids
@@ -63,7 +64,7 @@ type TxModel struct {
 	Type     *uint8 `db:"tx_type"`
 }
 
-// AccessListEntryModel is the db model for eth.access_list_entry
+// AccessListElementModel is the db model for eth.access_list_entry
 type AccessListElementModel struct {
 	ID          int64          `db:"id"`
 	Index       int64          `db:"index"`

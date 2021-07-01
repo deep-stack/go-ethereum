@@ -23,8 +23,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/lib/pq"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -119,7 +117,13 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		return nil, fmt.Errorf("expected number of transactions (%d), transaction trie nodes (%d), receipts (%d), and receipt trie nodes (%d)to be equal", len(txNodes), len(txTrieNodes), len(rctNodes), len(rctTrieNodes))
 	}
 	// Calculate reward
-	reward := CalcEthBlockReward(block.Header(), block.Uncles(), block.Transactions(), receipts)
+	var reward *big.Int
+	// in PoA networks block reward is 0
+	if sdi.chainConfig.Clique != nil {
+		reward = big.NewInt(0)
+	} else {
+		reward = CalcEthBlockReward(block.Header(), block.Uncles(), block.Transactions(), receipts)
+	}
 	t = time.Now()
 	// Begin new db tx for everything
 	tx, err := sdi.dbWriter.db.Beginx()
@@ -214,6 +218,12 @@ func (sdi *StateDiffIndexer) processHeader(tx *sqlx.Tx, header *types.Header, he
 	if err := shared.PublishIPLD(tx, headerNode); err != nil {
 		return 0, fmt.Errorf("error publishing header IPLD: %v", err)
 	}
+
+	var baseFee int64
+	if header.BaseFee != nil {
+		baseFee = header.BaseFee.Int64()
+	}
+
 	// index header
 	return sdi.dbWriter.upsertHeaderCID(tx, models.HeaderModel{
 		CID:             headerNode.Cid().String(),
@@ -229,6 +239,7 @@ func (sdi *StateDiffIndexer) processHeader(tx *sqlx.Tx, header *types.Header, he
 		TxRoot:          header.TxHash.String(),
 		UncleRoot:       header.UncleHash.String(),
 		Timestamp:       header.Time,
+		BaseFee:         baseFee,
 	})
 }
 
@@ -238,7 +249,13 @@ func (sdi *StateDiffIndexer) processUncles(tx *sqlx.Tx, headerID int64, blockNum
 		if err := shared.PublishIPLD(tx, uncleNode); err != nil {
 			return fmt.Errorf("error publishing uncle IPLD: %v", err)
 		}
-		uncleReward := CalcUncleMinerReward(blockNumber, uncleNode.Number.Uint64())
+		var uncleReward *big.Int
+		// in PoA networks uncle reward is 0
+		if sdi.chainConfig.Clique != nil {
+			uncleReward = big.NewInt(0)
+		} else {
+			uncleReward = CalcUncleMinerReward(blockNumber, uncleNode.Number.Uint64())
+		}
 		uncle := models.UncleModel{
 			CID:        uncleNode.Cid().String(),
 			MhKey:      shared.MultihashKeyFromCID(uncleNode.Cid()),
@@ -334,14 +351,6 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 			return err
 		}
 
-		// AccessListEntryModel is the db model for eth.access_list_entry
-		type AccessListElementModel struct {
-			ID          int64          `db:"id"`
-			Index       int64          `db:"index"`
-			TxID        int64          `db:"tx_id"`
-			Address     string         `db:"address"`
-			StorageKeys pq.StringArray `db:"storage_keys"`
-		}
 		// index access list if this is one
 		for j, accessListElement := range trx.AccessList() {
 			storageKeys := make([]string, len(accessListElement.StorageKeys))
