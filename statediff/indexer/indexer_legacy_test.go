@@ -72,7 +72,7 @@ func TestPublishAndIndexerLegacy(t *testing.T) {
 			TD      string
 			Reward  string
 			ID      int
-			BaseFee string `db:"base_fee"`
+			BaseFee int64 `db:"base_fee"`
 		}
 		header := new(res)
 		err = db.QueryRowx(pgStr, legacyData.BlockNumber.Uint64()).StructScan(header)
@@ -81,6 +81,7 @@ func TestPublishAndIndexerLegacy(t *testing.T) {
 		shared.ExpectEqual(t, header.CID, legacyHeaderCID.String())
 		shared.ExpectEqual(t, header.TD, legacyData.MockBlock.Difficulty().String())
 		shared.ExpectEqual(t, header.Reward, "5000000000000011250")
-		shared.ExpectEqual(t, header.BaseFee, legacyData.MockHeader.BaseFee.String())
+		require.Nil(t, legacyData.MockHeader.BaseFee)
+		shared.ExpectEqual(t, header.BaseFee, int64(0))
 	})
 }

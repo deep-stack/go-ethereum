@@ -212,6 +212,12 @@ func (sdi *StateDiffIndexer) processHeader(tx *sqlx.Tx, header *types.Header, he
 	if err := shared.PublishIPLD(tx, headerNode); err != nil {
 		return 0, fmt.Errorf("error publishing header IPLD: %v", err)
 	}
+
+	var baseFee int64
+	if header.BaseFee != nil {
+		baseFee = header.BaseFee.Int64()
+	}
+
 	// index header
 	return sdi.dbWriter.upsertHeaderCID(tx, models.HeaderModel{
 		CID:             headerNode.Cid().String(),
@@ -227,7 +233,7 @@ func (sdi *StateDiffIndexer) processHeader(tx *sqlx.Tx, header *types.Header, he
 		TxRoot:          header.TxHash.String(),
 		UncleRoot:       header.UncleHash.String(),
 		Timestamp:       header.Time,
-		BaseFee:         header.BaseFee.String(),
+		BaseFee:         baseFee,
 	})
 }
 
