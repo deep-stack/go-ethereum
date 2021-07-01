@@ -23,8 +23,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/lib/pq"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -335,14 +333,6 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 			return err
 		}
 
-		// AccessListEntryModel is the db model for eth.access_list_entry
-		type AccessListElementModel struct {
-			ID          int64          `db:"id"`
-			Index       int64          `db:"index"`
-			TxID        int64          `db:"tx_id"`
-			Address     string         `db:"address"`
-			StorageKeys pq.StringArray `db:"storage_keys"`
-		}
 		// index access list if this is one
 		for j, accessListElement := range trx.AccessList() {
 			storageKeys := make([]string, len(accessListElement.StorageKeys))
