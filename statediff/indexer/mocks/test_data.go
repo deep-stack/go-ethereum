@@ -53,7 +53,7 @@ var (
 		Extra:       []byte{},
 		BaseFee:     big.NewInt(params.InitialBaseFee),
 	}
-	MockTransactions, MockReceipts, SenderAddr        = createTransactionsAndReceipts()
+	MockTransactions, MockReceipts, SenderAddr        = createTransactionsAndReceipts(TestConfig, BlockNumber)
 	MockBlock                                         = types.NewBlock(&MockHeader, MockTransactions, nil, MockReceipts, new(trie.Trie))
 	MockHeaderRlp, _                                  = rlp.EncodeToBytes(MockBlock.Header())
 	Address                                           = common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476592")
@@ -182,14 +182,132 @@ type AccessListTx struct {
 
 */
 
+type LegacyData struct {
+	Config               *params.ChainConfig
+	BlockNumber          *big.Int
+	MockHeader           types.Header
+	MockTransactions     types.Transactions
+	MockReceipts         types.Receipts
+	SenderAddr           common.Address
+	MockBlock            *types.Block
+	MockHeaderRlp        []byte
+	Address              []byte
+	AnotherAddress       []byte
+	ContractAddress      common.Address
+	MockContractByteCode []byte
+	MockLog1             *types.Log
+	MockLog2             *types.Log
+	StorageLeafKey       []byte
+	MockStorageLeafKey   []byte
+	StorageLeafNode      []byte
+	ContractLeafKey      []byte
+	ContractAccount      []byte
+	ContractPartialPath  []byte
+	ContractLeafNode     []byte
+	AccountRoot          string
+	AccountLeafNode      []byte
+	StateDiffs           []sdtypes.StateNode
+}
+
+func NewLegacyData() *LegacyData {
+	config := params.MainnetChainConfig
+	// Block number before london fork.
+	blockNumber := config.EIP155Block
+
+	mockHeader := types.Header{
+		Time:        0,
+		Number:      new(big.Int).Set(blockNumber),
+		Root:        common.HexToHash("0x0"),
+		TxHash:      common.HexToHash("0x0"),
+		ReceiptHash: common.HexToHash("0x0"),
+		Difficulty:  big.NewInt(5000000),
+		Extra:       []byte{},
+	}
+
+	mockTransactions, mockReceipts, senderAddr := createLegacyTransactionsAndReceipts(config, blockNumber)
+	mockBlock := types.NewBlock(&mockHeader, mockTransactions, nil, mockReceipts, new(trie.Trie))
+	mockHeaderRlp, _ := rlp.EncodeToBytes(mockBlock.Header())
+	contractAddress := crypto.CreateAddress(senderAddr, mockTransactions[2].Nonce())
+
+	return &LegacyData{
+		Config:               config,
+		BlockNumber:          blockNumber,
+		MockHeader:           mockHeader,
+		MockTransactions:     mockTransactions,
+		MockReceipts:         mockReceipts,
+		SenderAddr:           senderAddr,
+		MockBlock:            mockBlock,
+		MockHeaderRlp:        mockHeaderRlp,
+		ContractAddress:      contractAddress,
+		MockContractByteCode: MockContractByteCode,
+		MockLog1:             MockLog1,
+		MockLog2:             MockLog2,
+		StorageLeafKey:       StorageLeafKey,
+		MockStorageLeafKey:   MockStorageLeafKey,
+		StorageLeafNode:      StorageLeafNode,
+		ContractLeafKey:      ContractLeafKey,
+		ContractAccount:      ContractAccount,
+		ContractPartialPath:  ContractPartialPath,
+		ContractLeafNode:     ContractLeafNode,
+		AccountRoot:          AccountRoot,
+		AccountLeafNode:      AccountLeafKey,
+		StateDiffs:           StateDiffs,
+	}
+}
+
+// createLegacyTransactionsAndReceipts is a helper function to generate signed mock legacy transactions and mock receipts with mock logs
+func createLegacyTransactionsAndReceipts(config *params.ChainConfig, blockNumber *big.Int) (types.Transactions, types.Receipts, common.Address) {
+	// make transactions
+	trx1 := types.NewTransaction(0, Address, big.NewInt(1000), 50, big.NewInt(100), []byte{})
+	trx2 := types.NewTransaction(1, AnotherAddress, big.NewInt(2000), 100, big.NewInt(200), []byte{})
+	trx3 := types.NewContractCreation(2, big.NewInt(1500), 75, big.NewInt(150), MockContractByteCode)
+
+	transactionSigner := types.MakeSigner(config, blockNumber)
+	mockCurve := elliptic.P256()
+	mockPrvKey, err := ecdsa.GenerateKey(mockCurve, rand.Reader)
+	if err != nil {
+		log.Crit(err.Error())
+	}
+	signedTrx1, err := types.SignTx(trx1, transactionSigner, mockPrvKey)
+	if err != nil {
+		log.Crit(err.Error())
+	}
+	signedTrx2, err := types.SignTx(trx2, transactionSigner, mockPrvKey)
+	if err != nil {
+		log.Crit(err.Error())
+	}
+	signedTrx3, err := types.SignTx(trx3, transactionSigner, mockPrvKey)
+	if err != nil {
+		log.Crit(err.Error())
+	}
+
+	senderAddr, err := types.Sender(transactionSigner, signedTrx1) // same for both trx
+	if err != nil {
+		log.Crit(err.Error())
+	}
+
+	// make receipts
+	mockReceipt1 := types.NewReceipt(nil, false, 50)
+	mockReceipt1.Logs = []*types.Log{MockLog1}
+	mockReceipt1.TxHash = signedTrx1.Hash()
+	mockReceipt2 := types.NewReceipt(common.HexToHash("0x1").Bytes(), false, 100)
+	mockReceipt2.Logs = []*types.Log{MockLog2}
+	mockReceipt2.TxHash = signedTrx2.Hash()
+	mockReceipt3 := types.NewReceipt(common.HexToHash("0x2").Bytes(), false, 75)
+	mockReceipt3.Logs = []*types.Log{}
+	mockReceipt3.TxHash = signedTrx3.Hash()
+
+	return types.Transactions{signedTrx1, signedTrx2, signedTrx3}, types.Receipts{mockReceipt1, mockReceipt2, mockReceipt3}, senderAddr
+}
+
 // createTransactionsAndReceipts is a helper function to generate signed mock transactions and mock receipts with mock logs
-func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common.Address) {
+func createTransactionsAndReceipts(config *params.ChainConfig, blockNumber *big.Int) (types.Transactions, types.Receipts, common.Address) {
 	// make transactions
 	trx1 := types.NewTransaction(0, Address, big.NewInt(1000), 50, big.NewInt(100), []byte{})
 	trx2 := types.NewTransaction(1, AnotherAddress, big.NewInt(2000), 100, big.NewInt(200), []byte{})
 	trx3 := types.NewContractCreation(2, big.NewInt(1500), 75, big.NewInt(150), MockContractByteCode)
 	trx4 := types.NewTx(&types.AccessListTx{
-		ChainID:  TestConfig.ChainID,
+		ChainID:  config.ChainID,
 		Nonce:    0,
 		GasPrice: big.NewInt(100),
 		Gas:      50,
@@ -202,7 +320,7 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 		},
 	})
 	trx5 := types.NewTx(&types.DynamicFeeTx{
-		ChainID:   TestConfig.ChainID,
+		ChainID:   config.ChainID,
 		Nonce:     0,
 		GasTipCap: big.NewInt(100),
 		GasFeeCap: big.NewInt(100),
@@ -216,7 +334,7 @@ func createTransactionsAndReceipts() (types.Transactions, types.Receipts, common
 		},
 	})
 
-	transactionSigner := types.MakeSigner(TestConfig, BlockNumber)
+	transactionSigner := types.MakeSigner(config, blockNumber)
 	mockCurve := elliptic.P256()
 	mockPrvKey, err := ecdsa.GenerateKey(mockCurve, rand.Reader)
 	if err != nil {
