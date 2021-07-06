@@ -174,7 +174,7 @@ func TestPublishAndIndexer(t *testing.T) {
 			TD      string
 			Reward  string
 			ID      int
-			BaseFee int64 `db:"base_fee"`
+			BaseFee *int64 `db:"base_fee"`
 		}
 		header := new(res)
 		err = db.QueryRowx(pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
@@ -184,7 +184,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		shared.ExpectEqual(t, header.CID, headerCID.String())
 		shared.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		shared.ExpectEqual(t, header.Reward, "2000000000000021250")
-		shared.ExpectEqual(t, header.BaseFee, mocks.MockHeader.BaseFee.Int64())
+		shared.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.Int64())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
