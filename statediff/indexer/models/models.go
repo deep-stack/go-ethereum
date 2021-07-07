@@ -36,7 +36,7 @@ type HeaderModel struct {
 	Bloom           []byte `db:"bloom"`
 	Timestamp       uint64 `db:"timestamp"`
 	TimesValidated  int64  `db:"times_validated"`
-	BaseFee         int64  `db:"base_fee"`
+	BaseFee         *int64 `db:"base_fee"`
 }
 
 // UncleModel is the db model for eth.uncle_cids

@@ -219,9 +219,10 @@ func (sdi *StateDiffIndexer) processHeader(tx *sqlx.Tx, header *types.Header, he
 		return 0, fmt.Errorf("error publishing header IPLD: %v", err)
 	}
 
-	var baseFee int64
+	var baseFee *int64
 	if header.BaseFee != nil {
-		baseFee = header.BaseFee.Int64()
+		baseFee = new(int64)
+		*baseFee = header.BaseFee.Int64()
 	}
 
 	// index header
