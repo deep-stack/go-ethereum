@@ -104,6 +104,11 @@ geth-linux-amd64:
 	@echo "Linux amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/geth-linux-* | grep amd64
 
+geth-linux-amd64-static:
+	$(GORUN) build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 --ldflags '-s -w -extldflags "-static"' -v ./cmd/geth
+	@echo "Linux amd64 cross compilation done:"
+	@ls -ld $(GOBIN)/geth-linux-* | grep amd64
+
 geth-linux-arm: geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
 	@echo "Linux ARM cross compilation done:"
 	@ls -ld $(GOBIN)/geth-linux-* | grep arm
