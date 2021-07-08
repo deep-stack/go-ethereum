@@ -1124,6 +1124,7 @@ func doXgo(cmdline []string) {
 }
 
 func xgoTool(args []string) *exec.Cmd {
+	os.Setenv("GOPATH", "/home/runner/go")
 	cmd := exec.Command(filepath.Join(GOBIN, "xgo"), args...)
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, []string{"GOBIN=" + GOBIN}...)
