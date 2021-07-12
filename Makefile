@@ -110,7 +110,7 @@ geth-linux-amd64-static:
 	@ls -ld $(GOBIN)/geth-linux-* | grep amd64
 
 geth-linux-arm: geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
-	@echo "Linux ARM cross compilation done:"
+	@echo "Linux ARM cross compilation don e:"
 	@ls -ld $(GOBIN)/geth-linux-* | grep arm
 
 geth-linux-arm-5:
