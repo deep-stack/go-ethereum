@@ -3,6 +3,7 @@ name: Docker Build and publish to Github
 on:
   push:
     branches:
+      - v1.10.8-statediff
       - v1.10.7-statediff
       - v1.10.6-statediff
       - v1.10.5-statediff
