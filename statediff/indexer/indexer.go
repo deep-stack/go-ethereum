@@ -319,10 +319,10 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 
 		// Indexing
 		// extract topic and contract data from the receipt for indexing
-		topicSet := make([]string, 4)
 		mappedContracts := make(map[string]bool) // use map to avoid duplicate addresses
 		logDataSet := make([]*models.LogsModel, len(receipt.Logs))
 		for idx, l := range receipt.Logs {
+			topicSet := make([]string, 4)
 			for ti, topic := range l.Topics {
 				topicSet[ti] = topic.Hex()
 			}

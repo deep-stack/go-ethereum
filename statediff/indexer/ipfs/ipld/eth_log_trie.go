@@ -19,7 +19,7 @@ type EthLogTrie struct {
   OUTPUT
 */
 
-// DecodeEthLogTrie returns an EthRctTrie object from its cid and rawdata.
+// DecodeEthLogTrie returns an EthLogTrie object from its cid and rawdata.
 func DecodeEthLogTrie(c cid.Cid, b []byte) (*EthLogTrie, error) {
 	tn, err := decodeTrieNode(c, b, decodeEthLogTrieLeaf)
 	if err != nil {
@@ -28,7 +28,7 @@ func DecodeEthLogTrie(c cid.Cid, b []byte) (*EthLogTrie, error) {
 	return &EthLogTrie{TrieNode: tn}, nil
 }
 
-// decodeEthLogTrieLeaf parses a eth-rct-trie leaf
+// decodeEthLogTrieLeaf parses a eth-log-trie leaf
 // from decoded RLP elements
 func decodeEthLogTrieLeaf(i []interface{}) ([]interface{}, error) {
 	l := new(types.Log)
@@ -76,12 +76,12 @@ func (t *EthLogTrie) Loggable() map[string]interface{} {
 	}
 }
 
-// rctTrie wraps a localTrie for use on the receipt trie.
+// logTrie wraps a localTrie for use on the receipt trie.
 type logTrie struct {
 	*localTrie
 }
 
-// newRctTrie initializes and returns a rctTrie.
+// newLogTrie initializes and returns a logTrie.
 func newLogTrie() *logTrie {
 	return &logTrie{
 		localTrie: newLocalTrie(),
