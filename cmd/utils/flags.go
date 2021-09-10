@@ -786,7 +786,7 @@ var (
 		Usage: "PostgreSQL database connection string for writing state diffs",
 	}
 	StateDiffDBInitFlag = cli.BoolFlag{
-		Name: "statediff.db.init",
+		Name:  "statediff.db.init",
 		Usage: "Whether or not the statediff database needs to be initialized; set true the first time this process is ran on a given database",
 	}
 	StateDiffDBNodeIDFlag = cli.StringFlag{

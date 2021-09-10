@@ -49,8 +49,8 @@ var (
 
 const (
 	removedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	removedNodeStateCID = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	removedNodeMhKey = "/blocks/DMQMLUSGAGDPOIZ4SJ7H3MW4Y4B4BZIAWZJ4VARHHN57VWAELWC2I4A"
+	removedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
+	removedNodeMhKey      = "/blocks/DMQMLUSGAGDPOIZ4SJ7H3MW4Y4B4BZIAWZJ4VARHHN57VWAELWC2I4A"
 )
 
 // Indexer interface to allow substitution of mocks for testing
@@ -65,7 +65,7 @@ type Indexer interface {
 type StateDiffIndexer struct {
 	chainConfig *params.ChainConfig
 	dbWriter    *PostgresCIDWriter
-	init bool
+	init        bool
 }
 
 // NewStateDiffIndexer creates a pointer to a new PayloadConverter which satisfies the PayloadConverter interface
@@ -509,11 +509,11 @@ func (sdi *StateDiffIndexer) PushStateNode(tx *BlockTx, stateNode sdtypes.StateN
 			// short circuit if it is a Removed node
 			// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
 			storageModel := models.StorageNodeModel{
-				Path:     storageNode.Path,
+				Path:       storageNode.Path,
 				StorageKey: common.BytesToHash(storageNode.LeafKey).String(),
-				CID:      removedNodeStorageCID,
-				MhKey:    removedNodeMhKey,
-				NodeType: storageNode.NodeType.Int(),
+				CID:        removedNodeStorageCID,
+				MhKey:      removedNodeMhKey,
+				NodeType:   storageNode.NodeType.Int(),
 			}
 			if err := sdi.dbWriter.upsertStorageCID(tx.dbtx, storageModel, stateID); err != nil {
 				return err

@@ -1481,10 +1481,10 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 						StorageNodes: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x06'},
-						NodeType:  sdtypes.Removed,
-						LeafKey:   contractLeafKey,
-						NodeValue: []byte{},
+						Path:         []byte{'\x06'},
+						NodeType:     sdtypes.Removed,
+						LeafKey:      contractLeafKey,
+						NodeValue:    []byte{},
 						StorageNodes: emptyStorage,
 					},
 					{

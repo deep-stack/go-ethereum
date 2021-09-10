@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/types"
 )
 
-// ResolveFromNodeType wrapper around NodeType.Int() so that we maintain backwards compatability
+// ResolveFromNodeType wrapper around NodeType.Int() so that we maintain backwards compatibility
 func ResolveFromNodeType(nodeType types.NodeType) int {
 	return nodeType.Int()
 }

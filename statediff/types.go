@@ -39,7 +39,7 @@ type DBParams struct {
 	ConnectionURL string
 	ID            string
 	ClientName    string
-	Init 		  bool
+	Init          bool
 }
 
 // Params is used to carry in parameters from subscribing/requesting clients configuration
