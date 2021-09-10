@@ -139,7 +139,8 @@ func setup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ind = indexer.NewStateDiffIndexer(mocks.TestConfig, db)
+	ind, err = indexer.NewStateDiffIndexer(mocks.TestConfig, db, false)
+	require.NoError(t, err)
 	var tx *indexer.BlockTx
 	tx, err = ind.PushBlock(
 		mockBlock,
