@@ -150,6 +150,7 @@ var (
 		utils.MinerNotifyFullFlag,
 		utils.StateDiffFlag,
 		utils.StateDiffDBFlag,
+		utils.StateDiffDBInitFlag,
 		utils.StateDiffDBNodeIDFlag,
 		utils.StateDiffDBClientNameFlag,
 		utils.StateDiffWritingFlag,
