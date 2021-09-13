@@ -62,6 +62,7 @@ type TxModel struct {
 	Src      string `db:"src"`
 	Data     []byte `db:"tx_data"`
 	Type     *uint8 `db:"tx_type"`
+	Gas		 uint64 `db:"gas"`
 }
 
 // AccessListElementModel is the db model for eth.access_list_entry
@@ -84,6 +85,7 @@ type ReceiptModel struct {
 	Contract     string `db:"contract"`
 	ContractHash string `db:"contract_hash"`
 	LogRoot      string `db:"log_root"`
+	GasUsed		uint64 `db:"gas_used"`
 }
 
 // StateNodeModel is the db model for eth.state_cids

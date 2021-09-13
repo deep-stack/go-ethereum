@@ -365,6 +365,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 			Data:   trx.Data(),
 			CID:    txNode.Cid().String(),
 			MhKey:  shared.MultihashKeyFromCID(txNode.Cid()),
+			Gas: 	txNode.Gas(),
 		}
 		txType := trx.Type()
 		if txType != types.LegacyTxType {
@@ -397,6 +398,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 			CID:          rctNode.Cid().String(),
 			MhKey:        shared.MultihashKeyFromCID(rctNode.Cid()),
 			LogRoot:      rctNode.LogRoot.String(),
+			GasUsed:      rctNode.GasUsed,
 		}
 		if len(receipt.PostState) == 0 {
 			rctModel.PostStatus = receipt.Status

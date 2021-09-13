@@ -69,10 +69,10 @@ func (in *PostgresCIDWriter) upsertUncleCID(tx *sqlx.Tx, uncle models.UncleModel
 
 func (in *PostgresCIDWriter) upsertTransactionCID(tx *sqlx.Tx, transaction models.TxModel, headerID int64) (int64, error) {
 	var txID int64
-	err := tx.QueryRowx(`INSERT INTO eth.transaction_cids (header_id, tx_hash, cid, dst, src, index, mh_key, tx_data, tx_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-									ON CONFLICT (header_id, tx_hash) DO UPDATE SET (cid, dst, src, index, mh_key, tx_data, tx_type) = ($3, $4, $5, $6, $7, $8, $9)
+	err := tx.QueryRowx(`INSERT INTO eth.transaction_cids (header_id, tx_hash, cid, dst, src, index, mh_key, tx_data, tx_type, gas) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+									ON CONFLICT (header_id, tx_hash) DO UPDATE SET (cid, dst, src, index, mh_key, tx_data, tx_type, gas) = ($3, $4, $5, $6, $7, $8, $9, $10)
 									RETURNING id`,
-		headerID, transaction.TxHash, transaction.CID, transaction.Dst, transaction.Src, transaction.Index, transaction.MhKey, transaction.Data, transaction.Type).Scan(&txID)
+		headerID, transaction.TxHash, transaction.CID, transaction.Dst, transaction.Src, transaction.Index, transaction.MhKey, transaction.Data, transaction.Type, transaction.Gas).Scan(&txID)
 	if err != nil {
 		return 0, fmt.Errorf("error upserting transaction_cids entry: %v", err)
 	}
@@ -93,10 +93,10 @@ func (in *PostgresCIDWriter) upsertAccessListElement(tx *sqlx.Tx, accessListElem
 
 func (in *PostgresCIDWriter) upsertReceiptCID(tx *sqlx.Tx, rct *models.ReceiptModel, txID int64) (int64, error) {
 	var receiptID int64
-	err := tx.QueryRowx(`INSERT INTO eth.receipt_cids (tx_id, cid, contract, contract_hash, mh_key, post_state, post_status, log_root) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
- 							  ON CONFLICT (tx_id) DO UPDATE SET (cid, contract, contract_hash, mh_key, post_state, post_status, log_root) = ($2, $3, $4, $5, $6, $7, $8)
+	err := tx.QueryRowx(`INSERT INTO eth.receipt_cids (tx_id, cid, contract, contract_hash, mh_key, post_state, post_status, log_root, gas_used) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ 							  ON CONFLICT (tx_id) DO UPDATE SET (cid, contract, contract_hash, mh_key, post_state, post_status, log_root, gas_used) = ($2, $3, $4, $5, $6, $7, $8, $9)
  							  RETURNING id`,
-		txID, rct.CID, rct.Contract, rct.ContractHash, rct.MhKey, rct.PostState, rct.PostStatus, rct.LogRoot).Scan(&receiptID)
+		txID, rct.CID, rct.Contract, rct.ContractHash, rct.MhKey, rct.PostState, rct.PostStatus, rct.LogRoot, rct.GasUsed).Scan(&receiptID)
 	if err != nil {
 		return 0, fmt.Errorf("error upserting receipt_cids entry: %w", err)
 	}
