@@ -365,7 +365,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *sqlx.Tx, args processArgs
 			Data:   trx.Data(),
 			CID:    txNode.Cid().String(),
 			MhKey:  shared.MultihashKeyFromCID(txNode.Cid()),
-			Gas: 	txNode.Gas(),
+			Gas:    txNode.Gas(),
 		}
 		txType := trx.Type()
 		if txType != types.LegacyTxType {
