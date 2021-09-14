@@ -80,7 +80,7 @@ func TestPublishAndIndexerLegacy(t *testing.T) {
 
 		shared.ExpectEqual(t, header.CID, legacyHeaderCID.String())
 		shared.ExpectEqual(t, header.TD, legacyData.MockBlock.Difficulty().String())
-		shared.ExpectEqual(t, header.Reward, "5000000000000011250")
+		shared.ExpectEqual(t, header.Reward, "5000000000000026250")
 		require.Nil(t, legacyData.MockHeader.BaseFee)
 		require.Nil(t, header.BaseFee)
 	})

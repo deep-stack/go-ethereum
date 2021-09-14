@@ -293,7 +293,7 @@ func createLegacyTransactionsAndReceipts(config *params.ChainConfig, blockNumber
 	mockReceipt2 := types.NewReceipt(common.HexToHash("0x1").Bytes(), false, 100)
 	mockReceipt2.Logs = []*types.Log{MockLog2}
 	mockReceipt2.TxHash = signedTrx2.Hash()
-	mockReceipt3 := types.NewReceipt(common.HexToHash("0x2").Bytes(), false, 75)
+	mockReceipt3 := types.NewReceipt(common.HexToHash("0x2").Bytes(), false, 175)
 	mockReceipt3.Logs = []*types.Log{}
 	mockReceipt3.TxHash = signedTrx3.Hash()
 
@@ -373,7 +373,7 @@ func createTransactionsAndReceipts(config *params.ChainConfig, blockNumber *big.
 	mockReceipt2 := types.NewReceipt(common.HexToHash("0x1").Bytes(), false, 100)
 	mockReceipt2.Logs = []*types.Log{MockLog2}
 	mockReceipt2.TxHash = signedTrx2.Hash()
-	mockReceipt3 := types.NewReceipt(common.HexToHash("0x2").Bytes(), false, 75)
+	mockReceipt3 := types.NewReceipt(common.HexToHash("0x2").Bytes(), false, 175)
 	mockReceipt3.Logs = []*types.Log{}
 	mockReceipt3.TxHash = signedTrx3.Hash()
 	mockReceipt4 := &types.Receipt{

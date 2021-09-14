@@ -184,7 +184,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		}
 		shared.ExpectEqual(t, header.CID, headerCID.String())
 		shared.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
-		shared.ExpectEqual(t, header.Reward, "2000000000000021250")
+		shared.ExpectEqual(t, header.Reward, "2000000000000026250")
 		shared.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.Int64())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
