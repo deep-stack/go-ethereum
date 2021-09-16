@@ -333,7 +333,7 @@ func TestPublishAndIndexer(t *testing.T) {
 			Topic0  string `db:"topic0"`
 			Topic1  string `db:"topic1"`
 		}
-		for i, _ := range rcts {
+		for i := range rcts {
 			results := make([]logIPLD, 0)
 			pgStr = `SELECT log_cids.index, log_cids.address, log_cids.Topic0, log_cids.Topic1, data FROM eth.log_cids
     				INNER JOIN eth.receipt_cids ON (log_cids.receipt_id = receipt_cids.id)
