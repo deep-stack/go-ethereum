@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// This package provides an interface for pushing and indexing IPLD objects into a Postgres database
+// Package indexer provides an interface for pushing and indexing IPLD objects into a Postgres database
 // Metrics for reporting processing and connection stats are defined in ./metrics.go
 package indexer
 
@@ -48,9 +48,9 @@ var (
 )
 
 const (
-	removedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	removedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	removedNodeMhKey      = "/blocks/DMQMLUSGAGDPOIZ4SJ7H3MW4Y4B4BZIAWZJ4VARHHN57VWAELWC2I4A"
+	RemovedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
+	RemovedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
+	RemovedNodeMhKey      = "/blocks/DMQMLUSGAGDPOIZ4SJ7H3MW4Y4B4BZIAWZJ4VARHHN57VWAELWC2I4A"
 )
 
 // Indexer interface to allow substitution of mocks for testing
@@ -69,12 +69,10 @@ type StateDiffIndexer struct {
 }
 
 // NewStateDiffIndexer creates a pointer to a new PayloadConverter which satisfies the PayloadConverter interface
-func NewStateDiffIndexer(chainConfig *params.ChainConfig, db *postgres.DB, init bool) (*StateDiffIndexer, error) {
-	// If this is the first time writing to this db, write the public.blocks entry for an empty node (for Removed state and storage node types)
-	if init {
-		if err := shared.PublishDirectWithDB(db, removedNodeMhKey, []byte{}); err != nil {
-			return nil, err
-		}
+func NewStateDiffIndexer(chainConfig *params.ChainConfig, db *postgres.DB) (*StateDiffIndexer, error) {
+	// Write the removed node to the db on init
+	if err := shared.PublishDirectWithDB(db, RemovedNodeMhKey, []byte{}); err != nil {
+		return nil, err
 	}
 	return &StateDiffIndexer{
 		chainConfig: chainConfig,
@@ -457,8 +455,8 @@ func (sdi *StateDiffIndexer) PushStateNode(tx *BlockTx, stateNode sdtypes.StateN
 		stateModel := models.StateNodeModel{
 			Path:     stateNode.Path,
 			StateKey: common.BytesToHash(stateNode.LeafKey).String(),
-			CID:      removedNodeStateCID,
-			MhKey:    removedNodeMhKey,
+			CID:      RemovedNodeStateCID,
+			MhKey:    RemovedNodeMhKey,
 			NodeType: stateNode.NodeType.Int(),
 		}
 		_, err := sdi.dbWriter.upsertStateCID(tx.dbtx, stateModel, tx.headerID)
@@ -511,8 +509,8 @@ func (sdi *StateDiffIndexer) PushStateNode(tx *BlockTx, stateNode sdtypes.StateN
 			storageModel := models.StorageNodeModel{
 				Path:       storageNode.Path,
 				StorageKey: common.BytesToHash(storageNode.LeafKey).String(),
-				CID:        removedNodeStorageCID,
-				MhKey:      removedNodeMhKey,
+				CID:        RemovedNodeStorageCID,
+				MhKey:      RemovedNodeMhKey,
 				NodeType:   storageNode.NodeType.Int(),
 			}
 			if err := sdi.dbWriter.upsertStorageCID(tx.dbtx, storageModel, stateID); err != nil {

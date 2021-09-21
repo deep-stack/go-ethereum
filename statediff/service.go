@@ -165,7 +165,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		if err != nil {
 			return err
 		}
-		indexer, err = ind.NewStateDiffIndexer(blockChain.Config(), db, params.DBParams.Init)
+		indexer, err = ind.NewStateDiffIndexer(blockChain.Config(), db)
 		if err != nil {
 			return err
 		}

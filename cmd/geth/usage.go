@@ -232,7 +232,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: []cli.Flag{
 			utils.StateDiffFlag,
 			utils.StateDiffDBFlag,
-			utils.StateDiffDBInitFlag,
 			utils.StateDiffDBNodeIDFlag,
 			utils.StateDiffDBClientNameFlag,
 			utils.StateDiffWritingFlag,

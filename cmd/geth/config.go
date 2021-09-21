@@ -187,9 +187,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			} else {
 				utils.Fatalf("Must specify client name for statediff DB output")
 			}
-			if ctx.GlobalIsSet(utils.StateDiffDBInitFlag.Name) {
-				dbParams.Init = ctx.GlobalBool(utils.StateDiffDBInitFlag.Name)
-			}
 		} else {
 			if ctx.GlobalBool(utils.StateDiffWritingFlag.Name) {
 				utils.Fatalf("Must pass DB parameters if enabling statediff write loop")

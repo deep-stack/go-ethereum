@@ -22,7 +22,6 @@ package types
 import "github.com/ethereum/go-ethereum/common"
 
 // NodeType for explicitly setting type of node
-// we use a string because it is RLP serializable, whereas an int is not
 type NodeType string
 
 const (
@@ -30,7 +29,7 @@ const (
 	Branch    NodeType = "Branch"
 	Extension NodeType = "Extension"
 	Leaf      NodeType = "Leaf"
-	Removed   NodeType = "Removed" // used to represent pathes which have been emptied
+	Removed   NodeType = "Removed" // used to represent paths which have been emptied
 )
 
 func (n NodeType) Int() int {
