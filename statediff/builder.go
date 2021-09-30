@@ -112,7 +112,7 @@ func (sdb *builder) buildStateTrie(it trie.NodeIterator) ([]StateNode, []CodeAnd
 		}
 		switch node.NodeType {
 		case Leaf:
-			var account state.Account
+			var account types.StateAccount
 			if err := rlp.DecodeBytes(nodeElements[1].([]byte), &account); err != nil {
 				return nil, nil, fmt.Errorf("error decoding account for leaf node at path %x nerror: %v", node.Path, err)
 			}
@@ -305,7 +305,7 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 		if node.NodeType == Leaf {
 			// created vs updated is important for leaf nodes since we need to diff their storage
 			// so we need to map all changed accounts at B to their leafkey, since account can change pathes but not leafkey
-			var account state.Account
+			var account types.StateAccount
 			if err := rlp.DecodeBytes(nodeElements[1].([]byte), &account); err != nil {
 				return nil, nil, fmt.Errorf("error decoding account for leaf node at path %x nerror: %v", node.Path, err)
 			}
@@ -350,7 +350,7 @@ func (sdb *builder) createdAndUpdatedStateWithIntermediateNodes(a, b trie.NodeIt
 		case Leaf:
 			// created vs updated is important for leaf nodes since we need to diff their storage
 			// so we need to map all changed accounts at B to their leafkey, since account can change paths but not leafkey
-			var account state.Account
+			var account types.StateAccount
 			if err := rlp.DecodeBytes(nodeElements[1].([]byte), &account); err != nil {
 				return nil, nil, fmt.Errorf("error decoding account for leaf node at path %x nerror: %v", node.Path, err)
 			}
@@ -401,7 +401,7 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffPathsAtB m
 		switch node.NodeType {
 		case Leaf:
 			// map all different accounts at A to their leafkey
-			var account state.Account
+			var account types.StateAccount
 			if err := rlp.DecodeBytes(nodeElements[1].([]byte), &account); err != nil {
 				return nil, fmt.Errorf("error decoding account for leaf node at path %x nerror: %v", node.Path, err)
 			}

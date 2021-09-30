@@ -605,7 +605,7 @@ func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- Cod
 				return
 			default:
 			}
-			account := new(state.Account)
+			account := new(types.StateAccount)
 			if err := rlp.DecodeBytes(leafIt.Value, account); err != nil {
 				log.Error("error decoding state account", "err", err)
 				return

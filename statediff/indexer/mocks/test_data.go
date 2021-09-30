@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -113,7 +112,7 @@ var (
 	ContractRoot       = "0x821e2556a290c86405f8160a2d662042a431ba456b9db265c79bb837c04be5f0"
 	ContractCodeHash   = common.HexToHash("0x753f98a8d4328b15636e46f66f2cb4bc860100aa17967cc145fcd17d1d4710ea")
 	ContractLeafKey    = testhelpers.AddressToLeafKey(ContractAddress)
-	ContractAccount, _ = rlp.EncodeToBytes(state.Account{
+	ContractAccount, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    nonce1,
 		Balance:  big.NewInt(0),
 		CodeHash: ContractCodeHash.Bytes(),
@@ -130,7 +129,7 @@ var (
 	AccountCodeHash = common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
 	AccountLeafKey  = testhelpers.Account2LeafKey
 	RemovedLeafKey  = testhelpers.Account1LeafKey
-	Account, _      = rlp.EncodeToBytes(state.Account{
+	Account, _      = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    nonce0,
 		Balance:  big.NewInt(1000),
 		CodeHash: AccountCodeHash.Bytes(),

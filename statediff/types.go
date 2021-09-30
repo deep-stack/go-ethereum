@@ -24,7 +24,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
+	ctypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/types"
 )
 
@@ -105,7 +105,7 @@ type AccountMap map[string]accountWrapper
 
 // accountWrapper is used to temporary associate the unpacked node with its raw values
 type accountWrapper struct {
-	Account   *state.Account
+	Account   *ctypes.StateAccount
 	NodeType  types.NodeType
 	Path      []byte
 	NodeValue []byte
