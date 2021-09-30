@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -39,7 +38,7 @@ var (
 	emptyStorage   = make([]sdtypes.StorageNode, 0)
 	block0, block1 *types.Block
 	minerLeafKey   = testhelpers.AddressToLeafKey(common.HexToAddress("0x0"))
-	account1, _    = rlp.EncodeToBytes(state.Account{
+	account1, _    = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    uint64(0),
 		Balance:  big.NewInt(10000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
@@ -49,7 +48,7 @@ var (
 		common.Hex2Bytes("3926db69aaced518e9b9f0f434a473e7174109c943548bb8f23be41ca76d9ad2"),
 		account1,
 	})
-	minerAccount, _ = rlp.EncodeToBytes(state.Account{
+	minerAccount, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    uint64(0),
 		Balance:  big.NewInt(2000002625000000000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
@@ -59,7 +58,7 @@ var (
 		common.Hex2Bytes("3380c7b7ae81a58eb98d9c78de4a1fd7fd9535fc953ed2be602daaa41767312a"),
 		minerAccount,
 	})
-	bankAccount, _ = rlp.EncodeToBytes(state.Account{
+	bankAccount, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    uint64(1),
 		Balance:  big.NewInt(1999978999999990000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),

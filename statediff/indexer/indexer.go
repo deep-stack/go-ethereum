@@ -23,8 +23,12 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ipfs/go-cid"
+	node "github.com/ipfs/go-ipld-format"
+	"github.com/jmoiron/sqlx"
+	"github.com/multiformats/go-multihash"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -36,10 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
-	"github.com/ipfs/go-cid"
-	node "github.com/ipfs/go-ipld-format"
-	"github.com/jmoiron/sqlx"
-	"github.com/multiformats/go-multihash"
 )
 
 var (
@@ -487,7 +487,7 @@ func (sdi *StateDiffIndexer) PushStateNode(tx *BlockTx, stateNode sdtypes.StateN
 		if len(i) != 2 {
 			return fmt.Errorf("eth IPLDPublisher expected state leaf node rlp to decode into two elements")
 		}
-		var account state.Account
+		var account types.StateAccount
 		if err := rlp.DecodeBytes(i[1].([]byte), &account); err != nil {
 			return fmt.Errorf("error decoding state account rlp: %s", err.Error())
 		}
