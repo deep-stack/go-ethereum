@@ -36,10 +36,10 @@ func ExpectEqual(t *testing.T, got interface{}, want interface{}) {
 // SetupDB is use to setup a db for watcher tests
 func SetupDB() (*postgres.DB, error) {
 	uri := postgres.DbConnectionString(postgres.ConnectionParams{
-		User:     "postgres",
+		User:     "vdbm",
 		Password: "password",
 		Hostname: "localhost",
-		Name:     "vulcanize_testing",
+		Name:     "vulcanize_public",
 		Port:     5432,
 	})
 	return postgres.NewDB(uri, postgres.ConnectionConfig{}, node.Info{})

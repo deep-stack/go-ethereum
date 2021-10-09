@@ -1,12 +1,12 @@
 version: '3.2'
 
 services:
-  db:
+  ipld-eth-db:
     restart: always
-    image: postgres:10.12-alpine
+    image: vulcanize/ipld-eth-db:v0.2.0
     environment:
-      POSTGRES_USER: "postgres"
-      POSTGRES_DB: "vulcanize_testing"
+      POSTGRES_USER: "vdbm"
+      POSTGRES_DB: "vulcanize_public"
       POSTGRES_PASSWORD: "password"
     volumes:
       - geth_node:/var/lib/postgresql/data
