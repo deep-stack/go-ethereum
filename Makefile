@@ -22,7 +22,7 @@ GORUN = env GO111MODULE=on go run
 #Database
 HOST_NAME = localhost
 PORT = 5432
-USER = postgres
+USER = vdbm
 PASSWORD = password
 
 # Set env variable
@@ -30,7 +30,7 @@ PASSWORD = password
 export PGPASSWORD=$(PASSWORD)
 
 #Test
-TEST_DB = vulcanize_testing
+TEST_DB = vulcanize_public
 TEST_CONNECT_STRING = postgresql://$(USER):$(PASSWORD)@$(HOST_NAME):$(PORT)/$(TEST_DB)?sslmode=disable
 
 geth:
@@ -56,10 +56,6 @@ ios:
 
 .PHONY: statedifftest
 statedifftest: | $(GOOSE)
-	dropdb -h $(HOST_NAME) -p $(PORT) -U $(USER) --if-exists $(TEST_DB)
-	createdb -h $(HOST_NAME) -p $(PORT) -U $(USER) $(TEST_DB)
-	$(GOOSE) -dir ./statediff/db/migrations postgres "$(TEST_CONNECT_STRING)" up
-	@echo "  >  \033[32mRunning StateDiff Tests...\033[0m "
 	MODE=statediff go test ./statediff/... -v
 
 test: all

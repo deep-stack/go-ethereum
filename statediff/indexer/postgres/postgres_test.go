@@ -31,11 +31,11 @@ import (
 )
 
 var DBParams = postgres.ConnectionParams{
-	Name:     "vulcanize_testing",
+	Name:     "vulcanize_public",
 	Password: "password",
 	Port:     5432,
 	Hostname: "localhost",
-	User:     "postgres",
+	User:     "vdbm",
 }
 
 func expectContainsSubstring(t *testing.T, full string, sub string) {
