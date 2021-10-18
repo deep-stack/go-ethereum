@@ -64,7 +64,7 @@ type blockChain interface {
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetBlockByNumber(number uint64) *types.Block
 	GetReceiptsByHash(hash common.Hash) types.Receipts
-	GetTdByHash(hash common.Hash) *big.Int
+	GetTd(hash common.Hash, number uint64) *big.Int
 	UnlockTrie(root common.Hash)
 	StateCache() state.Database
 }
@@ -442,7 +442,7 @@ func (sds *Service) newPayload(stateObject []byte, block *types.Block, params Pa
 		payload.BlockRlp = blockBuff.Bytes()
 	}
 	if params.IncludeTD {
-		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
+		payload.TotalDifficulty = sds.BlockChain.GetTd(block.Hash(), block.NumberU64())
 	}
 	if params.IncludeReceipts {
 		receiptBuff := new(bytes.Buffer)
@@ -658,7 +658,7 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 	var err error
 	var tx *ind.BlockTx
 	if params.IncludeTD {
-		totalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
+		totalDifficulty = sds.BlockChain.GetTd(block.Hash(), block.NumberU64())
 	}
 	if params.IncludeReceipts {
 		receipts = sds.BlockChain.GetReceiptsByHash(block.Hash())

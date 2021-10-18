@@ -38,40 +38,41 @@ type BlockChain struct {
 	ChainEvents            []core.ChainEvent
 	Receipts               map[common.Hash]types.Receipts
 	TDByHash               map[common.Hash]*big.Int
+	TDByNum                map[uint64]*big.Int
 }
 
 // SetBlocksForHashes mock method
-func (blockChain *BlockChain) SetBlocksForHashes(blocks map[common.Hash]*types.Block) {
-	if blockChain.blocksToReturnByHash == nil {
-		blockChain.blocksToReturnByHash = make(map[common.Hash]*types.Block)
+func (bc *BlockChain) SetBlocksForHashes(blocks map[common.Hash]*types.Block) {
+	if bc.blocksToReturnByHash == nil {
+		bc.blocksToReturnByHash = make(map[common.Hash]*types.Block)
 	}
-	blockChain.blocksToReturnByHash = blocks
+	bc.blocksToReturnByHash = blocks
 }
 
 // GetBlockByHash mock method
-func (blockChain *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
-	blockChain.HashesLookedUp = append(blockChain.HashesLookedUp, hash)
+func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
+	bc.HashesLookedUp = append(bc.HashesLookedUp, hash)
 
 	var block *types.Block
-	if len(blockChain.blocksToReturnByHash) > 0 {
-		block = blockChain.blocksToReturnByHash[hash]
+	if len(bc.blocksToReturnByHash) > 0 {
+		block = bc.blocksToReturnByHash[hash]
 	}
 
 	return block
 }
 
 // SetChainEvents mock method
-func (blockChain *BlockChain) SetChainEvents(chainEvents []core.ChainEvent) {
-	blockChain.ChainEvents = chainEvents
+func (bc *BlockChain) SetChainEvents(chainEvents []core.ChainEvent) {
+	bc.ChainEvents = chainEvents
 }
 
 // SubscribeChainEvent mock method
-func (blockChain *BlockChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
+func (bc *BlockChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	subErr := errors.New("subscription error")
 
 	var eventCounter int
 	subscription := event.NewSubscription(func(quit <-chan struct{}) error {
-		for _, chainEvent := range blockChain.ChainEvents {
+		for _, chainEvent := range bc.ChainEvents {
 			if eventCounter > 1 {
 				time.Sleep(250 * time.Millisecond)
 				return subErr
@@ -90,45 +91,57 @@ func (blockChain *BlockChain) SubscribeChainEvent(ch chan<- core.ChainEvent) eve
 }
 
 // SetReceiptsForHash test method
-func (blockChain *BlockChain) SetReceiptsForHash(hash common.Hash, receipts types.Receipts) {
-	if blockChain.Receipts == nil {
-		blockChain.Receipts = make(map[common.Hash]types.Receipts)
+func (bc *BlockChain) SetReceiptsForHash(hash common.Hash, receipts types.Receipts) {
+	if bc.Receipts == nil {
+		bc.Receipts = make(map[common.Hash]types.Receipts)
 	}
-	blockChain.Receipts[hash] = receipts
+	bc.Receipts[hash] = receipts
 }
 
 // GetReceiptsByHash mock method
-func (blockChain *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
-	return blockChain.Receipts[hash]
+func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
+	return bc.Receipts[hash]
 }
 
 // SetBlockForNumber test method
-func (blockChain *BlockChain) SetBlockForNumber(block *types.Block, number uint64) {
-	if blockChain.blocksToReturnByNumber == nil {
-		blockChain.blocksToReturnByNumber = make(map[uint64]*types.Block)
+func (bc *BlockChain) SetBlockForNumber(block *types.Block, number uint64) {
+	if bc.blocksToReturnByNumber == nil {
+		bc.blocksToReturnByNumber = make(map[uint64]*types.Block)
 	}
-	blockChain.blocksToReturnByNumber[number] = block
+	bc.blocksToReturnByNumber[number] = block
 }
 
 // GetBlockByNumber mock method
-func (blockChain *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	return blockChain.blocksToReturnByNumber[number]
+func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
+	return bc.blocksToReturnByNumber[number]
 }
 
-// GetTdByHash mock method
-func (blockChain *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
-	return blockChain.TDByHash[hash]
-}
-
-func (blockChain *BlockChain) SetTdByHash(hash common.Hash, td *big.Int) {
-	if blockChain.TDByHash == nil {
-		blockChain.TDByHash = make(map[common.Hash]*big.Int)
+// GetTd mock method
+func (bc *BlockChain) GetTd(hash common.Hash, blockNum uint64) *big.Int {
+	if td, ok := bc.TDByHash[hash]; ok {
+		return td
 	}
-	blockChain.TDByHash[hash] = td
+
+	if td, ok := bc.TDByNum[blockNum]; ok {
+		return td
+	}
+	return nil
 }
 
-func (blockChain *BlockChain) UnlockTrie(root common.Hash) {}
+func (bc *BlockChain) SetTd(hash common.Hash, blockNum uint64, td *big.Int) {
+	if bc.TDByHash == nil {
+		bc.TDByHash = make(map[common.Hash]*big.Int)
+	}
+	bc.TDByHash[hash] = td
 
-func (BlockChain *BlockChain) StateCache() state.Database {
+	if bc.TDByNum == nil {
+		bc.TDByNum = make(map[uint64]*big.Int)
+	}
+	bc.TDByNum[blockNum] = td
+}
+
+func (bc *BlockChain) UnlockTrie(root common.Hash) {}
+
+func (bc *BlockChain) StateCache() state.Database {
 	return nil
 }
