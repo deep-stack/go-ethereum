@@ -166,7 +166,7 @@ func (sds *MockStateDiffService) newPayload(stateObject []byte, block *types.Blo
 		payload.BlockRlp = blockBuff.Bytes()
 	}
 	if params.IncludeTD {
-		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
+		payload.TotalDifficulty = sds.BlockChain.GetTd(block.Hash(), block.NumberU64())
 	}
 	if params.IncludeReceipts {
 		receiptBuff := new(bytes.Buffer)

@@ -134,7 +134,7 @@ func testSubscriptionAPI(t *testing.T) {
 	serviceQuitChan := make(chan bool)
 	mockBlockChain := &BlockChain{}
 	mockBlockChain.SetReceiptsForHash(block1.Hash(), types.Receipts{mockReceipt})
-	mockBlockChain.SetTdByHash(block1.Hash(), mockTotalDifficulty)
+	mockBlockChain.SetTd(block1.Hash(), block1.NumberU64(), mockTotalDifficulty)
 	mockService := MockStateDiffService{
 		Mutex:             sync.Mutex{},
 		Builder:           statediff.NewBuilder(chain.StateCache()),
@@ -221,7 +221,7 @@ func testHTTPAPI(t *testing.T) {
 	})
 	mockBlockChain.SetBlockForNumber(block1, block1.Number().Uint64())
 	mockBlockChain.SetReceiptsForHash(block1.Hash(), types.Receipts{mockReceipt})
-	mockBlockChain.SetTdByHash(block1.Hash(), big.NewInt(1337))
+	mockBlockChain.SetTd(block1.Hash(), block1.NumberU64(), big.NewInt(1337))
 	mockService := MockStateDiffService{
 		Mutex:      sync.Mutex{},
 		Builder:    statediff.NewBuilder(chain.StateCache()),
