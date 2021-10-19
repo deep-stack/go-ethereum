@@ -179,7 +179,7 @@ and the `statediff` namespace exposed (`--http.api=statediff`).
 If `--statediff.writing` is set, the service will convert the state diff `StateObject` data into IPLD objects, persist them directly to Postgres,
 and generate secondary indexes around the IPLD data.
 
-The schema and migrations for this Postgres database are provided in `statediff/db/`.
+The schema and migrations for this Postgres database are provided in [ipld-eth-db](https://github.com/vulcanize/ipld-eth-db).
 
 #### Postgres setup
 We use [pressly/goose](https://github.com/pressly/goose) as our Postgres migration manager.
