@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -151,6 +152,7 @@ func NewBlockCache(max uint) blockCache {
 func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params ServiceParams) error {
 	blockChain := ethServ.BlockChain()
 	var indexer ind.Indexer
+	quitCh := make(chan bool)
 	if params.DBParams != nil {
 		info := nodeinfo.Info{
 			GenesisBlock: blockChain.Genesis().Hash().Hex(),
@@ -169,6 +171,10 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		if err != nil {
 			return err
 		}
+
+		if metrics.Enabled {
+			indexer.ReportDBMetrics(10*time.Second, quitCh)
+		}
 	}
 	workers := params.NumWorkers
 	if workers == 0 {
@@ -178,7 +184,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		Mutex:             sync.Mutex{},
 		BlockChain:        blockChain,
 		Builder:           NewBuilder(blockChain.StateCache()),
-		QuitChan:          make(chan bool),
+		QuitChan:          quitCh,
 		Subscriptions:     make(map[common.Hash]map[rpc.ID]Subscription),
 		SubscriptionTypes: make(map[common.Hash]Params),
 		BlockCache:        NewBlockCache(workers),
