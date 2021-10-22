@@ -172,9 +172,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 			return err
 		}
 
-		if metrics.Enabled {
-			indexer.ReportDBMetrics(10*time.Second, quitCh)
-		}
+		indexer.ReportDBMetrics(10*time.Second, quitCh)
 	}
 	workers := params.NumWorkers
 	if workers == 0 {
