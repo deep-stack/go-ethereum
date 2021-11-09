@@ -51,7 +51,7 @@ func setupLegacy(t *testing.T) {
 		legacyData.MockBlock.Difficulty())
 	require.NoError(t, err)
 
-	defer tx.Close(err)
+	defer tx.Close(tx, err)
 	for _, node := range legacyData.StateDiffs {
 		err = ind.PushStateNode(tx, node)
 		require.NoError(t, err)

@@ -668,7 +668,7 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 		return err
 	}
 	// defer handling of commit/rollback for any return case
-	defer tx.Close(err)
+	defer tx.Close(tx, err)
 	output := func(node StateNode) error {
 		return sds.indexer.PushStateNode(tx, node)
 	}
