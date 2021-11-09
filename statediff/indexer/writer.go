@@ -35,7 +35,7 @@ type PostgresCIDWriter struct {
 	db *postgres.DB
 }
 
-// NewPostgresCIDWriter creates a new pointer to a Indexer which satisfies the PostgresCIDWriter interface
+// NewPostgresCIDWriter creates a new pointer to a PostgresCIDWriter
 func NewPostgresCIDWriter(db *postgres.DB) *PostgresCIDWriter {
 	return &PostgresCIDWriter{
 		db: db,
@@ -107,7 +107,7 @@ func (in *PostgresCIDWriter) upsertReceiptCID(tx *sqlx.Tx, rct *models.ReceiptMo
 func (in *PostgresCIDWriter) upsertLogCID(tx *sqlx.Tx, logs []*models.LogsModel, receiptID int64) error {
 	for _, log := range logs {
 		_, err := tx.Exec(`INSERT INTO eth.log_cids (leaf_cid, leaf_mh_key, receipt_id, address, index, topic0, topic1, topic2, topic3, log_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-					ON CONFLICT (receipt_id, index) DO UPDATE SET (leaf_cid, leaf_mh_key ,address, topic0, topic1, topic2, topic3,log_data ) = ($1, $2, $4, $6, $7, $8, $9, $10)`,
+					ON CONFLICT (receipt_id, index) DO UPDATE SET (leaf_cid, leaf_mh_key, address, topic0, topic1, topic2, topic3, log_data) = ($1, $2, $4, $6, $7, $8, $9, $10)`,
 			log.LeafCID, log.LeafMhKey, receiptID, log.Address, log.Index, log.Topic0, log.Topic1, log.Topic2, log.Topic3, log.Data)
 		if err != nil {
 			return fmt.Errorf("error upserting logs entry: %w", err)

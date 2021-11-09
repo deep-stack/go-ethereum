@@ -149,7 +149,7 @@ func setup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Close(err)
+	defer tx.Close(tx, err)
 	for _, node := range mocks.StateDiffs {
 		err = ind.PushStateNode(tx, node)
 		if err != nil {
