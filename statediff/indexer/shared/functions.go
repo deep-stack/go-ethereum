@@ -18,18 +18,11 @@ package shared
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/statediff/indexer/postgres"
-
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
-	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 )
-
-// IPLDInsertPgStr is the postgres statement string for IPLDs inserting into public.blocks
-const IPLDInsertPgStr = `INSERT INTO public.blocks (key, data) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`
 
 // HandleZeroAddrPointer will return an empty string for a nil address pointer
 func HandleZeroAddrPointer(to *common.Address) string {
@@ -47,13 +40,6 @@ func HandleZeroAddr(to common.Address) string {
 	return to.Hex()
 }
 
-// Rollback sql transaction and log any error
-func Rollback(tx *sqlx.Tx) {
-	if err := tx.Rollback(); err != nil {
-		log.Error(err.Error())
-	}
-}
-
 // MultihashKeyFromCID converts a cid into a blockstore-prefixed multihash db key string
 func MultihashKeyFromCID(c cid.Cid) string {
 	dbKey := dshelp.MultihashToDsKey(c.Hash())
@@ -68,10 +54,4 @@ func MultihashKeyFromKeccak256(hash common.Hash) (string, error) {
 	}
 	dbKey := dshelp.MultihashToDsKey(mh)
 	return blockstore.BlockPrefix.String() + dbKey.String(), nil
-}
-
-// PublishDirectWithDB diretly writes a previously derived mhkey => value pair to the ipld database
-func PublishDirectWithDB(db *postgres.DB, key string, value []byte) error {
-	_, err := db.Exec(IPLDInsertPgStr, key, value)
-	return err
 }

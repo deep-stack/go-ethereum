@@ -20,8 +20,8 @@ import "github.com/lib/pq"
 
 // IPLDModel is the db model for public.blocks
 type IPLDModel struct {
-	Key  string
-	Data []byte
+	Key  string `db:"key"`
+	Data []byte `db:"data"`
 }
 
 // HeaderModel is the db model for eth.header_cids

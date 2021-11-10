@@ -19,11 +19,11 @@ package statediff
 import (
 	"context"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/statediff/types"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-	. "github.com/ethereum/go-ethereum/statediff/types"
 )
 
 // APIName is the namespace used for the state diffing service API
@@ -117,7 +117,7 @@ func (api *PublicStateDiffAPI) StreamCodeAndCodeHash(ctx context.Context, blockN
 
 	// create subscription and start waiting for events
 	rpcSub := notifier.CreateSubscription()
-	payloadChan := make(chan CodeAndCodeHash, chainEventChanSize)
+	payloadChan := make(chan types.CodeAndCodeHash, chainEventChanSize)
 	quitChan := make(chan bool)
 	api.sds.StreamCodeAndCodeHash(blockNumber, payloadChan, quitChan)
 	go func() {

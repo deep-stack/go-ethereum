@@ -16,8 +16,9 @@
 
 package shared
 
+type DBType string
+
 const (
-	RemovedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	RemovedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	RemovedNodeMhKey      = "/blocks/DMQMLUSGAGDPOIZ4SJ7H3MW4Y4B4BZIAWZJ4VARHHN57VWAELWC2I4A"
+	POSTGRES DBType = "Postgres"
+	DUMP     DBType = "Dump"
 )

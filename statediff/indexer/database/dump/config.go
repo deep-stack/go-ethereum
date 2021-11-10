@@ -14,10 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package shared
+package dump
 
-const (
-	RemovedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	RemovedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	RemovedNodeMhKey      = "/blocks/DMQMLUSGAGDPOIZ4SJ7H3MW4Y4B4BZIAWZJ4VARHHN57VWAELWC2I4A"
+import (
+	"io"
+
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
+
+type Config struct {
+	Dump io.WriteCloser
+}
+
+func (c Config) Type() shared.DBType {
+	return shared.DUMP
+}

@@ -786,16 +786,59 @@ var (
 		Name:  "statediff",
 		Usage: "Enables the processing of state diffs between each block",
 	}
-	StateDiffDBFlag = cli.StringFlag{
-		Name:  "statediff.db",
-		Usage: "PostgreSQL database connection string for writing state diffs",
+	StateDiffDBHostFlag = cli.StringFlag{
+		Name:  "statediff.db.host",
+		Usage: "Statediff database hostname/ip",
+		Value: "localhost",
+	}
+	StateDiffDBPortFlag = cli.IntFlag{
+		Name:  "statediff.db.port",
+		Usage: "Statediff database port",
+		Value: 5432,
+	}
+	StateDiffDBNameFlag = cli.StringFlag{
+		Name:  "statediff.db.name",
+		Usage: "Statediff database name",
+	}
+	StateDiffDBPasswordFlag = cli.StringFlag{
+		Name:  "statediff.db.password",
+		Usage: "Statediff database password",
+	}
+	StateDiffDBUserFlag = cli.StringFlag{
+		Name:  "statediff.db.user",
+		Usage: "Statediff database username",
+		Value: "postgres",
+	}
+	StateDiffDBMaxConnLifetime = cli.DurationFlag{
+		Name:  "statediff.db.maxconnlifetime",
+		Usage: "Statediff database maximum connection lifetime (in seconds)",
+	}
+	StateDiffDBMaxConnIdleTime = cli.DurationFlag{
+		Name:  "statediff.db.maxconnidletime",
+		Usage: "Statediff database maximum connection idle time (in seconds)",
+	}
+	StateDiffDBMaxConns = cli.IntFlag{
+		Name:  "statediff.db.maxconns",
+		Usage: "Statediff database maximum connections",
+	}
+	StateDiffDBMinConns = cli.IntFlag{
+		Name:  "statediff.db.minconns",
+		Usage: "Statediff database minimum connections",
+	}
+	StateDiffDBMaxIdleConns = cli.IntFlag{
+		Name:  "statediff.db.maxidleconns",
+		Usage: "Statediff database maximum idle connections",
+	}
+	StateDiffDBConnTimeout = cli.DurationFlag{
+		Name:  "statediff.db.conntimeout",
+		Usage: "Statediff database connection timeout (in seconds)",
 	}
 	StateDiffDBNodeIDFlag = cli.StringFlag{
-		Name:  "statediff.dbnodeid",
+		Name:  "statediff.db.nodeid",
 		Usage: "Node ID to use when writing state diffs to database",
 	}
 	StateDiffDBClientNameFlag = cli.StringFlag{
-		Name:  "statediff.dbclientname",
+		Name:  "statediff.db.clientname",
 		Usage: "Client name to use when writing state diffs to database",
 	}
 	StateDiffWritingFlag = cli.BoolFlag{

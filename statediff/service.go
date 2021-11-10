@@ -41,9 +41,9 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 
 	ind "github.com/ethereum/go-ethereum/statediff/indexer"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
-	"github.com/ethereum/go-ethereum/statediff/indexer/postgres"
-	. "github.com/ethereum/go-ethereum/statediff/types"
+	types2 "github.com/ethereum/go-ethereum/statediff/types"
 )
 
 const chainEventChanSize = 20000
@@ -72,39 +72,30 @@ type blockChain interface {
 
 // IService is the state-diffing service interface
 type IService interface {
-	// Start() and Stop()
+	// Lifecycle Start() and Stop() methods
 	node.Lifecycle
-	// Method to getting API(s) for this service
+	// APIs method for getting API(s) for this service
 	APIs() []rpc.API
-	// Main event loop for processing state diffs
+	// Loop is the main event loop for processing state diffs
 	Loop(chainEventCh chan core.ChainEvent)
-	// Method to subscribe to receive state diff processing output
+	// Subscribe method to subscribe to receive state diff processing output`
 	Subscribe(id rpc.ID, sub chan<- Payload, quitChan chan<- bool, params Params)
-	// Method to unsubscribe from state diff processing
+	// Unsubscribe method to unsubscribe from state diff processing
 	Unsubscribe(id rpc.ID) error
-	// Method to get state diff object at specific block
+	// StateDiffAt method to get state diff object at specific block
 	StateDiffAt(blockNumber uint64, params Params) (*Payload, error)
-	// Method to get state diff object at specific block
+	// StateDiffFor method to get state diff object at specific block
 	StateDiffFor(blockHash common.Hash, params Params) (*Payload, error)
-	// Method to get state trie object at specific block
+	// StateTrieAt method to get state trie object at specific block
 	StateTrieAt(blockNumber uint64, params Params) (*Payload, error)
-	// Method to stream out all code and codehash pairs
-	StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- CodeAndCodeHash, quitChan chan<- bool)
-	// Method to write state diff object directly to DB
+	// StreamCodeAndCodeHash method to stream out all code and codehash pairs
+	StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- types2.CodeAndCodeHash, quitChan chan<- bool)
+	// WriteStateDiffAt method to write state diff object directly to DB
 	WriteStateDiffAt(blockNumber uint64, params Params) error
-	// Method to write state diff object directly to DB
+	// WriteStateDiffFor method to write state diff object directly to DB
 	WriteStateDiffFor(blockHash common.Hash, params Params) error
-	// Event loop for progressively processing and writing diffs directly to DB
+	// WriteLoop event loop for progressively processing and writing diffs directly to DB
 	WriteLoop(chainEventCh chan core.ChainEvent)
-}
-
-// Wraps consructor parameters
-type ServiceParams struct {
-	DBParams *DBParams
-	// Whether to enable writing state diffs directly to track blochain head
-	EnableWriteLoop bool
-	// Size of the worker pool
-	NumWorkers uint
 }
 
 // Service is the underlying struct for the state diffing service
@@ -122,26 +113,26 @@ type Service struct {
 	// A mapping of subscription params rlp hash to the corresponding subscription params
 	SubscriptionTypes map[common.Hash]Params
 	// Cache the last block so that we can avoid having to lookup the next block's parent
-	BlockCache blockCache
+	BlockCache BlockCache
 	// Whether or not we have any subscribers; only if we do, do we processes state diffs
 	subscribers int32
 	// Interface for publishing statediffs as PG-IPLD objects
-	indexer ind.Indexer
+	indexer interfaces.StateDiffIndexer
 	// Whether to enable writing state diffs directly to track blochain head
 	enableWriteLoop bool
 	// Size of the worker pool
 	numWorkers uint
 }
 
-// Wrap the cached last block for safe access from different service loops
-type blockCache struct {
+// BlockCache caches the last block for safe access from different service loops
+type BlockCache struct {
 	sync.Mutex
 	blocks  map[common.Hash]*types.Block
 	maxSize uint
 }
 
-func NewBlockCache(max uint) blockCache {
-	return blockCache{
+func NewBlockCache(max uint) BlockCache {
+	return BlockCache{
 		blocks:  make(map[common.Hash]*types.Block),
 		maxSize: max,
 	}
@@ -149,29 +140,23 @@ func NewBlockCache(max uint) blockCache {
 
 // New creates a new statediff.Service
 // func New(stack *node.Node, ethServ *eth.Ethereum, dbParams *DBParams, enableWriteLoop bool) error {
-func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params ServiceParams) error {
+func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params Config) error {
 	blockChain := ethServ.BlockChain()
-	var indexer ind.Indexer
+	var indexer interfaces.StateDiffIndexer
 	quitCh := make(chan bool)
-	if params.DBParams != nil {
+	if params.IndexerConfig != nil {
 		info := nodeinfo.Info{
 			GenesisBlock: blockChain.Genesis().Hash().Hex(),
 			NetworkID:    strconv.FormatUint(cfg.NetworkId, 10),
 			ChainID:      blockChain.Config().ChainID.Uint64(),
-			ID:           params.DBParams.ID,
-			ClientName:   params.DBParams.ClientName,
+			ID:           params.ID,
+			ClientName:   params.ClientName,
 		}
-
-		// TODO: pass max idle, open, lifetime?
-		db, err := postgres.NewDB(params.DBParams.ConnectionURL, postgres.ConnectionConfig{}, info)
+		var err error
+		indexer, err = ind.NewStateDiffIndexer(params.Context, blockChain.Config(), info, params.IndexerConfig)
 		if err != nil {
 			return err
 		}
-		indexer, err = ind.NewStateDiffIndexer(blockChain.Config(), db)
-		if err != nil {
-			return err
-		}
-
 		indexer.ReportDBMetrics(10*time.Second, quitCh)
 	}
 	workers := params.NumWorkers
@@ -214,7 +199,7 @@ func (sds *Service) APIs() []rpc.API {
 
 // Return the parent block of currentBlock, using the cached block if available;
 // and cache the passed block
-func (lbc *blockCache) getParentBlock(currentBlock *types.Block, bc blockChain) *types.Block {
+func (lbc *BlockCache) getParentBlock(currentBlock *types.Block, bc blockChain) *types.Block {
 	lbc.Lock()
 	parentHash := currentBlock.ParentHash()
 	var parentBlock *types.Block
@@ -590,7 +575,7 @@ func sendNonBlockingQuit(id rpc.ID, sub Subscription) {
 }
 
 // StreamCodeAndCodeHash subscription method for extracting all the codehash=>code mappings that exist in the trie at the provided height
-func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- CodeAndCodeHash, quitChan chan<- bool) {
+func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- types2.CodeAndCodeHash, quitChan chan<- bool) {
 	current := sds.BlockChain.GetBlockByNumber(blockNumber)
 	log.Info("sending code and codehash", "block height", blockNumber)
 	currentTrie, err := sds.BlockChain.StateCache().OpenTrie(current.Root())
@@ -620,7 +605,7 @@ func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- Cod
 				log.Error("error collecting contract code", "err", err)
 				return
 			}
-			outChan <- CodeAndCodeHash{
+			outChan <- types2.CodeAndCodeHash{
 				Hash: codeHash,
 				Code: code,
 			}
@@ -660,7 +645,7 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 	var totalDifficulty *big.Int
 	var receipts types.Receipts
 	var err error
-	var tx *ind.BlockTx
+	var tx interfaces.Batch
 	if params.IncludeTD {
 		totalDifficulty = sds.BlockChain.GetTd(block.Hash(), block.NumberU64())
 	}
@@ -672,14 +657,18 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 		return err
 	}
 	// defer handling of commit/rollback for any return case
-	defer tx.Close(tx, err)
-	output := func(node StateNode) error {
+	defer func() {
+		if err := tx.Submit(err); err != nil {
+			log.Error("batch transaction submission failed", "err", err)
+		}
+	}()
+	output := func(node types2.StateNode) error {
 		return sds.indexer.PushStateNode(tx, node)
 	}
-	codeOutput := func(c CodeAndCodeHash) error {
+	codeOutput := func(c types2.CodeAndCodeHash) error {
 		return sds.indexer.PushCodeAndCodeHash(tx, c)
 	}
-	err = sds.Builder.WriteStateDiffObject(StateRoots{
+	err = sds.Builder.WriteStateDiffObject(types2.StateRoots{
 		NewStateRoot: block.Root(),
 		OldStateRoot: parentRoot,
 	}, params, output, codeOutput)

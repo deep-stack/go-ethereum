@@ -14,10 +14,29 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package shared
+package postgres
 
-const (
-	RemovedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	RemovedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	RemovedNodeMhKey      = "/blocks/DMQMLUSGAGDPOIZ4SJ7H3MW4Y4B4BZIAWZJ4VARHHN57VWAELWC2I4A"
+import (
+	"context"
+
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 )
+
+// SetupSQLXDB is used to setup a sqlx db for tests
+func SetupSQLXDB() (sql.Database, error) {
+	driver, err := NewSQLXDriver(context.Background(), DefaultConfig, node.Info{})
+	if err != nil {
+		return nil, err
+	}
+	return NewPostgresDB(driver), nil
+}
+
+// SetupPGXDB is used to setup a pgx db for tests
+func SetupPGXDB() (sql.Database, error) {
+	driver, err := NewPGXDriver(context.Background(), DefaultConfig, node.Info{})
+	if err != nil {
+		return nil, err
+	}
+	return NewPostgresDB(driver), nil
+}

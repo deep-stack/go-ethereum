@@ -23,7 +23,10 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"time"
 	"unicode"
+
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/statediff"
@@ -182,27 +185,48 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	}
 
 	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
-		var dbParams *statediff.DBParams
-		if ctx.GlobalIsSet(utils.StateDiffDBFlag.Name) {
-			dbParams = new(statediff.DBParams)
-			dbParams.ConnectionURL = ctx.GlobalString(utils.StateDiffDBFlag.Name)
+		var dbConfig *sql.Config
+		if ctx.GlobalIsSet(utils.StateDiffWritingFlag.Name) {
+			dbConfig = new(sql.Config)
+			dbConfig.Hostname = ctx.GlobalString(utils.StateDiffDBHostFlag.Name)
+			dbConfig.Port = ctx.GlobalInt(utils.StateDiffDBPortFlag.Name)
+			dbConfig.DatabaseName = ctx.GlobalString(utils.StateDiffDBNameFlag.Name)
+			dbConfig.Username = ctx.GlobalString(utils.StateDiffDBUserFlag.Name)
+			dbConfig.Password = ctx.GlobalString(utils.StateDiffDBPasswordFlag.Name)
+
 			if ctx.GlobalIsSet(utils.StateDiffDBNodeIDFlag.Name) {
-				dbParams.ID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
+				dbConfig.ID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
 			} else {
 				utils.Fatalf("Must specify node ID for statediff DB output")
 			}
+
 			if ctx.GlobalIsSet(utils.StateDiffDBClientNameFlag.Name) {
-				dbParams.ClientName = ctx.GlobalString(utils.StateDiffDBClientNameFlag.Name)
+				dbConfig.ClientName = ctx.GlobalString(utils.StateDiffDBClientNameFlag.Name)
 			} else {
 				utils.Fatalf("Must specify client name for statediff DB output")
 			}
-		} else {
-			if ctx.GlobalBool(utils.StateDiffWritingFlag.Name) {
-				utils.Fatalf("Must pass DB parameters if enabling statediff write loop")
+
+			if ctx.GlobalIsSet(utils.StateDiffDBMinConns.Name) {
+				dbConfig.MinConns = ctx.GlobalInt(utils.StateDiffDBMinConns.Name)
+			}
+			if ctx.GlobalIsSet(utils.StateDiffDBMaxConns.Name) {
+				dbConfig.MaxConns = ctx.GlobalInt(utils.StateDiffDBMaxConns.Name)
+			}
+			if ctx.GlobalIsSet(utils.StateDiffDBMaxIdleConns.Name) {
+				dbConfig.MaxIdle = ctx.GlobalInt(utils.StateDiffDBMaxIdleConns.Name)
+			}
+			if ctx.GlobalIsSet(utils.StateDiffDBMaxConnLifetime.Name) {
+				dbConfig.MaxConnLifetime = ctx.GlobalDuration(utils.StateDiffDBMaxConnLifetime.Name) * time.Second
+			}
+			if ctx.GlobalIsSet(utils.StateDiffDBMaxConnIdleTime.Name) {
+				dbConfig.MaxConnIdleTime = ctx.GlobalDuration(utils.StateDiffDBMaxConnIdleTime.Name) * time.Second
+			}
+			if ctx.GlobalIsSet(utils.StateDiffDBConnTimeout.Name) {
+				dbConfig.ConnTimeout = ctx.GlobalDuration(utils.StateDiffDBConnTimeout.Name) * time.Second
 			}
 		}
 		p := statediff.ServiceParams{
-			DBParams:        dbParams,
+			DBParams:        dbConfig,
 			EnableWriteLoop: ctx.GlobalBool(utils.StateDiffWritingFlag.Name),
 			NumWorkers:      ctx.GlobalUint(utils.StateDiffWorkersFlag.Name),
 		}

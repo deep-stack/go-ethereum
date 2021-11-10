@@ -1,5 +1,5 @@
 // VulcanizeDB
-// Copyright © 2021 Vulcanize
+// Copyright © 2019 Vulcanize
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
@@ -14,10 +14,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package shared
+package test_helpers
 
-const (
-	RemovedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	RemovedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
-	RemovedNodeMhKey      = "/blocks/DMQMLUSGAGDPOIZ4SJ7H3MW4Y4B4BZIAWZJ4VARHHN57VWAELWC2I4A"
+import (
+	"reflect"
+	"testing"
 )
+
+// ExpectEqual asserts the provided interfaces are deep equal
+func ExpectEqual(t *testing.T, got interface{}, want interface{}) {
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Expected: %v\nActual: %v", want, got)
+	}
+}
+
+// ListContainsString used to check if a list of strings contains a particular string
+func ListContainsString(sss []string, s string) bool {
+	for _, str := range sss {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}
