@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
-// DriverType to explicity type the kind of sql driver we are using
+// DriverType to explicitly type the kind of sql driver we are using
 type DriverType string
 
 const (

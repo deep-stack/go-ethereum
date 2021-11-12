@@ -26,6 +26,7 @@ import (
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
+	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
@@ -164,7 +165,7 @@ func TestPGXIndexer(t *testing.T) {
 			BaseFee *int64 `db:"base_fee"`
 		}
 		header := new(res)
-		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
+		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -216,12 +217,12 @@ func TestPGXIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			txTypePgStr := `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
 			switch c {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
 				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -231,8 +232,7 @@ func TestPGXIndexer(t *testing.T) {
 			case trx2CID.String():
 				test_helpers.ExpectEqual(t, data, tx2)
 				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -242,8 +242,7 @@ func TestPGXIndexer(t *testing.T) {
 			case trx3CID.String():
 				test_helpers.ExpectEqual(t, data, tx3)
 				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -253,8 +252,7 @@ func TestPGXIndexer(t *testing.T) {
 			case trx4CID.String():
 				test_helpers.ExpectEqual(t, data, tx4)
 				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -284,8 +282,7 @@ func TestPGXIndexer(t *testing.T) {
 			case trx5CID.String():
 				test_helpers.ExpectEqual(t, data, tx5)
 				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -398,6 +395,7 @@ func TestPGXIndexer(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			postStatePgStr := `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 			switch c {
 			case rct1CID.String():
 				test_helpers.ExpectEqual(t, data, rct1)
@@ -411,8 +409,7 @@ func TestPGXIndexer(t *testing.T) {
 			case rct2CID.String():
 				test_helpers.ExpectEqual(t, data, rct2)
 				var postState string
-				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postState, pgStr, c)
+				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -420,8 +417,7 @@ func TestPGXIndexer(t *testing.T) {
 			case rct3CID.String():
 				test_helpers.ExpectEqual(t, data, rct3)
 				var postState string
-				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postState, pgStr, c)
+				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -429,8 +425,7 @@ func TestPGXIndexer(t *testing.T) {
 			case rct4CID.String():
 				test_helpers.ExpectEqual(t, data, rct4)
 				var postState string
-				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postState, pgStr, c)
+				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -438,8 +433,7 @@ func TestPGXIndexer(t *testing.T) {
 			case rct5CID.String():
 				test_helpers.ExpectEqual(t, data, rct5)
 				var postState string
-				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postState, pgStr, c)
+				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -315,10 +315,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			Data:   trx.Data(),
 			CID:    txNode.Cid().String(),
 			MhKey:  shared.MultihashKeyFromCID(txNode.Cid()),
-		}
-		txType := trx.Type()
-		if txType != types.LegacyTxType {
-			txModel.Type = &txType
+			Type:   trx.Type(),
 		}
 		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", txModel); err != nil {
 			return err

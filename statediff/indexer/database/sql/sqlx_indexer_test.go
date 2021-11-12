@@ -26,6 +26,7 @@ import (
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
+	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
@@ -190,7 +191,7 @@ func TestSQLXIndexer(t *testing.T) {
 			BaseFee *int64 `db:"base_fee"`
 		}
 		header := new(res)
-		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
+		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -242,50 +243,47 @@ func TestSQLXIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			txTypePgStr := `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
 			switch c {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
-				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				var txType uint8
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txType)
 				}
 			case trx2CID.String():
 				test_helpers.ExpectEqual(t, data, tx2)
-				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				var txType uint8
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txType)
 				}
 			case trx3CID.String():
 				test_helpers.ExpectEqual(t, data, tx3)
-				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				var txType uint8
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txType)
 				}
 			case trx4CID.String():
 				test_helpers.ExpectEqual(t, data, tx4)
-				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				var txType uint8
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if *txType != types.AccessListTxType {
-					t.Fatalf("expected AccessListTxType (1), got %d", *txType)
+				if txType != types.AccessListTxType {
+					t.Fatalf("expected AccessListTxType (1), got %d", txType)
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_element.* FROM eth.access_list_element INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.id) WHERE cid = $1 ORDER BY access_list_element.index ASC`
@@ -310,8 +308,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx5CID.String():
 				test_helpers.ExpectEqual(t, data, tx5)
 				var txType *uint8
-				pgStr = `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
-				err = db.Get(context.Background(), &txType, pgStr, c)
+				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -423,7 +420,7 @@ func TestSQLXIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
+			postStatePgStr := `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 			switch c {
 			case rct1CID.String():
 				test_helpers.ExpectEqual(t, data, rct1)
@@ -437,8 +434,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct2CID.String():
 				test_helpers.ExpectEqual(t, data, rct2)
 				var postState string
-				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postState, pgStr, c)
+				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -446,8 +442,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct3CID.String():
 				test_helpers.ExpectEqual(t, data, rct3)
 				var postState string
-				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postState, pgStr, c)
+				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -455,8 +450,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct4CID.String():
 				test_helpers.ExpectEqual(t, data, rct4)
 				var postState string
-				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postState, pgStr, c)
+				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -464,8 +458,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct5CID.String():
 				test_helpers.ExpectEqual(t, data, rct5)
 				var postState string
-				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postState, pgStr, c)
+				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
@@ -76,7 +77,7 @@ func TestPGXIndexerLegacy(t *testing.T) {
 		}
 		header := new(res)
 
-		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).StructScan(header)
+		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
 		require.NoError(t, err)
 
 		test_helpers.ExpectEqual(t, header.CID, legacyHeaderCID.String())

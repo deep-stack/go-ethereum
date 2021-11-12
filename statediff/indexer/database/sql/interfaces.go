@@ -67,7 +67,6 @@ type Tx interface {
 // ScannableRow interface to accommodate different concrete row types
 type ScannableRow interface {
 	Scan(dest ...interface{}) error
-	StructScan(dest interface{}) error
 }
 
 // Result interface to accommodate different concrete result types

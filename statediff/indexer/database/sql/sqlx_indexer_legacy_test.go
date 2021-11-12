@@ -20,15 +20,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
-	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
-
 	"github.com/ipfs/go-cid"
+	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
@@ -85,7 +85,7 @@ func TestSQLXIndexerLegacy(t *testing.T) {
 			BaseFee *int64 `db:"base_fee"`
 		}
 		header := new(res)
-		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).StructScan(header)
+		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
 		require.NoError(t, err)
 
 		test_helpers.ExpectEqual(t, header.CID, legacyHeaderCID.String())

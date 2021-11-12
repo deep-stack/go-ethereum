@@ -105,8 +105,7 @@ func (pgx *PGXDriver) createNode() error {
 
 // QueryRow satisfies sql.Database
 func (pgx *PGXDriver) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
-	rows, _ := pgx.pool.Query(ctx, sql, args...)
-	return rowsWrapper{rows: rows}
+	return pgx.pool.QueryRow(ctx, sql, args...)
 }
 
 // Exec satisfies sql.Database
@@ -158,20 +157,6 @@ func (pgx *PGXDriver) Close() error {
 // Context satisfies sql.Database
 func (pgx *PGXDriver) Context() context.Context {
 	return pgx.ctx
-}
-
-type rowsWrapper struct {
-	rows pgx.Rows
-}
-
-// Scan satisfies sql.ScannableRow
-func (r rowsWrapper) Scan(dest ...interface{}) error {
-	return (pgx.Row)(r.rows).Scan(dest...)
-}
-
-// StructScan satisfies sql.ScannableRow
-func (r rowsWrapper) StructScan(dest interface{}) error {
-	return pgxscan.ScanRow(dest, r.rows)
 }
 
 type resultWrapper struct {
@@ -234,8 +219,7 @@ type pgxTxWrapper struct {
 
 // QueryRow satisfies sql.Tx
 func (t pgxTxWrapper) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
-	rows, _ := t.tx.Query(ctx, sql, args...)
-	return rowsWrapper{rows: rows}
+	return t.tx.QueryRow(ctx, sql, args...)
 }
 
 // Exec satisfies sql.Tx
