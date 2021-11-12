@@ -141,13 +141,15 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		}
 	}()
 	blockTx := &BatchTx{
-		stm:       sdi.dbWriter.db.InsertIPLDsStm(),
-		iplds:     make(chan models.IPLDModel),
-		quit:      make(chan struct{}),
-		ipldCache: models.IPLDBatch{},
-		dbtx:      tx,
+		ctx:         sdi.ctx,
+		BlockNumber: height,
+		stm:         sdi.dbWriter.db.InsertIPLDsStm(),
+		iplds:       make(chan models.IPLDModel),
+		quit:        make(chan struct{}),
+		ipldCache:   models.IPLDBatch{},
+		dbtx:        tx,
 		// handle transaction commit or rollback for any return case
-		close: func(self *BatchTx, err error) error {
+		submit: func(self *BatchTx, err error) error {
 			close(self.quit)
 			close(self.iplds)
 			if p := recover(); p != nil {

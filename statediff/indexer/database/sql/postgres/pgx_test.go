@@ -86,15 +86,15 @@ func TestPostgresPGX(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var data pgtype.Numeric
+		var data pgtype.Text
 		err = dbPool.QueryRow(ctx, `SELECT data FROM example WHERE id = 1`).Scan(&data)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		test_helpers.ExpectEqual(t, bi.String(), data)
+		test_helpers.ExpectEqual(t, data, bi.String())
 		actual := new(big.Int)
-		actual.Set(data.Int)
+		actual.SetString(data.String, 10)
 		test_helpers.ExpectEqual(t, actual, bi)
 	})
 

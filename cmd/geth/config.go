@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -26,10 +27,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
-
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/statediff"
+	"github.com/naoina/toml"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -38,13 +36,18 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/naoina/toml"
+	"github.com/ethereum/go-ethereum/statediff"
+	dumpdb "github.com/ethereum/go-ethereum/statediff/indexer/database/dump"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
 var (
@@ -185,48 +188,82 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	}
 
 	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
-		var dbConfig *sql.Config
+		var indexerConfig interfaces.Config
+		var clientName, nodeID string
 		if ctx.GlobalIsSet(utils.StateDiffWritingFlag.Name) {
-			dbConfig = new(sql.Config)
-			dbConfig.Hostname = ctx.GlobalString(utils.StateDiffDBHostFlag.Name)
-			dbConfig.Port = ctx.GlobalInt(utils.StateDiffDBPortFlag.Name)
-			dbConfig.DatabaseName = ctx.GlobalString(utils.StateDiffDBNameFlag.Name)
-			dbConfig.Username = ctx.GlobalString(utils.StateDiffDBUserFlag.Name)
-			dbConfig.Password = ctx.GlobalString(utils.StateDiffDBPasswordFlag.Name)
-
+			clientName = ctx.GlobalString(utils.StateDiffDBClientNameFlag.Name)
 			if ctx.GlobalIsSet(utils.StateDiffDBNodeIDFlag.Name) {
-				dbConfig.ID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
+				nodeID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
 			} else {
 				utils.Fatalf("Must specify node ID for statediff DB output")
 			}
 
-			if ctx.GlobalIsSet(utils.StateDiffDBClientNameFlag.Name) {
-				dbConfig.ClientName = ctx.GlobalString(utils.StateDiffDBClientNameFlag.Name)
-			} else {
-				utils.Fatalf("Must specify client name for statediff DB output")
+			dbTypeStr := ctx.GlobalString(utils.StateDiffDBTypeFlag.Name)
+			dbType, err := shared.ResolveDBType(dbTypeStr)
+			if err != nil {
+				utils.Fatalf("%v", err)
 			}
-
-			if ctx.GlobalIsSet(utils.StateDiffDBMinConns.Name) {
-				dbConfig.MinConns = ctx.GlobalInt(utils.StateDiffDBMinConns.Name)
-			}
-			if ctx.GlobalIsSet(utils.StateDiffDBMaxConns.Name) {
-				dbConfig.MaxConns = ctx.GlobalInt(utils.StateDiffDBMaxConns.Name)
-			}
-			if ctx.GlobalIsSet(utils.StateDiffDBMaxIdleConns.Name) {
-				dbConfig.MaxIdle = ctx.GlobalInt(utils.StateDiffDBMaxIdleConns.Name)
-			}
-			if ctx.GlobalIsSet(utils.StateDiffDBMaxConnLifetime.Name) {
-				dbConfig.MaxConnLifetime = ctx.GlobalDuration(utils.StateDiffDBMaxConnLifetime.Name) * time.Second
-			}
-			if ctx.GlobalIsSet(utils.StateDiffDBMaxConnIdleTime.Name) {
-				dbConfig.MaxConnIdleTime = ctx.GlobalDuration(utils.StateDiffDBMaxConnIdleTime.Name) * time.Second
-			}
-			if ctx.GlobalIsSet(utils.StateDiffDBConnTimeout.Name) {
-				dbConfig.ConnTimeout = ctx.GlobalDuration(utils.StateDiffDBConnTimeout.Name) * time.Second
+			switch dbType {
+			case shared.POSTGRES:
+				driverTypeStr := ctx.GlobalString(utils.StateDiffDBDriverTypeFlag.Name)
+				driverType, err := postgres.ResolveDriverType(driverTypeStr)
+				if err != nil {
+					utils.Fatalf("%v", err)
+				}
+				pgConfig := postgres.Config{
+					Hostname:     ctx.GlobalString(utils.StateDiffDBHostFlag.Name),
+					Port:         ctx.GlobalInt(utils.StateDiffDBPortFlag.Name),
+					DatabaseName: ctx.GlobalString(utils.StateDiffDBNameFlag.Name),
+					Username:     ctx.GlobalString(utils.StateDiffDBUserFlag.Name),
+					Password:     ctx.GlobalString(utils.StateDiffDBPasswordFlag.Name),
+					ID:           nodeID,
+					ClientName:   clientName,
+					Driver:       driverType,
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMinConns.Name) {
+					pgConfig.MinConns = ctx.GlobalInt(utils.StateDiffDBMinConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMaxConns.Name) {
+					pgConfig.MaxConns = ctx.GlobalInt(utils.StateDiffDBMaxConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMaxIdleConns.Name) {
+					pgConfig.MaxIdle = ctx.GlobalInt(utils.StateDiffDBMaxIdleConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMaxConnLifetime.Name) {
+					pgConfig.MaxConnLifetime = ctx.GlobalDuration(utils.StateDiffDBMaxConnLifetime.Name) * time.Second
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBMaxConnIdleTime.Name) {
+					pgConfig.MaxConnIdleTime = ctx.GlobalDuration(utils.StateDiffDBMaxConnIdleTime.Name) * time.Second
+				}
+				if ctx.GlobalIsSet(utils.StateDiffDBConnTimeout.Name) {
+					pgConfig.ConnTimeout = ctx.GlobalDuration(utils.StateDiffDBConnTimeout.Name) * time.Second
+				}
+				indexerConfig = pgConfig
+			case shared.DUMP:
+				dumpTypeStr := ctx.GlobalString(utils.StateDiffDBDumpDst.Name)
+				dumpType, err := dumpdb.ResolveDumpType(dumpTypeStr)
+				if err != nil {
+					utils.Fatalf("%v", err)
+				}
+				switch dumpType {
+				case dumpdb.STDERR:
+					indexerConfig = dumpdb.Config{Dump: os.Stdout}
+				case dumpdb.STDOUT:
+					indexerConfig = dumpdb.Config{Dump: os.Stderr}
+				case dumpdb.DISCARD:
+					indexerConfig = dumpdb.Config{Dump: dumpdb.NewDiscardWriterCloser()}
+				default:
+					utils.Fatalf("unrecognized dump destination: %s", dumpType)
+				}
+			default:
+				utils.Fatalf("unrecognized database type: %s", dbType)
 			}
 		}
-		p := statediff.ServiceParams{
-			DBParams:        dbConfig,
+		p := statediff.Config{
+			IndexerConfig:   indexerConfig,
+			ID:              nodeID,
+			ClientName:      clientName,
+			Context:         context.Background(),
 			EnableWriteLoop: ctx.GlobalBool(utils.StateDiffWritingFlag.Name),
 			NumWorkers:      ctx.GlobalUint(utils.StateDiffWorkersFlag.Name),
 		}

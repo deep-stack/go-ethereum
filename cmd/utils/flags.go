@@ -786,6 +786,21 @@ var (
 		Name:  "statediff",
 		Usage: "Enables the processing of state diffs between each block",
 	}
+	StateDiffDBTypeFlag = cli.StringFlag{
+		Name:  "statediff.db.type",
+		Usage: "Statediff database type",
+		Value: "postgres",
+	}
+	StateDiffDBDriverTypeFlag = cli.StringFlag{
+		Name:  "statediff.db.driver",
+		Usage: "Statediff database driver type",
+		Value: "pgx",
+	}
+	StateDiffDBDumpDst = cli.StringFlag{
+		Name:  "statediff.dump.dst",
+		Usage: "Statediff database dump destination (default is stdout)",
+		Value: "stdout",
+	}
 	StateDiffDBHostFlag = cli.StringFlag{
 		Name:  "statediff.db.host",
 		Usage: "Statediff database hostname/ip",
@@ -840,6 +855,7 @@ var (
 	StateDiffDBClientNameFlag = cli.StringFlag{
 		Name:  "statediff.db.clientname",
 		Usage: "Client name to use when writing state diffs to database",
+		Value: "go-ethereum",
 	}
 	StateDiffWritingFlag = cli.BoolFlag{
 		Name:  "statediff.writing",
@@ -847,7 +863,8 @@ var (
 	}
 	StateDiffWorkersFlag = cli.UintFlag{
 		Name:  "statediff.workers",
-		Usage: "Number of concurrent workers to use during statediff processing (0 = 1)",
+		Usage: "Number of concurrent workers to use during statediff processing (default 1)",
+		Value: 1,
 	}
 )
 
@@ -1804,7 +1821,7 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, cfg node.C
 }
 
 // RegisterStateDiffService configures and registers a service to stream state diff data over RPC
-func RegisterStateDiffService(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params statediff.ServiceParams) {
+func RegisterStateDiffService(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params statediff.Config) {
 	if err := statediff.New(stack, ethServ, cfg, params); err != nil {
 		Fatalf("Failed to register the Statediff service: %v", err)
 	}

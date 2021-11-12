@@ -19,33 +19,33 @@ package sql
 import (
 	"context"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
 	node "github.com/ipfs/go-ipld-format"
 	"github.com/lib/pq"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 )
 
 // BatchTx wraps a sql tx with the state necessary for building the tx concurrently during trie difference iteration
 type BatchTx struct {
-	ctx       context.Context
-	dbtx      Tx
-	headerID  int64
-	stm       string
-	quit      chan struct{}
-	iplds     chan models.IPLDModel
-	ipldCache models.IPLDBatch
+	BlockNumber uint64
+	ctx         context.Context
+	dbtx        Tx
+	headerID    int64
+	stm         string
+	quit        chan struct{}
+	iplds       chan models.IPLDModel
+	ipldCache   models.IPLDBatch
 
-	close func(blockTx *BatchTx, err error) error
+	submit func(blockTx *BatchTx, err error) error
 }
 
 // Submit satisfies indexer.AtomicTx
 func (tx *BatchTx) Submit(err error) error {
-	return tx.close(tx, err)
+	return tx.submit(tx, err)
 }
 
 func (tx *BatchTx) flush() error {

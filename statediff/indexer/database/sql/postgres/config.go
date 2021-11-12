@@ -18,17 +18,32 @@ package postgres
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
+// DriverType to explicity type the kind of sql driver we are using
 type DriverType string
 
 const (
-	PGX  DriverType = "PGX"
-	SQLX DriverType = "SQLX"
+	PGX     DriverType = "PGX"
+	SQLX    DriverType = "SQLX"
+	Unknown DriverType = "Unknown"
 )
+
+// ResolveDriverType resolves a DriverType from a provided string
+func ResolveDriverType(str string) (DriverType, error) {
+	switch strings.ToLower(str) {
+	case "pgx", "pgxpool":
+		return PGX, nil
+	case "sqlx":
+		return SQLX, nil
+	default:
+		return Unknown, fmt.Errorf("unrecognized driver type string: %s", str)
+	}
+}
 
 // DefaultConfig are default parameters for connecting to a Postgres sql
 var DefaultConfig = Config{
@@ -64,10 +79,12 @@ type Config struct {
 	Driver DriverType
 }
 
+// Type satisfies interfaces.Config
 func (c Config) Type() shared.DBType {
 	return shared.POSTGRES
 }
 
+// DbConnectionString constructs and returns the connection string from the config
 func (c Config) DbConnectionString() string {
 	if len(c.Username) > 0 && len(c.Password) > 0 {
 		return fmt.Sprintf("postgresql://%s:%s@%s:%d/%s?sslmode=disable",

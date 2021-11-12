@@ -20,6 +20,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
+
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
@@ -37,34 +40,38 @@ var (
 	legacyHeaderCID cid.Cid
 )
 
-func setupLegacy(t *testing.T) {
+func setupLegacySQLX(t *testing.T) {
 	mockLegacyBlock = legacyData.MockBlock
 	legacyHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, legacyData.MockHeaderRlp, multihash.KECCAK_256)
 
-	db, err = test_helpers.SetupDB()
+	db, err = postgres.SetupSQLXDB()
 	require.NoError(t, err)
 
-	ind, err = sql.NewSQLIndexer(context.Background(), legacyData.Config, db)
+	ind, err = sql.NewStateDiffIndexer(context.Background(), legacyData.Config, db)
 	require.NoError(t, err)
-	var tx *sql.BlockTx
+	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
 		mockLegacyBlock,
 		legacyData.MockReceipts,
 		legacyData.MockBlock.Difficulty())
 	require.NoError(t, err)
 
-	defer tx.Close(tx, err)
+	defer func() {
+		if err := tx.Submit(err); err != nil {
+			t.Fatal(err)
+		}
+	}()
 	for _, node := range legacyData.StateDiffs {
 		err = ind.PushStateNode(tx, node)
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.BlockNumber, legacyData.BlockNumber.Uint64())
+	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, legacyData.BlockNumber.Uint64())
 }
 
-func TestPublishAndIndexerLegacy(t *testing.T) {
+func TestSQLXIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a legacy tx", func(t *testing.T) {
-		setupLegacy(t)
+		setupLegacySQLX(t)
 		defer tearDown(t)
 		pgStr := `SELECT cid, td, reward, id, base_fee
 				FROM eth.header_cids

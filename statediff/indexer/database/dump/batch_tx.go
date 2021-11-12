@@ -30,21 +30,22 @@ import (
 
 // BatchTx wraps a void with the state necessary for building the tx concurrently during trie difference iteration
 type BatchTx struct {
-	dump      io.Writer
-	quit      chan struct{}
-	iplds     chan models.IPLDModel
-	ipldCache models.IPLDBatch
+	BlockNumber uint64
+	dump        io.Writer
+	quit        chan struct{}
+	iplds       chan models.IPLDModel
+	ipldCache   models.IPLDBatch
 
-	close func(blockTx *BatchTx, err error) error
+	submit func(blockTx *BatchTx, err error) error
 }
 
 // Submit satisfies indexer.AtomicTx
 func (tx *BatchTx) Submit(err error) error {
-	return tx.close(tx, err)
+	return tx.submit(tx, err)
 }
 
 func (tx *BatchTx) flush() error {
-	if _, err := fmt.Fprintf(tx.dump, "%+v", tx.ipldCache); err != nil {
+	if _, err := fmt.Fprintf(tx.dump, "%+v\r\n", tx.ipldCache); err != nil {
 		return err
 	}
 	tx.ipldCache = models.IPLDBatch{}

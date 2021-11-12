@@ -102,11 +102,12 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	t = time.Now()
 
 	blockTx := &BatchTx{
-		dump:      sdi.dump,
-		iplds:     make(chan models.IPLDModel),
-		quit:      make(chan struct{}),
-		ipldCache: models.IPLDBatch{},
-		close: func(self *BatchTx, err error) error {
+		BlockNumber: height,
+		dump:        sdi.dump,
+		iplds:       make(chan models.IPLDModel),
+		quit:        make(chan struct{}),
+		ipldCache:   models.IPLDBatch{},
+		submit: func(self *BatchTx, err error) error {
 			close(self.quit)
 			close(self.iplds)
 			tDiff := time.Since(t)
@@ -205,7 +206,7 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 		Timestamp:       header.Time,
 		BaseFee:         baseFee,
 	}
-	_, err := fmt.Fprintf(sdi.dump, "%+v", mod)
+	_, err := fmt.Fprintf(sdi.dump, "%+v\r\n", mod)
 	return 0, err
 }
 
@@ -228,7 +229,7 @@ func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerID int64, blockNum
 			BlockHash:  uncleNode.Hash().String(),
 			Reward:     uncleReward.String(),
 		}
-		if _, err := fmt.Fprintf(sdi.dump, "%+v", uncle); err != nil {
+		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", uncle); err != nil {
 			return err
 		}
 	}
@@ -319,7 +320,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 		if txType != types.LegacyTxType {
 			txModel.Type = &txType
 		}
-		if _, err := fmt.Fprintf(sdi.dump, "%+v", txModel); err != nil {
+		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", txModel); err != nil {
 			return err
 		}
 
@@ -334,7 +335,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 				Address:     accessListElement.Address.Hex(),
 				StorageKeys: storageKeys,
 			}
-			if _, err := fmt.Fprintf(sdi.dump, "%+v", accessListElementModel); err != nil {
+			if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", accessListElementModel); err != nil {
 				return err
 			}
 		}
@@ -357,11 +358,11 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			rctModel.PostState = common.Bytes2Hex(receipt.PostState)
 		}
 
-		if _, err := fmt.Fprintf(sdi.dump, "%+v", rctModel); err != nil {
+		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", rctModel); err != nil {
 			return err
 		}
 
-		if _, err := fmt.Fprintf(sdi.dump, "%+v", logDataSet); err != nil {
+		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", logDataSet); err != nil {
 			return err
 		}
 	}
@@ -392,7 +393,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			MhKey:    shared.RemovedNodeMhKey,
 			NodeType: stateNode.NodeType.Int(),
 		}
-		_, err := fmt.Fprintf(sdi.dump, "%+v", stateModel)
+		_, err := fmt.Fprintf(sdi.dump, "%+v\r\n", stateModel)
 		return err
 	}
 	stateCIDStr, stateMhKey, err := tx.cacheRaw(ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
@@ -407,7 +408,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		NodeType: stateNode.NodeType.Int(),
 	}
 	// index the state node, collect the stateID to reference by FK
-	if _, err := fmt.Fprintf(sdi.dump, "%+v", stateModel); err != nil {
+	if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", stateModel); err != nil {
 		return err
 	}
 	// if we have a leaf, decode and index the account data
@@ -429,7 +430,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			CodeHash:    account.CodeHash,
 			StorageRoot: account.Root.String(),
 		}
-		if _, err := fmt.Fprintf(sdi.dump, "%+v", accountModel); err != nil {
+		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", accountModel); err != nil {
 			return err
 		}
 	}
@@ -445,7 +446,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 				MhKey:      shared.RemovedNodeMhKey,
 				NodeType:   storageNode.NodeType.Int(),
 			}
-			if _, err := fmt.Fprintf(sdi.dump, "%+v", storageModel); err != nil {
+			if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", storageModel); err != nil {
 				return err
 			}
 			continue
@@ -461,7 +462,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			MhKey:      storageMhKey,
 			NodeType:   storageNode.NodeType.Int(),
 		}
-		if _, err := fmt.Fprintf(sdi.dump, "%+v", storageModel); err != nil {
+		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", storageModel); err != nil {
 			return err
 		}
 	}

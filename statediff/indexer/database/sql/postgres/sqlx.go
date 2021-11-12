@@ -177,8 +177,7 @@ type sqlxTxWrapper struct {
 
 // QueryRow satisfies sql.Tx
 func (t sqlxTxWrapper) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
-	row := t.tx.QueryRow(sql, args...)
-	return rowWrapper{row: row}
+	return t.tx.QueryRowx(sql, args...)
 }
 
 // Exec satisfies sql.Tx

@@ -79,6 +79,9 @@ This service introduces a CLI flag namespace `statediff`
 `--statediff` flag is used to turn on the service
 `--statediff.writing` is used to tell the service to write state diff objects it produces from synced ChainEvents directly to a configured Postgres database
 `--statediff.workers` is used to set the number of concurrent workers to process state diff objects and write them into the database
+`--statediff.db.type` is the type of database we write out to (current options: postgres and dump)
+`--statediff.dump.dst` is the destination to write to when operating in database dump mode (stdout, stderr, discard)
+`--statediff.db.driver` is the specific driver to use for the database (current options for postgres: pgx and sqlx)
 `--statediff.db.host` is the hostname/ip to dial to connect to the database
 `--statediff.db.port` is the port to dial to connect to the database
 `--statediff.db.name` is the name of the database to connect to

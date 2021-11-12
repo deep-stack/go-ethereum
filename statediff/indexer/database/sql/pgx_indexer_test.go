@@ -32,33 +32,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/statediff/indexer"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
-
-var (
-	db        sql.Database
-	err       error
-	ind       *interfaces.StateDiffIndexer
-	ipfsPgGet = `SELECT data FROM public.blocks
-					WHERE key = $1`
-	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5  []byte
-	mockBlock                                              *types.Block
-	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID cid.Cid
-	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID            cid.Cid
-	state1CID, state2CID, storageCID                       cid.Cid
-)
-
-func expectTrue(t *testing.T, value bool) {
-	if !value {
-		t.Fatalf("Assertion failed")
-	}
-}
 
 func init() {
 	if os.Getenv("MODE") != "statediff" {
@@ -136,14 +118,14 @@ func init() {
 	storageCID, _ = ipld.RawdataToCid(ipld.MEthStorageTrie, mocks.StorageLeafNode, multihash.KECCAK_256)
 }
 
-func setup(t *testing.T) {
-	db, err = test_helpers.SetupDB()
+func setupPGX(t *testing.T) {
+	db, err = postgres.SetupPGXDB()
 	if err != nil {
 		t.Fatal(err)
 	}
-	ind, err = indexer.NewStateDiffIndexer(context.Background(), mocks.TestConfig, db)
+	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, db)
 	require.NoError(t, err)
-	var tx *sql.BlockTx
+	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
 		mockBlock,
 		mocks.MockReceipts,
@@ -151,7 +133,11 @@ func setup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Close(tx, err)
+	defer func() {
+		if err := tx.Submit(err); err != nil {
+			t.Fatal(err)
+		}
+	}()
 	for _, node := range mocks.StateDiffs {
 		err = ind.PushStateNode(tx, node)
 		if err != nil {
@@ -159,19 +145,12 @@ func setup(t *testing.T) {
 		}
 	}
 
-	test_helpers.ExpectEqual(t, tx.BlockNumber, mocks.BlockNumber.Uint64())
+	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, mocks.BlockNumber.Uint64())
 }
 
-func tearDown(t *testing.T) {
-	sql.TearDownDB(t, db)
-	if err := ind.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestPublishAndIndexer(t *testing.T) {
+func TestPGXIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
-		setup(t)
+		setupPGX(t)
 		defer tearDown(t)
 		pgStr := `SELECT cid, td, reward, id, base_fee
 				FROM eth.header_cids
@@ -208,7 +187,7 @@ func TestPublishAndIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
-		setup(t)
+		setupPGX(t)
 		defer tearDown(t)
 		// check that txs were properly indexed
 		trxs := make([]string, 0)
@@ -318,7 +297,7 @@ func TestPublishAndIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index log IPLDs for multiple receipt of a specific block", func(t *testing.T) {
-		setup(t)
+		setupPGX(t)
 		defer tearDown(t)
 
 		rcts := make([]string, 0)
@@ -368,7 +347,7 @@ func TestPublishAndIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index receipt IPLDs in a single tx", func(t *testing.T) {
-		setup(t)
+		setupPGX(t)
 		defer tearDown(t)
 
 		// check receipts were properly indexed
@@ -470,7 +449,7 @@ func TestPublishAndIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index state IPLDs in a single tx", func(t *testing.T) {
-		setup(t)
+		setupPGX(t)
 		defer tearDown(t)
 		// check that state nodes were properly indexed and published
 		stateNodes := make([]models.StateNodeModel, 0)
@@ -548,18 +527,18 @@ func TestPublishAndIndexer(t *testing.T) {
 		}
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
-		test_helpers.ExpectEqual(t, prefixedKey, sql.RemovedNodeMhKey)
+		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
 		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, stateNode.CID, sql.RemovedNodeStateCID)
+		test_helpers.ExpectEqual(t, stateNode.CID, shared.RemovedNodeStateCID)
 		test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x02'})
 		test_helpers.ExpectEqual(t, data, []byte{})
 	})
 
 	t.Run("Publish and index storage IPLDs in a single tx", func(t *testing.T) {
-		setup(t)
+		setupPGX(t)
 		defer tearDown(t)
 		// check that storage nodes were properly indexed
 		storageNodes := make([]models.StorageNodeWithStateKeyModel, 0)
@@ -608,7 +587,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		}
 		test_helpers.ExpectEqual(t, len(storageNodes), 1)
 		test_helpers.ExpectEqual(t, storageNodes[0], models.StorageNodeWithStateKeyModel{
-			CID:        sql.RemovedNodeStorageCID,
+			CID:        shared.RemovedNodeStorageCID,
 			NodeType:   3,
 			StorageKey: common.BytesToHash(mocks.RemovedLeafKey).Hex(),
 			StateKey:   common.BytesToHash(mocks.ContractLeafKey).Hex(),
@@ -620,7 +599,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		}
 		mhKey = dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
-		test_helpers.ExpectEqual(t, prefixedKey, sql.RemovedNodeMhKey)
+		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
 		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
 		if err != nil {
 			t.Fatal(err)
