@@ -306,6 +306,7 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 
 // Loop is the main processing method
 func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
+	log.Info("Starting statediff listening loop")
 	chainEventSub := sds.BlockChain.SubscribeChainEvent(chainEventCh)
 	defer chainEventSub.Unsubscribe()
 	errCh := chainEventSub.Err()
