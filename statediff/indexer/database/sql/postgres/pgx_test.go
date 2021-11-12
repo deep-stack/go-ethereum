@@ -23,7 +23,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/pgtype"
 	"github.com/jackc/pgx/v4/pgxpool"
 
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
@@ -86,15 +85,15 @@ func TestPostgresPGX(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var data pgtype.Text
-		err = dbPool.QueryRow(ctx, `SELECT data FROM example WHERE id = 1`).Scan(&data)
+		var data string
+		err = dbPool.QueryRow(ctx, `SELECT cast(data AS TEXT) FROM example WHERE id = 1`).Scan(&data)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		test_helpers.ExpectEqual(t, data, bi.String())
 		actual := new(big.Int)
-		actual.SetString(data.String, 10)
+		actual.SetString(data, 10)
 		test_helpers.ExpectEqual(t, actual, bi)
 	})
 
