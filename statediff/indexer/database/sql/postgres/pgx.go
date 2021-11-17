@@ -138,11 +138,6 @@ func (pgx *PGXDriver) Stats() sql.Stats {
 	return pgxStatsWrapper{stats: stats}
 }
 
-// NodeInfo satisfies sql.Database
-func (pgx *PGXDriver) NodeInfo() node.Info {
-	return pgx.nodeInfo
-}
-
 // NodeID satisfies sql.Database
 func (pgx *PGXDriver) NodeID() int64 {
 	return pgx.nodeID

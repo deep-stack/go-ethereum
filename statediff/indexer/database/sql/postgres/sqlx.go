@@ -107,11 +107,6 @@ func (driver *SQLXDriver) Stats() sql.Stats {
 	return sqlxStatsWrapper{stats: stats}
 }
 
-// NodeInfo satisfies sql.Database
-func (driver *SQLXDriver) NodeInfo() node.Info {
-	return driver.nodeInfo
-}
-
 // NodeID satisfies sql.Database
 func (driver *SQLXDriver) NodeID() int64 {
 	return driver.nodeID

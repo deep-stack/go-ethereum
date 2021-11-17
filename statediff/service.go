@@ -664,7 +664,7 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 		}
 	}()
 	output := func(node types2.StateNode) error {
-		return sds.indexer.PushStateNode(tx, node)
+		return sds.indexer.PushStateNode(tx, node, block.Hash().String())
 	}
 	codeOutput := func(c types2.CodeAndCodeHash) error {
 		return sds.indexer.PushCodeAndCodeHash(tx, c)
