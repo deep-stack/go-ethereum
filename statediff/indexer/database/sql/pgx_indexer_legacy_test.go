@@ -53,7 +53,7 @@ func setupLegacyPGX(t *testing.T) {
 		}
 	}()
 	for _, node := range legacyData.StateDiffs {
-		err = ind.PushStateNode(tx, node)
+		err = ind.PushStateNode(tx, node, legacyData.MockBlock.Hash().String())
 		require.NoError(t, err)
 	}
 

@@ -22,7 +22,7 @@ import (
 
 // Config holds params for writing sql statements out to a file
 type Config struct {
-	NodeID   int64 // this is the nodeID used as FK in public.blocks
+	NodeID   int64 // this is the nodeID used as FK in eth.header_cids
 	FilePath string
 }
 

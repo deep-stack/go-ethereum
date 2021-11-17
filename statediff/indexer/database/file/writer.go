@@ -63,9 +63,7 @@ func NewSQLWriter(file *os.File) *SQLWriter {
 func (sqw *SQLWriter) Loop() {
 	sqw.collationIndex = 0
 	go func() {
-		defer func() {
-			close(sqw.doneChan)
-		}()
+		defer close(sqw.doneChan)
 		var l int
 		for {
 			select {

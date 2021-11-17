@@ -159,7 +159,7 @@ func setupSQLX(t *testing.T) {
 		}
 	}()
 	for _, node := range mocks.StateDiffs {
-		err = ind.PushStateNode(tx, node)
+		err = ind.PushStateNode(tx, node, mockBlock.Hash().String())
 		if err != nil {
 			t.Fatal(err)
 		}

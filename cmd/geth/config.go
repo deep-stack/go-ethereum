@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/statediff"
 	dumpdb "github.com/ethereum/go-ethereum/statediff/indexer/database/dump"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
@@ -204,6 +205,14 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 				utils.Fatalf("%v", err)
 			}
 			switch dbType {
+			case shared.FILE:
+				if !ctx.GlobalIsSet(utils.StateDiffFileNodeRowIDFlag.Name) {
+					utils.Fatalf("In statediff file writing mode a node row ID must be provided")
+				}
+				indexerConfig = file.Config{
+					NodeID:   int64(ctx.GlobalInt(utils.StateDiffFileNodeRowIDFlag.Name)),
+					FilePath: ctx.GlobalString(utils.StateDiffFilePath.Name),
+				}
 			case shared.POSTGRES:
 				driverTypeStr := ctx.GlobalString(utils.StateDiffDBDriverTypeFlag.Name)
 				driverType, err := postgres.ResolveDriverType(driverTypeStr)

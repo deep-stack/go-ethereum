@@ -100,7 +100,7 @@ type StateNodeModel struct {
 
 // StorageNodeModel is the db model for eth.storage_cids
 type StorageNodeModel struct {
-	HeaderID   string `db:"header_id""`
+	HeaderID   string `db:"header_id"`
 	StatePath  []byte `db:"state_path"`
 	Path       []byte `db:"storage_path"`
 	StorageKey string `db:"storage_leaf_key"`
@@ -112,7 +112,7 @@ type StorageNodeModel struct {
 
 // StorageNodeWithStateKeyModel is a db model for eth.storage_cids + eth.state_cids.state_key
 type StorageNodeWithStateKeyModel struct {
-	HeaderID   string `db:"header_id""`
+	HeaderID   string `db:"header_id"`
 	StatePath  []byte `db:"state_path"`
 	Path       []byte `db:"storage_path"`
 	StateKey   string `db:"state_leaf_key"`
