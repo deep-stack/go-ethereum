@@ -34,7 +34,6 @@ type BatchTx struct {
 	BlockNumber uint64
 	ctx         context.Context
 	dbtx        Tx
-	headerID    int64
 	stm         string
 	quit        chan struct{}
 	iplds       chan models.IPLDModel

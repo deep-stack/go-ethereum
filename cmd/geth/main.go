@@ -167,6 +167,7 @@ var (
 		utils.StateDiffDBClientNameFlag,
 		utils.StateDiffWritingFlag,
 		utils.StateDiffWorkersFlag,
+		utils.StateDiffFilePath,
 		configFileFlag,
 		utils.CatalystFlag,
 	}

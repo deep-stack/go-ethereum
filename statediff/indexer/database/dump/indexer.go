@@ -136,7 +136,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	t = time.Now()
 
 	// Publish and index header, collect headerID
-	var headerID int64
+	var headerID string
 	headerID, err = sdi.processHeader(blockTx, block.Header(), headerNode, reward, totalDifficulty)
 	if err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 
 // processHeader publishes and indexes a header IPLD in Postgres
 // it returns the headerID
-func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, headerNode node.Node, reward, td *big.Int) (int64, error) {
+func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, headerNode node.Node, reward, td *big.Int) (string, error) {
 	tx.cacheIPLD(headerNode)
 
 	var baseFee *int64
@@ -190,12 +190,13 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 		*baseFee = header.BaseFee.Int64()
 	}
 
+	headerID := header.Hash().String()
 	mod := models.HeaderModel{
 		CID:             headerNode.Cid().String(),
 		MhKey:           shared.MultihashKeyFromCID(headerNode.Cid()),
 		ParentHash:      header.ParentHash.String(),
 		BlockNumber:     header.Number.String(),
-		BlockHash:       header.Hash().String(),
+		BlockHash:       headerID,
 		TotalDifficulty: td.String(),
 		Reward:          reward.String(),
 		Bloom:           header.Bloom.Bytes(),
@@ -207,11 +208,11 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 		BaseFee:         baseFee,
 	}
 	_, err := fmt.Fprintf(sdi.dump, "%+v\r\n", mod)
-	return 0, err
+	return headerID, err
 }
 
 // processUncles publishes and indexes uncle IPLDs in Postgres
-func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerID int64, blockNumber uint64, uncleNodes []*ipld2.EthHeader) error {
+func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerID string, blockNumber uint64, uncleNodes []*ipld2.EthHeader) error {
 	// publish and index uncles
 	for _, uncleNode := range uncleNodes {
 		tx.cacheIPLD(uncleNode)
@@ -223,6 +224,7 @@ func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerID int64, blockNum
 			uncleReward = shared.CalcUncleMinerReward(blockNumber, uncleNode.Number.Uint64())
 		}
 		uncle := models.UncleModel{
+			HeaderID:   headerID,
 			CID:        uncleNode.Cid().String(),
 			MhKey:      shared.MultihashKeyFromCID(uncleNode.Cid()),
 			ParentHash: uncleNode.ParentHash.String(),
@@ -238,7 +240,7 @@ func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerID int64, blockNum
 
 // processArgs bundles arguments to processReceiptsAndTxs
 type processArgs struct {
-	headerID        int64
+	headerID        string
 	blockNumber     *big.Int
 	receipts        types.Receipts
 	txs             types.Transactions
@@ -263,59 +265,24 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 		tx.cacheIPLD(txNode)
 
 		// Indexing
-		// extract topic and contract data from the receipt for indexing
-		mappedContracts := make(map[string]bool) // use map to avoid duplicate addresses
-		logDataSet := make([]*models.LogsModel, len(receipt.Logs))
-		for idx, l := range receipt.Logs {
-			topicSet := make([]string, 4)
-			for ti, topic := range l.Topics {
-				topicSet[ti] = topic.Hex()
-			}
-
-			if !args.logLeafNodeCIDs[i][idx].Defined() {
-				return fmt.Errorf("invalid log cid")
-			}
-
-			mappedContracts[l.Address.String()] = true
-			logDataSet[idx] = &models.LogsModel{
-				Address:   l.Address.String(),
-				Index:     int64(l.Index),
-				Data:      l.Data,
-				LeafCID:   args.logLeafNodeCIDs[i][idx].String(),
-				LeafMhKey: shared.MultihashKeyFromCID(args.logLeafNodeCIDs[i][idx]),
-				Topic0:    topicSet[0],
-				Topic1:    topicSet[1],
-				Topic2:    topicSet[2],
-				Topic3:    topicSet[3],
-			}
-		}
-		// these are the contracts seen in the logs
-		logContracts := make([]string, 0, len(mappedContracts))
-		for addr := range mappedContracts {
-			logContracts = append(logContracts, addr)
-		}
-		// this is the contract address if this receipt is for a contract creation tx
-		contract := shared.HandleZeroAddr(receipt.ContractAddress)
-		var contractHash string
-		if contract != "" {
-			contractHash = crypto.Keccak256Hash(common.HexToAddress(contract).Bytes()).String()
-		}
-		// index tx first so that the receipt can reference it by FK
+		// index tx
 		trx := args.txs[i]
+		trxID := trx.Hash().String()
 		// derive sender for the tx that corresponds with this receipt
 		from, err := types.Sender(signer, trx)
 		if err != nil {
 			return fmt.Errorf("error deriving tx sender: %v", err)
 		}
 		txModel := models.TxModel{
-			Dst:    shared.HandleZeroAddrPointer(trx.To()),
-			Src:    shared.HandleZeroAddr(from),
-			TxHash: trx.Hash().String(),
-			Index:  int64(i),
-			Data:   trx.Data(),
-			CID:    txNode.Cid().String(),
-			MhKey:  shared.MultihashKeyFromCID(txNode.Cid()),
-			Type:   trx.Type(),
+			HeaderID: args.headerID,
+			Dst:      shared.HandleZeroAddrPointer(trx.To()),
+			Src:      shared.HandleZeroAddr(from),
+			TxHash:   trxID,
+			Index:    int64(i),
+			Data:     trx.Data(),
+			CID:      txNode.Cid().String(),
+			MhKey:    shared.MultihashKeyFromCID(txNode.Cid()),
+			Type:     trx.Type(),
 		}
 		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", txModel); err != nil {
 			return err
@@ -328,6 +295,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 				storageKeys[k] = storageKey.Hex()
 			}
 			accessListElementModel := models.AccessListElementModel{
+				TxID:        trxID,
 				Index:       int64(j),
 				Address:     accessListElement.Address.Hex(),
 				StorageKeys: storageKeys,
@@ -337,12 +305,20 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			}
 		}
 
+		// this is the contract address if this receipt is for a contract creation tx
+		contract := shared.HandleZeroAddr(receipt.ContractAddress)
+		var contractHash string
+		if contract != "" {
+			contractHash = crypto.Keccak256Hash(common.HexToAddress(contract).Bytes()).String()
+		}
+
 		// index the receipt
 		if !args.rctLeafNodeCIDs[i].Defined() {
 			return fmt.Errorf("invalid receipt leaf node cid")
 		}
 
 		rctModel := &models.ReceiptModel{
+			TxID:         trxID,
 			Contract:     contract,
 			ContractHash: contractHash,
 			LeafCID:      args.rctLeafNodeCIDs[i].String(),
@@ -357,6 +333,31 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 
 		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", rctModel); err != nil {
 			return err
+		}
+
+		logDataSet := make([]*models.LogsModel, len(receipt.Logs))
+		for idx, l := range receipt.Logs {
+			topicSet := make([]string, 4)
+			for ti, topic := range l.Topics {
+				topicSet[ti] = topic.Hex()
+			}
+
+			if !args.logLeafNodeCIDs[i][idx].Defined() {
+				return fmt.Errorf("invalid log cid")
+			}
+
+			logDataSet[idx] = &models.LogsModel{
+				ReceiptID: trxID,
+				Address:   l.Address.String(),
+				Index:     int64(l.Index),
+				Data:      l.Data,
+				LeafCID:   args.logLeafNodeCIDs[i][idx].String(),
+				LeafMhKey: shared.MultihashKeyFromCID(args.logLeafNodeCIDs[i][idx]),
+				Topic0:    topicSet[0],
+				Topic1:    topicSet[1],
+				Topic2:    topicSet[2],
+				Topic3:    topicSet[3],
+			}
 		}
 
 		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", logDataSet); err != nil {
@@ -374,7 +375,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 }
 
 // PushStateNode publishes and indexes a state diff node object (including any child storage nodes) in the IPLD sql
-func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode) error {
+func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode, headerID string) error {
 	tx, ok := batch.(*BatchTx)
 	if !ok {
 		return fmt.Errorf("sql batch is expected to be of type %T, got %T", &BatchTx{}, batch)
@@ -384,6 +385,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		// short circuit if it is a Removed node
 		// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
 		stateModel := models.StateNodeModel{
+			HeaderID: headerID,
 			Path:     stateNode.Path,
 			StateKey: common.BytesToHash(stateNode.LeafKey).String(),
 			CID:      shared.RemovedNodeStateCID,
@@ -398,6 +400,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
 	}
 	stateModel := models.StateNodeModel{
+		HeaderID: headerID,
 		Path:     stateNode.Path,
 		StateKey: common.BytesToHash(stateNode.LeafKey).String(),
 		CID:      stateCIDStr,
@@ -422,6 +425,8 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			return fmt.Errorf("error decoding state account rlp: %s", err.Error())
 		}
 		accountModel := models.StateAccountModel{
+			HeaderID:    headerID,
+			StatePath:   stateNode.Path,
 			Balance:     account.Balance.String(),
 			Nonce:       account.Nonce,
 			CodeHash:    account.CodeHash,
@@ -437,6 +442,8 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			// short circuit if it is a Removed node
 			// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
 			storageModel := models.StorageNodeModel{
+				HeaderID:   headerID,
+				StatePath:  stateNode.Path,
 				Path:       storageNode.Path,
 				StorageKey: common.BytesToHash(storageNode.LeafKey).String(),
 				CID:        shared.RemovedNodeStorageCID,
@@ -453,6 +460,8 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			return fmt.Errorf("error generating and cacheing storage node IPLD: %v", err)
 		}
 		storageModel := models.StorageNodeModel{
+			HeaderID:   headerID,
+			StatePath:  stateNode.Path,
 			Path:       storageNode.Path,
 			StorageKey: common.BytesToHash(storageNode.LeafKey).String(),
 			CID:        storageCIDStr,
@@ -482,7 +491,7 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(batch interfaces.Batch, codeAnd
 	return nil
 }
 
-// Close satisfied io.Closer
+// Close satisfies io.Closer
 func (sdi *StateDiffIndexer) Close() error {
 	return sdi.dump.Close()
 }

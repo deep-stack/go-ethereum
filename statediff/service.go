@@ -239,8 +239,14 @@ func (sds *Service) WriteLoop(chainEventCh chan core.ChainEvent) {
 				statediffMetrics.writeLoopChannelLen.Update(int64(len(chainEventCh)))
 				chainEventFwd <- chainEvent
 			case err := <-errCh:
+				println("here")
 				log.Error("Error from chain event subscription", "error", err)
 				close(sds.QuitChan)
+				log.Info("Quitting the statediffing writing loop")
+				if err := sds.indexer.Close(); err != nil {
+					log.Error("Error closing indexer", "err", err)
+				}
+				return
 			case <-sds.QuitChan:
 				log.Info("Quitting the statediffing writing loop")
 				if err := sds.indexer.Close(); err != nil {
@@ -339,6 +345,9 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 		case err := <-errCh:
 			log.Error("Error from chain event subscription", "error", err)
 			close(sds.QuitChan)
+			log.Info("Quitting the statediffing listening loop")
+			sds.close()
+			return
 		case <-sds.QuitChan:
 			log.Info("Quitting the statediffing listening loop")
 			sds.close()
@@ -664,7 +673,7 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 		}
 	}()
 	output := func(node types2.StateNode) error {
-		return sds.indexer.PushStateNode(tx, node)
+		return sds.indexer.PushStateNode(tx, node, block.Hash().String())
 	}
 	codeOutput := func(c types2.CodeAndCodeHash) error {
 		return sds.indexer.PushCodeAndCodeHash(tx, c)

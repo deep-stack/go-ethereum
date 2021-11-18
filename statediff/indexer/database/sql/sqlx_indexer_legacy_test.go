@@ -62,7 +62,7 @@ func setupLegacySQLX(t *testing.T) {
 		}
 	}()
 	for _, node := range legacyData.StateDiffs {
-		err = ind.PushStateNode(tx, node)
+		err = ind.PushStateNode(tx, node, mockLegacyBlock.Hash().String())
 		require.NoError(t, err)
 	}
 
@@ -73,16 +73,16 @@ func TestSQLXIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a legacy tx", func(t *testing.T) {
 		setupLegacySQLX(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, id, base_fee
+		pgStr := `SELECT cid, td, reward, block_hash, base_fee
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
 		type res struct {
-			CID     string
-			TD      string
-			Reward  string
-			ID      int
-			BaseFee *int64 `db:"base_fee"`
+			CID       string
+			TD        string
+			Reward    string
+			BlockHash string `db:"block_hash"`
+			BaseFee   *int64 `db:"base_fee"`
 		}
 		header := new(res)
 		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)

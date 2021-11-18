@@ -14,33 +14,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package shared
+package file
 
-import (
-	"fmt"
-	"strings"
-)
+// BatchTx wraps a void with the state necessary for building the tx concurrently during trie difference iteration
+type BatchTx struct {
+	BlockNumber uint64
 
-// DBType to explicitly type the kind of DB
-type DBType string
+	submit func(blockTx *BatchTx, err error) error
+}
 
-const (
-	POSTGRES DBType = "Postgres"
-	DUMP     DBType = "Dump"
-	FILE     DBType = "File"
-	UNKNOWN  DBType = "Unknown"
-)
-
-// ResolveDBType resolves a DBType from a provided string
-func ResolveDBType(str string) (DBType, error) {
-	switch strings.ToLower(str) {
-	case "postgres", "pg":
-		return POSTGRES, nil
-	case "dump", "d":
-		return DUMP, nil
-	case "file", "f", "fs":
-		return FILE, nil
-	default:
-		return UNKNOWN, fmt.Errorf("unrecognized db type string: %s", str)
-	}
+// Submit satisfies indexer.AtomicTx
+func (tx *BatchTx) Submit(err error) error {
+	return tx.submit(tx, err)
 }

@@ -26,7 +26,6 @@ import (
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
-	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
@@ -140,7 +139,7 @@ func setupPGX(t *testing.T) {
 		}
 	}()
 	for _, node := range mocks.StateDiffs {
-		err = ind.PushStateNode(tx, node)
+		err = ind.PushStateNode(tx, node, mockBlock.Hash().String())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,19 +152,24 @@ func TestPGXIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setupPGX(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, id, base_fee
+		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, base_fee
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
 		type res struct {
-			CID     string
-			TD      string
-			Reward  string
-			ID      int
-			BaseFee *int64 `db:"base_fee"`
+			CID       string
+			TD        string
+			Reward    string
+			BlockHash string `db:"block_hash"`
+			BaseFee   *int64 `db:"base_fee"`
 		}
 		header := new(res)
-		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
+		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).Scan(
+			&header.CID,
+			&header.TD,
+			&header.Reward,
+			&header.BlockHash,
+			&header.BaseFee)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -192,7 +196,7 @@ func TestPGXIndexer(t *testing.T) {
 		defer tearDown(t)
 		// check that txs were properly indexed
 		trxs := make([]string, 0)
-		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.id)
+		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1`
 		err = db.Select(context.Background(), &trxs, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
@@ -221,46 +225,46 @@ func TestPGXIndexer(t *testing.T) {
 			switch c {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
-				var txType *uint8
+				var txType uint8
 				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected tx_type 0, got %d", txType)
 				}
 			case trx2CID.String():
 				test_helpers.ExpectEqual(t, data, tx2)
-				var txType *uint8
+				var txType uint8
 				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected tx_type 0, got %d", txType)
 				}
 			case trx3CID.String():
 				test_helpers.ExpectEqual(t, data, tx3)
-				var txType *uint8
+				var txType uint8
 				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected tx_type 0, got %d", txType)
 				}
 			case trx4CID.String():
 				test_helpers.ExpectEqual(t, data, tx4)
-				var txType *uint8
+				var txType uint8
 				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if *txType != types.AccessListTxType {
-					t.Fatalf("expected AccessListTxType (1), got %d", *txType)
+				if txType != types.AccessListTxType {
+					t.Fatalf("expected AccessListTxType (1), got %d", txType)
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
-				pgStr = `SELECT access_list_element.* FROM eth.access_list_element INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.id) WHERE cid = $1 ORDER BY access_list_element.index ASC`
+				pgStr = `SELECT access_list_element.* FROM eth.access_list_element INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_element.index ASC`
 				err = db.Select(context.Background(), &accessListElementModels, pgStr, c)
 				if err != nil {
 					t.Fatal(err)
@@ -299,8 +303,8 @@ func TestPGXIndexer(t *testing.T) {
 
 		rcts := make([]string, 0)
 		pgStr := `SELECT receipt_cids.leaf_cid FROM eth.receipt_cids, eth.transaction_cids, eth.header_cids
-				WHERE receipt_cids.tx_id = transaction_cids.id
-				AND transaction_cids.header_id = header_cids.id
+				WHERE receipt_cids.tx_id = transaction_cids.tx_hash
+				AND transaction_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
 				ORDER BY transaction_cids.index`
 		err = db.Select(context.Background(), &rcts, pgStr, mocks.BlockNumber.Uint64())
@@ -317,8 +321,8 @@ func TestPGXIndexer(t *testing.T) {
 		}
 		for i := range rcts {
 			results := make([]logIPLD, 0)
-			pgStr = `SELECT log_cids.index, log_cids.address, log_cids.Topic0, log_cids.Topic1, data FROM eth.log_cids
-    				INNER JOIN eth.receipt_cids ON (log_cids.receipt_id = receipt_cids.id)
+			pgStr = `SELECT log_cids.index, log_cids.address, log_cids.topic0, log_cids.topic1, data FROM eth.log_cids
+    				INNER JOIN eth.receipt_cids ON (log_cids.rct_id = receipt_cids.tx_id)
 					INNER JOIN public.blocks ON (log_cids.leaf_mh_key = blocks.key)
 					WHERE receipt_cids.leaf_cid = $1 ORDER BY eth.log_cids.index ASC`
 			err = db.Select(context.Background(), &results, pgStr, rcts[i])
@@ -350,9 +354,9 @@ func TestPGXIndexer(t *testing.T) {
 		// check receipts were properly indexed
 		rcts := make([]string, 0)
 		pgStr := `SELECT receipt_cids.leaf_cid FROM eth.receipt_cids, eth.transaction_cids, eth.header_cids
-				WHERE receipt_cids.tx_id = transaction_cids.id
-				AND transaction_cids.header_id = header_cids.id
-				AND header_cids.block_number = $1 order by transaction_cids.id`
+				WHERE receipt_cids.tx_id = transaction_cids.tx_hash
+				AND transaction_cids.header_id = header_cids.block_hash
+				AND header_cids.block_number = $1 order by transaction_cids.index`
 		err = db.Select(context.Background(), &rcts, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
@@ -447,8 +451,8 @@ func TestPGXIndexer(t *testing.T) {
 		defer tearDown(t)
 		// check that state nodes were properly indexed and published
 		stateNodes := make([]models.StateNodeModel, 0)
-		pgStr := `SELECT state_cids.id, state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
-				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.id)
+		pgStr := `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
+				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type != 3`
 		err = db.Select(context.Background(), &stateNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
@@ -467,9 +471,9 @@ func TestPGXIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			pgStr = `SELECT * from eth.state_accounts WHERE state_id = $1`
+			pgStr = `SELECT header_id, state_path, cast(balance AS TEXT), nonce, code_hash, storage_root from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
 			var account models.StateAccountModel
-			err = db.Get(context.Background(), &account, pgStr, stateNode.ID)
+			err = db.Get(context.Background(), &account, pgStr, stateNode.HeaderID, stateNode.Path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -479,8 +483,8 @@ func TestPGXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x06'})
 				test_helpers.ExpectEqual(t, data, mocks.ContractLeafNode)
 				test_helpers.ExpectEqual(t, account, models.StateAccountModel{
-					ID:          account.ID,
-					StateID:     stateNode.ID,
+					HeaderID:    account.HeaderID,
+					StatePath:   stateNode.Path,
 					Balance:     "0",
 					CodeHash:    mocks.ContractCodeHash.Bytes(),
 					StorageRoot: mocks.ContractRoot,
@@ -493,8 +497,8 @@ func TestPGXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x0c'})
 				test_helpers.ExpectEqual(t, data, mocks.AccountLeafNode)
 				test_helpers.ExpectEqual(t, account, models.StateAccountModel{
-					ID:          account.ID,
-					StateID:     stateNode.ID,
+					HeaderID:    account.HeaderID,
+					StatePath:   stateNode.Path,
 					Balance:     "1000",
 					CodeHash:    mocks.AccountCodeHash.Bytes(),
 					StorageRoot: mocks.AccountRoot,
@@ -505,8 +509,8 @@ func TestPGXIndexer(t *testing.T) {
 
 		// check that Removed state nodes were properly indexed and published
 		stateNodes = make([]models.StateNodeModel, 0)
-		pgStr = `SELECT state_cids.id, state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
-				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.id)
+		pgStr = `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
+				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type = 3`
 		err = db.Select(context.Background(), &stateNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
@@ -538,8 +542,8 @@ func TestPGXIndexer(t *testing.T) {
 		storageNodes := make([]models.StorageNodeWithStateKeyModel, 0)
 		pgStr := `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
 				FROM eth.storage_cids, eth.state_cids, eth.header_cids
-				WHERE storage_cids.state_id = state_cids.id
-				AND state_cids.header_id = header_cids.id
+				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
+				AND state_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
 				AND storage_cids.node_type != 3`
 		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())
@@ -571,8 +575,8 @@ func TestPGXIndexer(t *testing.T) {
 		storageNodes = make([]models.StorageNodeWithStateKeyModel, 0)
 		pgStr = `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
 				FROM eth.storage_cids, eth.state_cids, eth.header_cids
-				WHERE storage_cids.state_id = state_cids.id
-				AND state_cids.header_id = header_cids.id
+				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
+				AND state_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
 				AND storage_cids.node_type = 3`
 		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())

@@ -29,7 +29,7 @@ import (
 // StateDiffIndexer interface required to index statediff data
 type StateDiffIndexer interface {
 	PushBlock(block *types.Block, receipts types.Receipts, totalDifficulty *big.Int) (Batch, error)
-	PushStateNode(tx Batch, stateNode sdtypes.StateNode) error
+	PushStateNode(tx Batch, stateNode sdtypes.StateNode, headerID string) error
 	PushCodeAndCodeHash(tx Batch, codeAndCodeHash sdtypes.CodeAndCodeHash) error
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
 	io.Closer

@@ -26,7 +26,7 @@ type IPLDBatch struct {
 
 // UncleBatch holds the arguments for a batch insert of uncle data
 type UncleBatch struct {
-	HeaderID     []int64
+	HeaderID     []string
 	BlockHashes  []string
 	ParentHashes []string
 	CIDs         []string
@@ -36,7 +36,7 @@ type UncleBatch struct {
 
 // TxBatch holds the arguments for a batch insert of tx data
 type TxBatch struct {
-	HeaderID int64
+	HeaderID string
 	Indexes  []int64
 	TxHashes []string
 	CIDs     []string
@@ -44,20 +44,20 @@ type TxBatch struct {
 	Dsts     []string
 	Srcs     []string
 	Datas    [][]byte
-	Types    []*uint8
+	Types    []uint8
 }
 
 // AccessListBatch holds the arguments for a batch insert of access list data
 type AccessListBatch struct {
 	Indexes         []int64
-	TxIDs           []int64
+	TxIDs           []string
 	Addresses       []string
 	StorageKeysSets []pq.StringArray
 }
 
 // ReceiptBatch holds the arguments for a batch insert of receipt data
 type ReceiptBatch struct {
-	TxIDs          []int64
+	TxIDs          []string
 	LeafCIDs       []string
 	LeafMhKeys     []string
 	PostStatuses   []uint64
@@ -71,7 +71,7 @@ type ReceiptBatch struct {
 type LogBatch struct {
 	LeafCIDs   []string
 	LeafMhKeys []string
-	ReceiptIDs []int64
+	ReceiptIDs []string
 	Addresses  []string
 	Indexes    []int64
 	Datas      [][]byte
@@ -83,34 +83,33 @@ type LogBatch struct {
 
 // StateBatch holds the arguments for a batch insert of state data
 type StateBatch struct {
-	ID       int64
-	HeaderID int64
-	Path     []byte
-	StateKey string
-	NodeType int
-	CID      string
-	MhKey    string
-	Diff     bool
+	HeaderID  string
+	Paths     [][]byte
+	StateKeys []string
+	NodeTypes []int
+	CIDs      []string
+	MhKeys    []string
+	Diff      bool
 }
 
 // AccountBatch holds the arguments for a batch insert of account data
 type AccountBatch struct {
-	ID          int64
-	StateID     int64
-	Balance     string
-	Nonce       uint64
-	CodeHash    []byte
-	StorageRoot string
+	HeaderID     string
+	StatePaths   [][]byte
+	Balances     []string
+	Nonces       []uint64
+	CodeHashes   [][]byte
+	StorageRoots []string
 }
 
 // StorageBatch holds the arguments for a batch insert of storage data
 type StorageBatch struct {
-	ID         int64
-	StateID    int64
-	Path       []byte
-	StorageKey string
-	NodeType   int
-	CID        string
-	MhKey      string
-	Diff       bool
+	HeaderID    string
+	StatePaths  [][]string
+	Paths       [][]byte
+	StorageKeys []string
+	NodeTypes   []int
+	CIDs        []string
+	MhKeys      []string
+	Diff        bool
 }

@@ -24,6 +24,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -150,29 +151,35 @@ func testSubscriptionAPI(t *testing.T) {
 	id := rpc.NewID()
 	payloadChan := make(chan statediff.Payload)
 	quitChan := make(chan bool)
+	wg := new(sync.WaitGroup)
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+		sort.Slice(expectedStateDiffBytes, func(i, j int) bool { return expectedStateDiffBytes[i] < expectedStateDiffBytes[j] })
+		select {
+		case payload := <-payloadChan:
+			if !bytes.Equal(payload.BlockRlp, expectedBlockRlp) {
+				t.Errorf("payload does not have expected block\r\nactual block rlp: %v\r\nexpected block rlp: %v", payload.BlockRlp, expectedBlockRlp)
+			}
+			sort.Slice(payload.StateObjectRlp, func(i, j int) bool { return payload.StateObjectRlp[i] < payload.StateObjectRlp[j] })
+			if !bytes.Equal(payload.StateObjectRlp, expectedStateDiffBytes) {
+				t.Errorf("payload does not have expected state diff\r\nactual state diff rlp: %v\r\nexpected state diff rlp: %v", payload.StateObjectRlp, expectedStateDiffBytes)
+			}
+			if !bytes.Equal(expectedReceiptBytes, payload.ReceiptsRlp) {
+				t.Errorf("payload does not have expected receipts\r\nactual receipt rlp: %v\r\nexpected receipt rlp: %v", payload.ReceiptsRlp, expectedReceiptBytes)
+			}
+			if !bytes.Equal(payload.TotalDifficulty.Bytes(), mockTotalDifficulty.Bytes()) {
+				t.Errorf("payload does not have expected total difficulty\r\nactual td: %d\r\nexpected td: %d", payload.TotalDifficulty.Int64(), mockTotalDifficulty.Int64())
+			}
+		case <-quitChan:
+			t.Errorf("channel quit before delivering payload")
+		}
+	}()
+	time.Sleep(1)
 	mockService.Subscribe(id, payloadChan, quitChan, params)
 	blockChan <- block1
 	parentBlockChain <- block0
-
-	sort.Slice(expectedStateDiffBytes, func(i, j int) bool { return expectedStateDiffBytes[i] < expectedStateDiffBytes[j] })
-	select {
-	case payload := <-payloadChan:
-		if !bytes.Equal(payload.BlockRlp, expectedBlockRlp) {
-			t.Errorf("payload does not have expected block\r\nactual block rlp: %v\r\nexpected block rlp: %v", payload.BlockRlp, expectedBlockRlp)
-		}
-		sort.Slice(payload.StateObjectRlp, func(i, j int) bool { return payload.StateObjectRlp[i] < payload.StateObjectRlp[j] })
-		if !bytes.Equal(payload.StateObjectRlp, expectedStateDiffBytes) {
-			t.Errorf("payload does not have expected state diff\r\nactual state diff rlp: %v\r\nexpected state diff rlp: %v", payload.StateObjectRlp, expectedStateDiffBytes)
-		}
-		if !bytes.Equal(expectedReceiptBytes, payload.ReceiptsRlp) {
-			t.Errorf("payload does not have expected receipts\r\nactual receipt rlp: %v\r\nexpected receipt rlp: %v", payload.ReceiptsRlp, expectedReceiptBytes)
-		}
-		if !bytes.Equal(payload.TotalDifficulty.Bytes(), mockTotalDifficulty.Bytes()) {
-			t.Errorf("payload does not have expected total difficulty\r\nactual td: %d\r\nexpected td: %d", payload.TotalDifficulty.Int64(), mockTotalDifficulty.Int64())
-		}
-	case <-quitChan:
-		t.Errorf("channel quit before delivering payload")
-	}
+	wg.Wait()
 }
 
 func testHTTPAPI(t *testing.T) {

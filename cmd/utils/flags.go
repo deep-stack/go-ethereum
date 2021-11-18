@@ -788,7 +788,7 @@ var (
 	}
 	StateDiffDBTypeFlag = cli.StringFlag{
 		Name:  "statediff.db.type",
-		Usage: "Statediff database type",
+		Usage: "Statediff database type (current options: postgres, file, dump)",
 		Value: "postgres",
 	}
 	StateDiffDBDriverTypeFlag = cli.StringFlag{
@@ -851,6 +851,10 @@ var (
 	StateDiffDBNodeIDFlag = cli.StringFlag{
 		Name:  "statediff.db.nodeid",
 		Usage: "Node ID to use when writing state diffs to database",
+	}
+	StateDiffFilePath = cli.StringFlag{
+		Name:  "statediff.file.path",
+		Usage: "Full path (including filename) to write statediff data out to when operating in file mode",
 	}
 	StateDiffDBClientNameFlag = cli.StringFlag{
 		Name:  "statediff.db.clientname",

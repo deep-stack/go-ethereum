@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/dump"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
@@ -32,10 +33,17 @@ import (
 // NewStateDiffIndexer creates and returns an implementation of the StateDiffIndexer interface
 func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, nodeInfo node.Info, config interfaces.Config) (interfaces.StateDiffIndexer, error) {
 	switch config.Type() {
+	case shared.FILE:
+		fc, ok := config.(file.Config)
+		if !ok {
+			return nil, fmt.Errorf("file config is not the correct type: got %T, expected %T", config, file.Config{})
+		}
+		fc.NodeInfo = nodeInfo
+		return file.NewStateDiffIndexer(ctx, chainConfig, fc)
 	case shared.POSTGRES:
 		pgc, ok := config.(postgres.Config)
 		if !ok {
-			return nil, fmt.Errorf("ostgres config is not the correct type: got %T, expected %T", config, postgres.Config{})
+			return nil, fmt.Errorf("postgres config is not the correct type: got %T, expected %T", config, postgres.Config{})
 		}
 		var err error
 		var driver sql.Driver
