@@ -22,14 +22,7 @@ var _ sql.Database = &DB{}
 
 const (
 	createNodeStm = `INSERT INTO nodes (genesis_block, network_id, node_id, client_name, chain_id) VALUES ($1, $2, $3, $4, $5)
-					 ON CONFLICT (genesis_block, network_id, node_id, chain_id)
-					 DO UPDATE
-                    	SET genesis_block = $1,
-                        network_id = $2,
-                        node_id = $3,
-                        client_name = $4,
-						chain_id = $5
-                	 RETURNING id`
+					 ON CONFLICT (node_id) DO NOTHING`
 )
 
 // NewPostgresDB returns a postgres.DB using the provided driver
@@ -37,7 +30,7 @@ func NewPostgresDB(driver sql.Driver) *DB {
 	return &DB{driver}
 }
 
-// DB implements sql.Databse using a configured driver and Postgres statement syntax
+// DB implements sql.Database using a configured driver and Postgres statement syntax
 type DB struct {
 	sql.Driver
 }

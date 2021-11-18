@@ -36,7 +36,7 @@ type Driver interface {
 	Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 	Begin(ctx context.Context) (Tx, error)
 	Stats() Stats
-	NodeID() int64
+	NodeID() string
 	Context() context.Context
 	io.Closer
 }

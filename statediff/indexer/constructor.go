@@ -38,6 +38,7 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, n
 		if !ok {
 			return nil, fmt.Errorf("file config is not the correct type: got %T, expected %T", config, file.Config{})
 		}
+		fc.NodeInfo = nodeInfo
 		return file.NewStateDiffIndexer(ctx, chainConfig, fc)
 	case shared.POSTGRES:
 		pgc, ok := config.(postgres.Config)

@@ -206,11 +206,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			}
 			switch dbType {
 			case shared.FILE:
-				if !ctx.GlobalIsSet(utils.StateDiffFileNodeRowIDFlag.Name) {
-					utils.Fatalf("In statediff file writing mode a node row ID must be provided")
-				}
 				indexerConfig = file.Config{
-					NodeID:   int64(ctx.GlobalInt(utils.StateDiffFileNodeRowIDFlag.Name)),
 					FilePath: ctx.GlobalString(utils.StateDiffFilePath.Name),
 				}
 			case shared.POSTGRES:

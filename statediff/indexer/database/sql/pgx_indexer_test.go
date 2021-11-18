@@ -26,7 +26,6 @@ import (
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
-	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
@@ -153,7 +152,7 @@ func TestPGXIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setupPGX(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, block_hash, base_fee
+		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, base_fee
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
@@ -165,7 +164,12 @@ func TestPGXIndexer(t *testing.T) {
 			BaseFee   *int64 `db:"base_fee"`
 		}
 		header := new(res)
-		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
+		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).Scan(
+			&header.CID,
+			&header.TD,
+			&header.Reward,
+			&header.BlockHash,
+			&header.BaseFee)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -221,43 +225,43 @@ func TestPGXIndexer(t *testing.T) {
 			switch c {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
-				var txType *uint8
+				var txType uint8
 				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected tx_type 0, got %d", txType)
 				}
 			case trx2CID.String():
 				test_helpers.ExpectEqual(t, data, tx2)
-				var txType *uint8
+				var txType uint8
 				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected tx_type 0, got %d", txType)
 				}
 			case trx3CID.String():
 				test_helpers.ExpectEqual(t, data, tx3)
-				var txType *uint8
+				var txType uint8
 				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != nil {
-					t.Fatalf("expected nil tx_type, got %d", *txType)
+				if txType != 0 {
+					t.Fatalf("expected tx_type 0, got %d", txType)
 				}
 			case trx4CID.String():
 				test_helpers.ExpectEqual(t, data, tx4)
-				var txType *uint8
+				var txType uint8
 				err = db.Get(context.Background(), &txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if *txType != types.AccessListTxType {
-					t.Fatalf("expected AccessListTxType (1), got %d", *txType)
+				if txType != types.AccessListTxType {
+					t.Fatalf("expected AccessListTxType (1), got %d", txType)
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_element.* FROM eth.access_list_element INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_element.index ASC`
@@ -467,7 +471,7 @@ func TestPGXIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			pgStr = `SELECT * from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
+			pgStr = `SELECT header_id, state_path, cast(balance AS TEXT), nonce, code_hash, storage_root from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
 			var account models.StateAccountModel
 			err = db.Get(context.Background(), &account, pgStr, stateNode.HeaderID, stateNode.Path)
 			if err != nil {

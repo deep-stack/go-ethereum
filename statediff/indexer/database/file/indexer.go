@@ -55,7 +55,7 @@ var (
 type StateDiffIndexer struct {
 	writer      *SQLWriter
 	chainConfig *params.ChainConfig
-	nodeID      int64
+	nodeID      string
 	wg          *sync.WaitGroup
 }
 
@@ -78,7 +78,7 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 	return &StateDiffIndexer{
 		writer:      w,
 		chainConfig: chainConfig,
-		nodeID:      config.NodeID,
+		nodeID:      config.NodeInfo.ID,
 		wg:          wg,
 	}, nil
 }

@@ -32,7 +32,7 @@ type SQLXDriver struct {
 	ctx      context.Context
 	db       *sqlx.DB
 	nodeInfo node.Info
-	nodeID   int64
+	nodeID   string
 }
 
 // NewSQLXDriver returns a new sqlx driver for Postgres
@@ -60,16 +60,15 @@ func NewSQLXDriver(ctx context.Context, config Config, node node.Info) (*SQLXDri
 }
 
 func (driver *SQLXDriver) createNode() error {
-	var nodeID int64
-	err := driver.db.QueryRowx(
+	_, err := driver.db.Exec(
 		createNodeStm,
 		driver.nodeInfo.GenesisBlock, driver.nodeInfo.NetworkID,
 		driver.nodeInfo.ID, driver.nodeInfo.ClientName,
-		driver.nodeInfo.ChainID).Scan(&nodeID)
+		driver.nodeInfo.ChainID)
 	if err != nil {
 		return ErrUnableToSetNode(err)
 	}
-	driver.nodeID = nodeID
+	driver.nodeID = driver.nodeInfo.ID
 	return nil
 }
 
@@ -108,7 +107,7 @@ func (driver *SQLXDriver) Stats() sql.Stats {
 }
 
 // NodeID satisfies sql.Database
-func (driver *SQLXDriver) NodeID() int64 {
+func (driver *SQLXDriver) NodeID() string {
 	return driver.nodeID
 }
 

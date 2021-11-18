@@ -30,7 +30,6 @@ type DriverType string
 const (
 	PGX     DriverType = "PGX"
 	SQLX    DriverType = "SQLX"
-	FILE    DriverType = "File"
 	Unknown DriverType = "Unknown"
 )
 
@@ -41,8 +40,6 @@ func ResolveDriverType(str string) (DriverType, error) {
 		return PGX, nil
 	case "sqlx":
 		return SQLX, nil
-	case "file":
-		return FILE, nil
 	default:
 		return Unknown, fmt.Errorf("unrecognized driver type string: %s", str)
 	}
@@ -52,9 +49,9 @@ func ResolveDriverType(str string) (DriverType, error) {
 var DefaultConfig = Config{
 	Hostname:     "localhost",
 	Port:         5432,
-	DatabaseName: "vulcanize_test",
+	DatabaseName: "vulcanize_testing",
 	Username:     "postgres",
-	Password:     "",
+	Password:     "password",
 }
 
 // Config holds params for a Postgres db

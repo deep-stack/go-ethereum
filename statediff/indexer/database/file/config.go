@@ -17,13 +17,14 @@
 package file
 
 import (
+	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
 // Config holds params for writing sql statements out to a file
 type Config struct {
-	NodeID   int64 // this is the nodeID used as FK in eth.header_cids
 	FilePath string
+	NodeInfo node.Info
 }
 
 // Type satisfies interfaces.Config

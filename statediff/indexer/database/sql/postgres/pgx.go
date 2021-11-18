@@ -34,7 +34,7 @@ type PGXDriver struct {
 	ctx      context.Context
 	pool     *pgxpool.Pool
 	nodeInfo node.Info
-	nodeID   int64
+	nodeID   string
 }
 
 // NewPGXDriver returns a new pgx driver
@@ -89,17 +89,16 @@ func MakeConfig(config Config) (*pgxpool.Config, error) {
 }
 
 func (pgx *PGXDriver) createNode() error {
-	var nodeID int64
-	err := pgx.pool.QueryRow(
+	_, err := pgx.pool.Exec(
 		pgx.ctx,
 		createNodeStm,
 		pgx.nodeInfo.GenesisBlock, pgx.nodeInfo.NetworkID,
 		pgx.nodeInfo.ID, pgx.nodeInfo.ClientName,
-		pgx.nodeInfo.ChainID).Scan(&nodeID)
+		pgx.nodeInfo.ChainID)
 	if err != nil {
 		return ErrUnableToSetNode(err)
 	}
-	pgx.nodeID = nodeID
+	pgx.nodeID = pgx.nodeInfo.ID
 	return nil
 }
 
@@ -139,7 +138,7 @@ func (pgx *PGXDriver) Stats() sql.Stats {
 }
 
 // NodeID satisfies sql.Database
-func (pgx *PGXDriver) NodeID() int64 {
+func (pgx *PGXDriver) NodeID() string {
 	return pgx.nodeID
 }
 
