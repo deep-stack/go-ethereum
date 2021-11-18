@@ -53,7 +53,7 @@ func TearDownDB(t *testing.T, db Database) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tx.Exec(ctx, `DELETE FROM eth.access_list_element`)
+	_, err = tx.Exec(ctx, `DELETE FROM eth.access_list_elements`)
 	if err != nil {
 		t.Fatal(err)
 	}

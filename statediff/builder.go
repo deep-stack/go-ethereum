@@ -167,7 +167,7 @@ func (sdb *builder) BuildStateDiffObject(args Args, params Params) (types2.State
 	}, nil
 }
 
-// Writes a statediff object to output callback
+// WriteStateDiffObject writes a statediff object to output callback
 func (sdb *builder) WriteStateDiffObject(args types2.StateRoots, params Params, output types2.StateNodeSink, codeOutput types2.CodeSink) error {
 	if !params.IntermediateStateNodes || len(params.WatchedAddresses) > 0 {
 		// if we are watching only specific accounts then we are only diffing leaf nodes
