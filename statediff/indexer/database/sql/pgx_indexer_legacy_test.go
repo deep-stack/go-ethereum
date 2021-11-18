@@ -20,7 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
@@ -64,20 +63,21 @@ func TestPGXIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a legacy tx", func(t *testing.T) {
 		setupLegacyPGX(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, id, base_fee
+		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, base_fee
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
 		type res struct {
-			CID     string
-			TD      string
-			Reward  string
-			ID      int
-			BaseFee *int64 `db:"base_fee"`
+			CID       string
+			TD        string
+			Reward    string
+			BlockHash string `db:"block_hash"`
+			BaseFee   *int64 `db:"base_fee"`
 		}
 		header := new(res)
 
-		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
+		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).Scan(
+			&header.CID, &header.TD, &header.Reward, &header.BlockHash, &header.BaseFee)
 		require.NoError(t, err)
 
 		test_helpers.ExpectEqual(t, header.CID, legacyHeaderCID.String())
