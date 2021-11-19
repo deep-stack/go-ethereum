@@ -104,6 +104,13 @@ e.g.
 ./build/bin/geth --syncmode=full --gcmode=archive --statediff --statediff.writing --statediff.db.type=postgres --statediff.db.driver=sqlx --statediff.db.host=localhost --statediff.db.port=5432 --statediff.db.name=vulcanize_test --statediff.db.user=postgres --statediff.db.nodeid=nodeid --statediff.db.clientname=clientname
 `
 
+When operating in `--statediff.db.type=file` mode, the service will write SQL statements out to the file designated by
+`--statediff.file.path`. Please note that it writes out SQL statements with all `ON CONFLICT` constraint checks dropped.
+This is done so that we can scale out the production of the SQL statements horizontally, merge the separate SQL files produced,
+de-duplicate using unix tools (`sort statediff.sql | uniq` or `sort -u statediff.sql`), bulk load using psql
+(`psql db_name --set ON_ERROR_STOP=on -f statediff.sql`), and then add our primary and foreign key constraints and indexes
+back afterwards.
+
 ### RPC endpoints
 The state diffing service exposes both a WS subscription endpoint, and a number of HTTP unary endpoints.
 
