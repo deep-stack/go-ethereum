@@ -83,7 +83,7 @@ func (in *Writer) upsertTransactionCID(tx Tx, transaction models.TxModel) error 
 }
 
 /*
-INSERT INTO eth.access_list_element (tx_id, index, address, storage_keys) VALUES ($1, $2, $3, $4)
+INSERT INTO eth.access_list_elements (tx_id, index, address, storage_keys) VALUES ($1, $2, $3, $4)
 ON CONFLICT (tx_id, index) DO NOTHING
 */
 func (in *Writer) upsertAccessListElement(tx Tx, accessListElement models.AccessListElementModel) error {

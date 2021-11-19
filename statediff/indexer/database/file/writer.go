@@ -25,7 +25,6 @@ import (
 	node "github.com/ipfs/go-ipld-format"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
@@ -33,7 +32,8 @@ import (
 
 var (
 	nullHash         = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
-	collatedStmtSize = 65336 // min(linuxPipeSize, macOSPipeSize)
+	pipeSize         = 65336 // min(linuxPipeSize, macOSPipeSize)
+	collatedStmtSize = pipeSize * 16
 )
 
 // SQLWriter writes sql statements to a file
@@ -43,18 +43,22 @@ type SQLWriter struct {
 	collatedStmt   []byte
 	collationIndex int
 
-	quitChan chan struct{}
-	doneChan chan struct{}
+	flushChan     chan struct{}
+	flushFinished chan struct{}
+	quitChan      chan struct{}
+	doneChan      chan struct{}
 }
 
 // NewSQLWriter creates a new pointer to a Writer
 func NewSQLWriter(file *os.File) *SQLWriter {
 	return &SQLWriter{
-		file:         file,
-		stmts:        make(chan []byte),
-		collatedStmt: make([]byte, collatedStmtSize),
-		quitChan:     make(chan struct{}),
-		doneChan:     make(chan struct{}),
+		file:          file,
+		stmts:         make(chan []byte),
+		collatedStmt:  make([]byte, collatedStmtSize),
+		flushChan:     make(chan struct{}),
+		flushFinished: make(chan struct{}),
+		quitChan:      make(chan struct{}),
+		doneChan:      make(chan struct{}),
 	}
 }
 
@@ -72,16 +76,21 @@ func (sqw *SQLWriter) Loop() {
 				l = len(stmt)
 				if l+sqw.collationIndex+1 > collatedStmtSize {
 					if err := sqw.flush(); err != nil {
-						log.Error("error writing cached sql stmts to file", "err", err)
+						panic(fmt.Sprintf("error writing sql stmts buffer to file: %v", err))
 					}
 				}
-				copy(sqw.collatedStmt[sqw.collationIndex:sqw.collationIndex+l-1], stmt)
+				copy(sqw.collatedStmt[sqw.collationIndex:sqw.collationIndex+l], stmt)
 				sqw.collationIndex += l
 			case <-sqw.quitChan:
 				if err := sqw.flush(); err != nil {
-					log.Error("error writing cached sql stmts to file", "err", err)
+					panic(fmt.Sprintf("error writing sql stmts buffer to file: %v", err))
 				}
 				return
+			case <-sqw.flushChan:
+				if err := sqw.flush(); err != nil {
+					panic(fmt.Sprintf("error writing sql stmts buffer to file: %v", err))
+				}
+				sqw.flushFinished <- struct{}{}
 			}
 		}
 	}()
@@ -94,8 +103,14 @@ func (sqw *SQLWriter) Close() error {
 	return nil
 }
 
+// Flush sends a flush signal to the looping process
+func (sqw *SQLWriter) Flush() {
+	sqw.flushChan <- struct{}{}
+	<-sqw.flushFinished
+}
+
 func (sqw *SQLWriter) flush() error {
-	if _, err := sqw.file.Write(sqw.collatedStmt[0 : sqw.collationIndex-1]); err != nil {
+	if _, err := sqw.file.Write(sqw.collatedStmt[0:sqw.collationIndex]); err != nil {
 		return err
 	}
 	sqw.collationIndex = 0
@@ -103,45 +118,42 @@ func (sqw *SQLWriter) flush() error {
 }
 
 const (
-	nodeInsert = `INSERT INTO nodes (genesis_block, network_id, node_id, client_name, chain_id) VALUES (%s, %s, %s, %s, %d)
-					ON CONFLICT (node_id) DO NOTHING;\n`
+	nodeInsert = "INSERT INTO nodes (genesis_block, network_id, node_id, client_name, chain_id) VALUES " +
+		"('%s', '%s', '%s', '%s', %d);\n"
 
-	ipldInsert = `INSERT INTO public.blocks (key, data) VALUES (%s, %x) ON CONFLICT (key) DO NOTHING;\n`
+	ipldInsert = "INSERT INTO public.blocks (key, data) VALUES ('%s', '%x');\n"
 
-	headerInsert = `INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, node_id, reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, base_fee)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s, %d, %d)
-ON CONFLICT (block_hash) DO UPDATE SET (parent_hash, cid, td, node_id, reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, base_fee) = (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s, eth.header_cids.times_validated + 1, %d);\n`
+	headerInsert = "INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, node_id, reward, " +
+		"state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, base_fee) VALUES " +
+		"('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%x', %d, '%s', %d, %d);\n"
 
-	headerInsertWithoutBaseFee = `INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, node_id, reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, base_fee)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s, %d, NULL)
-ON CONFLICT (block_hash) DO UPDATE SET (parent_hash, cid, td, node_id, reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, base_fee) = (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s, eth.header_cids.times_validated + 1, NULL);\n`
+	headerInsertWithoutBaseFee = "INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, node_id, " +
+		"reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, base_fee) VALUES " +
+		"('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%x', %d, '%s', %d, NULL);\n"
 
-	uncleInsert = `INSERT INTO eth.uncle_cids (block_hash, header_id, parent_hash, cid, reward, mh_key) VALUES (%s, %s, %s, %s, %s, %s)
-ON CONFLICT (block_hash) DO NOTHING;\n`
+	uncleInsert = "INSERT INTO eth.uncle_cids (block_hash, header_id, parent_hash, cid, reward, mh_key) VALUES " +
+		"('%s', '%s', '%s', '%s', '%s', '%s');\n"
 
-	txInsert = `INSERT INTO eth.transaction_cids (header_id, tx_hash, cid, dst, src, index, mh_key, tx_data, tx_type) VALUES (%s, %s, %s, %s, %s, %d, %s, %s, %d)
-ON CONFLICT (tx_hash) DO NOTHING;\n`
+	txInsert = "INSERT INTO eth.transaction_cids (header_id, tx_hash, cid, dst, src, index, mh_key, tx_data, tx_type) " +
+		"VALUES ('%s', '%s', '%s', '%s', '%s', %d, '%s', '%x', %d);\n"
 
-	alInsert = `INSERT INTO eth.access_list_element (tx_id, index, address, storage_keys) VALUES (%s, %d, %s, %s)
-ON CONFLICT (tx_id, index) DO NOTHING;\n`
+	alInsert = "INSERT INTO eth.access_list_elements (tx_id, index, address, storage_keys) VALUES ('%s', %d, '%s', '%s');\n"
 
-	rctInsert = `INSERT INTO eth.receipt_cids (tx_id, leaf_cid, contract, contract_hash, leaf_mh_key, post_state, post_status, log_root) VALUES (%s, %s, %s, %s, %s, %s, %d, %s)
-ON CONFLICT (tx_id) DO NOTHING;\n`
+	rctInsert = "INSERT INTO eth.receipt_cids (tx_id, leaf_cid, contract, contract_hash, leaf_mh_key, post_state, " +
+		"post_status, log_root) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', %d, '%s');\n"
 
-	logInsert = `INSERT INTO eth.log_cids (leaf_cid, leaf_mh_key, rct_id, address, index, topic0, topic1, topic2, topic3, log_data) VALUES (%s, %s, %s, %s, %d, %s, %s, %s, %s, %s)
-ON CONFLICT (rct_id, index) DO NOTHING;\n`
+	logInsert = "INSERT INTO eth.log_cids (leaf_cid, leaf_mh_key, rct_id, address, index, topic0, topic1, topic2, " +
+		"topic3, log_data) VALUES ('%s', '%s', '%s', '%s', %d, '%s', '%s', '%s', '%s', '%x');\n"
 
-	stateInsert = `INSERT INTO eth.state_cids (header_id, state_leaf_key, cid, state_path, node_type, diff, mh_key) VALUES (%s, %s, %s, %s, %d, %t, %s)
-ON CONFLICT (header_id, state_path) DO UPDATE SET (state_leaf_key, cid, node_type, diff, mh_key) = (%s, %s, %d, %t, %s);\n`
+	stateInsert = "INSERT INTO eth.state_cids (header_id, state_leaf_key, cid, state_path, node_type, diff, mh_key) " +
+		"VALUES ('%s', '%s', '%s', '%x', %d, %t, '%s');\n"
 
-	accountInsert = `INSERT INTO eth.state_accounts (header_id, state_path, balance, nonce, code_hash, storage_root) VALUES (%s, %s, %s, %d, %s, %s)
-ON CONFLICT (header_id, state_path) DO NOTHING;\n`
+	accountInsert = "INSERT INTO eth.state_accounts (header_id, state_path, balance, nonce, code_hash, storage_root) " +
+		"VALUES ('%s', '%x', '%s', %d, '%x', '%s');\n"
 
-	storageInsert = `INSERT INTO eth.storage_cids (header_id, state_path, storage_leaf_key, cid, storage_path, node_type, diff, mh_key) VALUES (%s, %s, %s, %s, %s, %d, %t, %s)
-ON CONFLICT (header_id, state_path, storage_path) DO UPDATE SET (storage_leaf_key, cid, node_type, diff, mh_key) = (%s, %s, %d, %t, %s);\n`
+	storageInsert = "INSERT INTO eth.storage_cids (header_id, state_path, storage_leaf_key, cid, storage_path, " +
+		"node_type, diff, mh_key) VALUES ('%s', '%x', '%s', '%s', '%x', %d, %t, '%s');\n"
 )
-
-// 					ON CONFLICT (node_id) DO UPDATE SET genesis_block = %s, network_id = %s, client_name = %s, chain_id = %s;\n`
 
 func (sqw *SQLWriter) upsertNode(node nodeinfo.Info) {
 	sqw.stmts <- []byte(fmt.Sprintf(nodeInsert, node.GenesisBlock, node.NetworkID, node.ID, node.ClientName, node.ChainID))
@@ -183,15 +195,11 @@ func (sqw *SQLWriter) upsertHeaderCID(header models.HeaderModel) {
 	if header.BaseFee == nil {
 		stmt = fmt.Sprintf(headerInsertWithoutBaseFee, header.BlockNumber, header.BlockHash, header.ParentHash, header.CID,
 			header.TotalDifficulty, header.NodeID, header.Reward, header.StateRoot, header.TxRoot,
-			header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, 1,
-			header.ParentHash, header.CID, header.TotalDifficulty, header.NodeID, header.Reward, header.StateRoot,
-			header.TxRoot, header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey)
+			header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, 1)
 	} else {
 		stmt = fmt.Sprintf(headerInsert, header.BlockNumber, header.BlockHash, header.ParentHash, header.CID,
 			header.TotalDifficulty, header.NodeID, header.Reward, header.StateRoot, header.TxRoot,
-			header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, 1, header.BaseFee,
-			header.ParentHash, header.CID, header.TotalDifficulty, header.NodeID, header.Reward, header.StateRoot,
-			header.TxRoot, header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, header.BaseFee)
+			header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, 1, header.BaseFee)
 	}
 	sqw.stmts <- []byte(stmt)
 	indexerMetrics.blocks.Inc(1)
@@ -228,8 +236,8 @@ func (sqw *SQLWriter) upsertStateCID(stateNode models.StateNodeModel) {
 	if stateNode.StateKey != nullHash.String() {
 		stateKey = stateNode.StateKey
 	}
-	sqw.stmts <- []byte(fmt.Sprintf(stateInsert, stateNode.HeaderID, stateKey, stateNode.CID, stateNode.Path, stateNode.NodeType,
-		true, stateNode.MhKey, stateKey, stateNode.CID, stateNode.NodeType, true, stateNode.MhKey))
+	sqw.stmts <- []byte(fmt.Sprintf(stateInsert, stateNode.HeaderID, stateKey, stateNode.CID, stateNode.Path,
+		stateNode.NodeType, true, stateNode.MhKey))
 }
 
 func (sqw *SQLWriter) upsertStateAccount(stateAccount models.StateAccountModel) {
@@ -243,6 +251,5 @@ func (sqw *SQLWriter) upsertStorageCID(storageCID models.StorageNodeModel) {
 		storageKey = storageCID.StorageKey
 	}
 	sqw.stmts <- []byte(fmt.Sprintf(storageInsert, storageCID.HeaderID, storageCID.StatePath, storageKey, storageCID.CID,
-		storageCID.Path, storageCID.NodeType, true, storageCID.MhKey, storageKey, storageCID.CID, storageCID.NodeType,
-		true, storageCID.MhKey))
+		storageCID.Path, storageCID.NodeType, true, storageCID.MhKey))
 }

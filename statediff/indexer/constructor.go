@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/dump"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
@@ -34,6 +35,7 @@ import (
 func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, nodeInfo node.Info, config interfaces.Config) (interfaces.StateDiffIndexer, error) {
 	switch config.Type() {
 	case shared.FILE:
+		log.Info("Starting statediff service in SQL file writing mode")
 		fc, ok := config.(file.Config)
 		if !ok {
 			return nil, fmt.Errorf("file config is not the correct type: got %T, expected %T", config, file.Config{})
@@ -41,6 +43,7 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, n
 		fc.NodeInfo = nodeInfo
 		return file.NewStateDiffIndexer(ctx, chainConfig, fc)
 	case shared.POSTGRES:
+		log.Info("Starting statediff service in Postgres writing mode")
 		pgc, ok := config.(postgres.Config)
 		if !ok {
 			return nil, fmt.Errorf("postgres config is not the correct type: got %T, expected %T", config, postgres.Config{})
@@ -63,6 +66,7 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, n
 		}
 		return sql.NewStateDiffIndexer(ctx, chainConfig, postgres.NewPostgresDB(driver))
 	case shared.DUMP:
+		log.Info("Starting statediff service in data dump mode")
 		dumpc, ok := config.(dump.Config)
 		if !ok {
 			return nil, fmt.Errorf("dump config is not the correct type: got %T, expected %T", config, dump.Config{})

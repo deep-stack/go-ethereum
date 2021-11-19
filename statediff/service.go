@@ -239,7 +239,6 @@ func (sds *Service) WriteLoop(chainEventCh chan core.ChainEvent) {
 				statediffMetrics.writeLoopChannelLen.Update(int64(len(chainEventCh)))
 				chainEventFwd <- chainEvent
 			case err := <-errCh:
-				println("here")
 				log.Error("Error from chain event subscription", "error", err)
 				close(sds.QuitChan)
 				log.Info("Quitting the statediffing writing loop")

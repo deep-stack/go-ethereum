@@ -286,7 +286,7 @@ func TestSQLXIndexer(t *testing.T) {
 					t.Fatalf("expected AccessListTxType (1), got %d", txType)
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
-				pgStr = `SELECT access_list_element.* FROM eth.access_list_element INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_element.index ASC`
+				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
 				err = db.Select(context.Background(), &accessListElementModels, pgStr, c)
 				if err != nil {
 					t.Fatal(err)

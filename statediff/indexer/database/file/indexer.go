@@ -72,9 +72,12 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 	if err != nil {
 		return nil, fmt.Errorf("unable to create file (%s), err: %v", filePath, err)
 	}
+	log.Info("Writing statediff SQL statements to file", "file", filePath)
 	w := NewSQLWriter(file)
 	wg := new(sync.WaitGroup)
 	w.Loop()
+	w.upsertNode(config.NodeInfo)
+	w.upsertIPLDDirect(shared.RemovedNodeMhKey, []byte{})
 	return &StateDiffIndexer{
 		writer:      w,
 		chainConfig: chainConfig,
@@ -130,11 +133,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 			indexerMetrics.tStateStoreCodeProcessing.Update(tDiff)
 			traceMsg += fmt.Sprintf("state, storage, and code storage processing time: %s\r\n", tDiff.String())
 			t = time.Now()
-			if err := sdi.writer.flush(); err != nil {
-				traceMsg += fmt.Sprintf(" TOTAL PROCESSING DURATION: %s\r\n", time.Since(start).String())
-				log.Debug(traceMsg)
-				return err
-			}
+			sdi.writer.Flush()
 			tDiff = time.Since(t)
 			indexerMetrics.tPostgresCommit.Update(tDiff)
 			traceMsg += fmt.Sprintf("postgres transaction commit duration: %s\r\n", tDiff.String())

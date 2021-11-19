@@ -56,7 +56,7 @@ func (db *DB) InsertTxStm() string {
 
 // InsertAccessListElementStm satisfies the sql.Statements interface
 func (db *DB) InsertAccessListElementStm() string {
-	return `INSERT INTO eth.access_list_element (tx_id, index, address, storage_keys) VALUES ($1, $2, $3, $4)
+	return `INSERT INTO eth.access_list_elements (tx_id, index, address, storage_keys) VALUES ($1, $2, $3, $4)
 			ON CONFLICT (tx_id, index) DO NOTHING`
 }
 
