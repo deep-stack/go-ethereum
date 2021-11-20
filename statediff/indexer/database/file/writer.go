@@ -18,7 +18,7 @@ package file
 
 import (
 	"fmt"
-	"os"
+	"io"
 
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
@@ -38,7 +38,7 @@ var (
 
 // SQLWriter writes sql statements to a file
 type SQLWriter struct {
-	file           *os.File
+	wc             io.WriteCloser
 	stmts          chan []byte
 	collatedStmt   []byte
 	collationIndex int
@@ -50,9 +50,9 @@ type SQLWriter struct {
 }
 
 // NewSQLWriter creates a new pointer to a Writer
-func NewSQLWriter(file *os.File) *SQLWriter {
+func NewSQLWriter(wc io.WriteCloser) *SQLWriter {
 	return &SQLWriter{
-		file:          file,
+		wc:            wc,
 		stmts:         make(chan []byte),
 		collatedStmt:  make([]byte, collatedStmtSize),
 		flushChan:     make(chan struct{}),
@@ -100,7 +100,7 @@ func (sqw *SQLWriter) Loop() {
 func (sqw *SQLWriter) Close() error {
 	close(sqw.quitChan)
 	<-sqw.doneChan
-	return nil
+	return sqw.wc.Close()
 }
 
 // Flush sends a flush signal to the looping process
@@ -110,7 +110,7 @@ func (sqw *SQLWriter) Flush() {
 }
 
 func (sqw *SQLWriter) flush() error {
-	if _, err := sqw.file.Write(sqw.collatedStmt[0:sqw.collationIndex]); err != nil {
+	if _, err := sqw.wc.Write(sqw.collatedStmt[0:sqw.collationIndex]); err != nil {
 		return err
 	}
 	sqw.collationIndex = 0

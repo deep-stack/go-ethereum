@@ -541,5 +541,5 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(batch interfaces.Batch, codeAnd
 
 // Close satisfies io.Closer
 func (sdi *StateDiffIndexer) Close() error {
-	return sdi.dbWriter.db.Close()
+	return sdi.dbWriter.Close()
 }

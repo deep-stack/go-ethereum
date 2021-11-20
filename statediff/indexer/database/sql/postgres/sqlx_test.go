@@ -39,10 +39,14 @@ func TestPostgresSQLX(t *testing.T) {
 
 		sqlxdb, err = sqlx.Connect("postgres", connStr)
 		if err != nil {
-			t.Fatalf("failed to connect to db with connection string: %s err: %v", pgConfig.ConnString(), err)
+			t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
 		}
 		if sqlxdb == nil {
 			t.Fatal("DB is nil")
+		}
+		err = sqlxdb.Close()
+		if err != nil {
+			t.Fatal(err)
 		}
 	})
 
@@ -59,9 +63,7 @@ func TestPostgresSQLX(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err != nil {
-			t.Fatal(err)
-		}
+		defer db.Close()
 
 		bi := new(big.Int)
 		bi.SetString("34940183920000000000", 10)
@@ -107,11 +109,15 @@ func TestPostgresSQLX(t *testing.T) {
 		badHash := fmt.Sprintf("x %s", strings.Repeat("1", 100))
 		badInfo := node.Info{GenesisBlock: badHash, NetworkID: "1", ID: "x123", ClientName: "geth"}
 
-		_, err := postgres.NewSQLXDriver(ctx, postgres.DefaultConfig, badInfo)
+		d, err := postgres.NewSQLXDriver(ctx, postgres.DefaultConfig, badInfo)
 		if err == nil {
 			t.Fatal("Expected an error")
 		}
 
 		expectContainsSubstring(t, err.Error(), postgres.SettingNodeFailedMsg)
+		err = d.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
 	})
 }

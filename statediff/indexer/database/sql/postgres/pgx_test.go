@@ -111,7 +111,8 @@ func TestPostgresPGX(t *testing.T) {
 		badHash := fmt.Sprintf("x %s", strings.Repeat("1", 100))
 		badInfo := node.Info{GenesisBlock: badHash, NetworkID: "1", ID: "x123", ClientName: "geth"}
 
-		_, err := postgres.NewPGXDriver(ctx, postgres.DefaultConfig, badInfo)
+		d, err := postgres.NewPGXDriver(ctx, postgres.DefaultConfig, badInfo)
+		defer d.Close()
 		if err == nil {
 			t.Fatal("Expected an error")
 		}
