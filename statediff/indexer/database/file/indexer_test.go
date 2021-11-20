@@ -14,14 +14,20 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package sql_test
+package file_test
 
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -30,21 +36,17 @@ import (
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
-	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
 var (
-	db        sql.Database
+	sqlxdb    *sqlx.DB
 	err       error
 	ind       interfaces.StateDiffIndexer
 	ipfsPgGet = `SELECT data FROM public.blocks
@@ -55,12 +57,6 @@ var (
 	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID            cid.Cid
 	state1CID, state2CID, storageCID                       cid.Cid
 )
-
-func expectTrue(t *testing.T, value bool) {
-	if !value {
-		t.Fatalf("Assertion failed")
-	}
-}
 
 func init() {
 	if os.Getenv("MODE") != "statediff" {
@@ -138,12 +134,12 @@ func init() {
 	storageCID, _ = ipld.RawdataToCid(ipld.MEthStorageTrie, mocks.StorageLeafNode, multihash.KECCAK_256)
 }
 
-func setupSQLX(t *testing.T) {
-	db, err = postgres.SetupSQLXDB()
-	if err != nil {
-		t.Fatal(err)
+func setup(t *testing.T) {
+	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.FilePath)
+		require.NoError(t, err)
 	}
-	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, db)
+	ind, err = file.NewStateDiffIndexer(context.Background(), mocks.TestConfig, file.TestConfig)
 	require.NoError(t, err)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
@@ -157,25 +153,29 @@ func setupSQLX(t *testing.T) {
 		if err := tx.Submit(err); err != nil {
 			t.Fatal(err)
 		}
+		if err := ind.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 	for _, node := range mocks.StateDiffs {
 		err = ind.PushStateNode(tx, node, mockBlock.Hash().String())
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, mocks.BlockNumber.Uint64())
-}
+	test_helpers.ExpectEqual(t, tx.(*file.BatchTx).BlockNumber, mocks.BlockNumber.Uint64())
 
-func tearDown(t *testing.T) {
-	sql.TearDownDB(t, db)
-	if err := ind.Close(); err != nil {
-		t.Fatal(err)
+	connStr := postgres.DefaultConfig.DbConnectionString()
+
+	sqlxdb, err = sqlx.Connect("postgres", connStr)
+	if err != nil {
+		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
 	}
 }
 
-func TestSQLXIndexer(t *testing.T) {
+func TestFileIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
+		setup(t)
+		dumpData(t)
 		defer tearDown(t)
 		pgStr := `SELECT cid, td, reward, block_hash, base_fee
 				FROM eth.header_cids
@@ -189,10 +189,11 @@ func TestSQLXIndexer(t *testing.T) {
 			BaseFee   *string `db:"base_fee"`
 		}
 		header := new(res)
-		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
+		err = sqlxdb.QueryRowx(pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
@@ -204,21 +205,22 @@ func TestSQLXIndexer(t *testing.T) {
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 		var data []byte
-		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
+		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 		if err != nil {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, data, mocks.MockHeaderRlp)
 	})
-
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
+		setup(t)
+		dumpData(t)
 		defer tearDown(t)
+
 		// check that txs were properly indexed
 		trxs := make([]string, 0)
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1`
-		err = db.Select(context.Background(), &trxs, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&trxs, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -237,7 +239,7 @@ func TestSQLXIndexer(t *testing.T) {
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 			var data []byte
-			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -246,7 +248,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
 				var txType uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				err = sqlxdb.Get(&txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -256,7 +258,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx2CID.String():
 				test_helpers.ExpectEqual(t, data, tx2)
 				var txType uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				err = sqlxdb.Get(&txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -266,7 +268,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx3CID.String():
 				test_helpers.ExpectEqual(t, data, tx3)
 				var txType uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				err = sqlxdb.Get(&txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -276,7 +278,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx4CID.String():
 				test_helpers.ExpectEqual(t, data, tx4)
 				var txType uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				err = sqlxdb.Get(&txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -285,7 +287,7 @@ func TestSQLXIndexer(t *testing.T) {
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
-				err = db.Select(context.Background(), &accessListElementModels, pgStr, c)
+				err = sqlxdb.Select(&accessListElementModels, pgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -306,7 +308,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx5CID.String():
 				test_helpers.ExpectEqual(t, data, tx5)
 				var txType *uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				err = sqlxdb.Get(&txType, txTypePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -318,7 +320,8 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index log IPLDs for multiple receipt of a specific block", func(t *testing.T) {
-		setupSQLX(t)
+		setup(t)
+		dumpData(t)
 		defer tearDown(t)
 
 		rcts := make([]string, 0)
@@ -327,7 +330,7 @@ func TestSQLXIndexer(t *testing.T) {
 				AND transaction_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
 				ORDER BY transaction_cids.index`
-		err = db.Select(context.Background(), &rcts, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&rcts, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -345,7 +348,7 @@ func TestSQLXIndexer(t *testing.T) {
     				INNER JOIN eth.receipt_cids ON (log_cids.rct_id = receipt_cids.tx_id)
 					INNER JOIN public.blocks ON (log_cids.leaf_mh_key = blocks.key)
 					WHERE receipt_cids.leaf_cid = $1 ORDER BY eth.log_cids.index ASC`
-			err = db.Select(context.Background(), &results, pgStr, rcts[i])
+			err = sqlxdb.Select(&results, pgStr, rcts[i])
 			require.NoError(t, err)
 
 			// expecting MockLog1 and MockLog2 for mockReceipt4
@@ -368,7 +371,8 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index receipt IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
+		setup(t)
+		dumpData(t)
 		defer tearDown(t)
 
 		// check receipts were properly indexed
@@ -377,7 +381,7 @@ func TestSQLXIndexer(t *testing.T) {
 				WHERE receipt_cids.tx_id = transaction_cids.tx_hash
 				AND transaction_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1 order by transaction_cids.index`
-		err = db.Select(context.Background(), &rcts, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&rcts, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -389,7 +393,7 @@ func TestSQLXIndexer(t *testing.T) {
 					FROM eth.receipt_cids
 					INNER JOIN public.blocks ON (receipt_cids.leaf_mh_key = public.blocks.key)
 					WHERE receipt_cids.leaf_cid = $1`
-			err = db.Select(context.Background(), &result, pgStr, rctLeafCID)
+			err = sqlxdb.Select(&result, pgStr, rctLeafCID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -414,7 +418,7 @@ func TestSQLXIndexer(t *testing.T) {
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 			var data []byte
-			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -424,7 +428,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, rct1)
 				var postStatus uint64
 				pgStr = `SELECT post_status FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postStatus, pgStr, c)
+				err = sqlxdb.Get(&postStatus, pgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -432,7 +436,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct2CID.String():
 				test_helpers.ExpectEqual(t, data, rct2)
 				var postState string
-				err = db.Get(context.Background(), &postState, postStatePgStr, c)
+				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -440,7 +444,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct3CID.String():
 				test_helpers.ExpectEqual(t, data, rct3)
 				var postState string
-				err = db.Get(context.Background(), &postState, postStatePgStr, c)
+				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -448,7 +452,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct4CID.String():
 				test_helpers.ExpectEqual(t, data, rct4)
 				var postState string
-				err = db.Get(context.Background(), &postState, postStatePgStr, c)
+				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -456,7 +460,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct5CID.String():
 				test_helpers.ExpectEqual(t, data, rct5)
 				var postState string
-				err = db.Get(context.Background(), &postState, postStatePgStr, c)
+				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -466,14 +470,16 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index state IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
+		setup(t)
+		dumpData(t)
 		defer tearDown(t)
+
 		// check that state nodes were properly indexed and published
 		stateNodes := make([]models.StateNodeModel, 0)
 		pgStr := `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type != 3`
-		err = db.Select(context.Background(), &stateNodes, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&stateNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -486,13 +492,13 @@ func TestSQLXIndexer(t *testing.T) {
 			}
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
-			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 			if err != nil {
 				t.Fatal(err)
 			}
 			pgStr = `SELECT * from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
 			var account models.StateAccountModel
-			err = db.Get(context.Background(), &account, pgStr, stateNode.HeaderID, stateNode.Path)
+			err = sqlxdb.Get(&account, pgStr, stateNode.HeaderID, stateNode.Path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -531,7 +537,7 @@ func TestSQLXIndexer(t *testing.T) {
 		pgStr = `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type = 3`
-		err = db.Select(context.Background(), &stateNodes, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&stateNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -545,7 +551,7 @@ func TestSQLXIndexer(t *testing.T) {
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
-		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
+		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -555,8 +561,10 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index storage IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
+		setup(t)
+		dumpData(t)
 		defer tearDown(t)
+
 		// check that storage nodes were properly indexed
 		storageNodes := make([]models.StorageNodeWithStateKeyModel, 0)
 		pgStr := `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
@@ -565,7 +573,7 @@ func TestSQLXIndexer(t *testing.T) {
 				AND state_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
 				AND storage_cids.node_type != 3`
-		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&storageNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -584,7 +592,7 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
-		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
+		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -598,7 +606,7 @@ func TestSQLXIndexer(t *testing.T) {
 				AND state_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
 				AND storage_cids.node_type = 3`
-		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&storageNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -617,7 +625,7 @@ func TestSQLXIndexer(t *testing.T) {
 		mhKey = dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
 		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
-		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
+		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 		if err != nil {
 			t.Fatal(err)
 		}

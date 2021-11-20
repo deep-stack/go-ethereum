@@ -47,10 +47,10 @@ func TestPostgresPGX(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect to db with connection string: %s err: %v", pgConfig.ConnString(), err)
 		}
-		defer dbPool.Close()
 		if dbPool == nil {
 			t.Fatal("DB pool is nil")
 		}
+		dbPool.Close()
 	})
 
 	t.Run("serializes big.Int to db", func(t *testing.T) {

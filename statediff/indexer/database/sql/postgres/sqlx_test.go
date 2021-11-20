@@ -39,10 +39,14 @@ func TestPostgresSQLX(t *testing.T) {
 
 		sqlxdb, err = sqlx.Connect("postgres", connStr)
 		if err != nil {
-			t.Fatalf("failed to connect to db with connection string: %s err: %v", pgConfig.ConnString(), err)
+			t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
 		}
 		if sqlxdb == nil {
 			t.Fatal("DB is nil")
+		}
+		err = sqlxdb.Close()
+		if err != nil {
+			t.Fatal(err)
 		}
 	})
 
@@ -59,9 +63,7 @@ func TestPostgresSQLX(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err != nil {
-			t.Fatal(err)
-		}
+		defer db.Close()
 
 		bi := new(big.Int)
 		bi.SetString("34940183920000000000", 10)

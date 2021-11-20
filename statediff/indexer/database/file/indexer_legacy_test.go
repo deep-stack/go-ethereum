@@ -14,30 +14,42 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package sql_test
+package file_test
 
 import (
 	"context"
+	"errors"
+	"os"
 	"testing"
 
+	"github.com/ipfs/go-cid"
+	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
+	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
-func setupLegacyPGX(t *testing.T) {
+var (
+	legacyData      = mocks.NewLegacyData()
+	mockLegacyBlock *types.Block
+	legacyHeaderCID cid.Cid
+)
+
+func setupLegacy(t *testing.T) {
 	mockLegacyBlock = legacyData.MockBlock
 	legacyHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, legacyData.MockHeaderRlp, multihash.KECCAK_256)
-
-	db, err = postgres.SetupPGXDB()
-	require.NoError(t, err)
-
-	ind, err = sql.NewStateDiffIndexer(context.Background(), legacyData.Config, db)
+	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.FilePath)
+		require.NoError(t, err)
+	}
+	ind, err := file.NewStateDiffIndexer(context.Background(), legacyData.Config, file.TestConfig)
 	require.NoError(t, err)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
@@ -50,20 +62,53 @@ func setupLegacyPGX(t *testing.T) {
 		if err := tx.Submit(err); err != nil {
 			t.Fatal(err)
 		}
+		if err := ind.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 	for _, node := range legacyData.StateDiffs {
 		err = ind.PushStateNode(tx, node, legacyData.MockBlock.Hash().String())
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, legacyData.BlockNumber.Uint64())
+	test_helpers.ExpectEqual(t, tx.(*file.BatchTx).BlockNumber, legacyData.BlockNumber.Uint64())
+
+	connStr := postgres.DefaultConfig.DbConnectionString()
+
+	sqlxdb, err = sqlx.Connect("postgres", connStr)
+	if err != nil {
+		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
+	}
 }
 
-func TestPGXIndexerLegacy(t *testing.T) {
+func dumpData(t *testing.T) {
+	sqlFileBytes, err := os.ReadFile(file.TestConfig.FilePath)
+	require.NoError(t, err)
+
+	_, err = sqlxdb.Exec(string(sqlFileBytes))
+	require.NoError(t, err)
+}
+
+func tearDown(t *testing.T) {
+	file.TearDownDB(t, sqlxdb)
+	err := os.Remove(file.TestConfig.FilePath)
+	require.NoError(t, err)
+	err = sqlxdb.Close()
+	require.NoError(t, err)
+}
+
+func expectTrue(t *testing.T, value bool) {
+	if !value {
+		t.Fatalf("Assertion failed")
+	}
+}
+
+func TestFileIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs", func(t *testing.T) {
-		setupLegacyPGX(t)
+		setupLegacy(t)
+		dumpData(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, base_fee
+		pgStr := `SELECT cid, td, reward, block_hash, base_fee
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
@@ -71,13 +116,11 @@ func TestPGXIndexerLegacy(t *testing.T) {
 			CID       string
 			TD        string
 			Reward    string
-			BlockHash string `db:"block_hash"`
-			BaseFee   *int64 `db:"base_fee"`
+			BlockHash string  `db:"block_hash"`
+			BaseFee   *string `db:"base_fee"`
 		}
 		header := new(res)
-
-		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).Scan(
-			&header.CID, &header.TD, &header.Reward, &header.BlockHash, &header.BaseFee)
+		err = sqlxdb.QueryRowx(pgStr, legacyData.BlockNumber.Uint64()).StructScan(header)
 		require.NoError(t, err)
 
 		test_helpers.ExpectEqual(t, header.CID, legacyHeaderCID.String())

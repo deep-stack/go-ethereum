@@ -33,6 +33,10 @@ func TearDownDB(t *testing.T, db Database) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = tx.Exec(ctx, `DELETE FROM eth.uncle_cids`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = tx.Exec(ctx, `DELETE FROM eth.transaction_cids`)
 	if err != nil {
 		t.Fatal(err)
@@ -62,6 +66,10 @@ func TearDownDB(t *testing.T, db Database) {
 		t.Fatal(err)
 	}
 	_, err = tx.Exec(ctx, `DELETE FROM blocks`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM nodes`)
 	if err != nil {
 		t.Fatal(err)
 	}
