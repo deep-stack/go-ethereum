@@ -121,21 +121,21 @@ const (
 	nodeInsert = "INSERT INTO nodes (genesis_block, network_id, node_id, client_name, chain_id) VALUES " +
 		"('%s', '%s', '%s', '%s', %d);\n"
 
-	ipldInsert = "INSERT INTO public.blocks (key, data) VALUES ('%s', '%x');\n"
+	ipldInsert = "INSERT INTO public.blocks (key, data) VALUES ('%s', '\\x%x');\n"
 
 	headerInsert = "INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, node_id, reward, " +
 		"state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, base_fee) VALUES " +
-		"('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%x', %d, '%s', %d, %d);\n"
+		"('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '\\x%x', %d, '%s', %d, %s);\n"
 
 	headerInsertWithoutBaseFee = "INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, node_id, " +
 		"reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, base_fee) VALUES " +
-		"('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%x', %d, '%s', %d, NULL);\n"
+		"('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '\\x%x', %d, '%s', %d, NULL);\n"
 
 	uncleInsert = "INSERT INTO eth.uncle_cids (block_hash, header_id, parent_hash, cid, reward, mh_key) VALUES " +
 		"('%s', '%s', '%s', '%s', '%s', '%s');\n"
 
 	txInsert = "INSERT INTO eth.transaction_cids (header_id, tx_hash, cid, dst, src, index, mh_key, tx_data, tx_type) " +
-		"VALUES ('%s', '%s', '%s', '%s', '%s', %d, '%s', '%x', %d);\n"
+		"VALUES ('%s', '%s', '%s', '%s', '%s', %d, '%s', '\\x%x', %d);\n"
 
 	alInsert = "INSERT INTO eth.access_list_elements (tx_id, index, address, storage_keys) VALUES ('%s', %d, '%s', '%s');\n"
 
@@ -143,16 +143,16 @@ const (
 		"post_status, log_root) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', %d, '%s');\n"
 
 	logInsert = "INSERT INTO eth.log_cids (leaf_cid, leaf_mh_key, rct_id, address, index, topic0, topic1, topic2, " +
-		"topic3, log_data) VALUES ('%s', '%s', '%s', '%s', %d, '%s', '%s', '%s', '%s', '%x');\n"
+		"topic3, log_data) VALUES ('%s', '%s', '%s', '%s', %d, '%s', '%s', '%s', '%s', '\\x%x');\n"
 
 	stateInsert = "INSERT INTO eth.state_cids (header_id, state_leaf_key, cid, state_path, node_type, diff, mh_key) " +
-		"VALUES ('%s', '%s', '%s', '%x', %d, %t, '%s');\n"
+		"VALUES ('%s', '%s', '%s', '\\x%x', %d, %t, '%s');\n"
 
 	accountInsert = "INSERT INTO eth.state_accounts (header_id, state_path, balance, nonce, code_hash, storage_root) " +
-		"VALUES ('%s', '%x', '%s', %d, '%x', '%s');\n"
+		"VALUES ('%s', '\\x%x', '%s', %d, '\\x%x', '%s');\n"
 
 	storageInsert = "INSERT INTO eth.storage_cids (header_id, state_path, storage_leaf_key, cid, storage_path, " +
-		"node_type, diff, mh_key) VALUES ('%s', '%x', '%s', '%s', '%x', %d, %t, '%s');\n"
+		"node_type, diff, mh_key) VALUES ('%s', '\\x%x', '%s', '%s', '\\x%x', %d, %t, '%s');\n"
 )
 
 func (sqw *SQLWriter) upsertNode(node nodeinfo.Info) {
@@ -199,7 +199,7 @@ func (sqw *SQLWriter) upsertHeaderCID(header models.HeaderModel) {
 	} else {
 		stmt = fmt.Sprintf(headerInsert, header.BlockNumber, header.BlockHash, header.ParentHash, header.CID,
 			header.TotalDifficulty, header.NodeID, header.Reward, header.StateRoot, header.TxRoot,
-			header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, 1, header.BaseFee)
+			header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, 1, *header.BaseFee)
 	}
 	sqw.stmts <- []byte(stmt)
 	indexerMetrics.blocks.Inc(1)

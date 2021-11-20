@@ -47,10 +47,10 @@ func TestPostgresPGX(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect to db with connection string: %s err: %v", pgConfig.ConnString(), err)
 		}
-		defer dbPool.Close()
 		if dbPool == nil {
 			t.Fatal("DB pool is nil")
 		}
+		dbPool.Close()
 	})
 
 	t.Run("serializes big.Int to db", func(t *testing.T) {
@@ -111,8 +111,7 @@ func TestPostgresPGX(t *testing.T) {
 		badHash := fmt.Sprintf("x %s", strings.Repeat("1", 100))
 		badInfo := node.Info{GenesisBlock: badHash, NetworkID: "1", ID: "x123", ClientName: "geth"}
 
-		d, err := postgres.NewPGXDriver(ctx, postgres.DefaultConfig, badInfo)
-		defer d.Close()
+		_, err := postgres.NewPGXDriver(ctx, postgres.DefaultConfig, badInfo)
 		if err == nil {
 			t.Fatal("Expected an error")
 		}

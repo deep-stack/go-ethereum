@@ -191,10 +191,10 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 func (sdi *StateDiffIndexer) processHeader(header *types.Header, headerNode node.Node, reward, td *big.Int) string {
 	sdi.fileWriter.upsertIPLDNode(headerNode)
 
-	var baseFee *int64
+	var baseFee *string
 	if header.BaseFee != nil {
-		baseFee = new(int64)
-		*baseFee = header.BaseFee.Int64()
+		baseFee = new(string)
+		*baseFee = header.BaseFee.String()
 	}
 	headerID := header.Hash().String()
 	sdi.fileWriter.upsertHeaderCID(models.HeaderModel{

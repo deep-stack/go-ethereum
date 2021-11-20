@@ -18,22 +18,21 @@ package file_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
-	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
 	"github.com/ipfs/go-cid"
 	"github.com/jmoiron/sqlx"
-
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
+	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
@@ -46,7 +45,10 @@ var (
 func setupLegacy(t *testing.T) {
 	mockLegacyBlock = legacyData.MockBlock
 	legacyHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, legacyData.MockHeaderRlp, multihash.KECCAK_256)
-
+	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.FilePath)
+		require.NoError(t, err)
+	}
 	ind, err := file.NewStateDiffIndexer(context.Background(), legacyData.Config, file.TestConfig)
 	require.NoError(t, err)
 	var tx interfaces.Batch
@@ -69,7 +71,7 @@ func setupLegacy(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, legacyData.BlockNumber.Uint64())
+	test_helpers.ExpectEqual(t, tx.(*file.BatchTx).BlockNumber, legacyData.BlockNumber.Uint64())
 
 	connStr := postgres.DefaultConfig.DbConnectionString()
 
@@ -88,6 +90,7 @@ func dumpData(t *testing.T) {
 }
 
 func tearDown(t *testing.T) {
+	file.TearDownDB(t, sqlxdb)
 	err := os.Remove(file.TestConfig.FilePath)
 	require.NoError(t, err)
 	err = sqlxdb.Close()
@@ -100,12 +103,12 @@ func expectTrue(t *testing.T, value bool) {
 	}
 }
 
-func TestFIleIndexerLegacy(t *testing.T) {
-	t.Run("Publish and index header IPLDs in a legacy tx", func(t *testing.T) {
+func TestFileIndexerLegacy(t *testing.T) {
+	t.Run("Publish and index header IPLDs", func(t *testing.T) {
 		setupLegacy(t)
 		dumpData(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, base_fee
+		pgStr := `SELECT cid, td, reward, block_hash, base_fee
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
@@ -113,13 +116,11 @@ func TestFIleIndexerLegacy(t *testing.T) {
 			CID       string
 			TD        string
 			Reward    string
-			BlockHash string `db:"block_hash"`
-			BaseFee   *int64 `db:"base_fee"`
+			BlockHash string  `db:"block_hash"`
+			BaseFee   *string `db:"base_fee"`
 		}
 		header := new(res)
-
-		err = sqlxdb.QueryRow(pgStr, legacyData.BlockNumber.Uint64()).Scan(
-			&header.CID, &header.TD, &header.Reward, &header.BlockHash, &header.BaseFee)
+		err = sqlxdb.QueryRowx(pgStr, legacyData.BlockNumber.Uint64()).StructScan(header)
 		require.NoError(t, err)
 
 		test_helpers.ExpectEqual(t, header.CID, legacyHeaderCID.String())

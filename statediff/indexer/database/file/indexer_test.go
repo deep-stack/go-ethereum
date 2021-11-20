@@ -19,29 +19,29 @@ package file_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
-	"github.com/jmoiron/sqlx"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
+	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
-	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
@@ -135,7 +135,11 @@ func init() {
 }
 
 func setup(t *testing.T) {
-	ind, err := file.NewStateDiffIndexer(context.Background(), legacyData.Config, file.TestConfig)
+	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.FilePath)
+		require.NoError(t, err)
+	}
+	ind, err = file.NewStateDiffIndexer(context.Background(), mocks.TestConfig, file.TestConfig)
 	require.NoError(t, err)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
@@ -158,7 +162,7 @@ func setup(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, mocks.BlockNumber.Uint64())
+	test_helpers.ExpectEqual(t, tx.(*file.BatchTx).BlockNumber, mocks.BlockNumber.Uint64())
 
 	connStr := postgres.DefaultConfig.DbConnectionString()
 
@@ -168,7 +172,7 @@ func setup(t *testing.T) {
 	}
 }
 
-func TestSQLXIndexer(t *testing.T) {
+func TestFileIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
 		dumpData(t)
@@ -181,18 +185,19 @@ func TestSQLXIndexer(t *testing.T) {
 			CID       string
 			TD        string
 			Reward    string
-			BlockHash string `db:"block_hash"`
-			BaseFee   *int64 `db:"base_fee"`
+			BlockHash string  `db:"block_hash"`
+			BaseFee   *string `db:"base_fee"`
 		}
 		header := new(res)
 		err = sqlxdb.QueryRowx(pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
-		test_helpers.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.Int64())
+		test_helpers.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.String())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
@@ -206,7 +211,6 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 		test_helpers.ExpectEqual(t, data, mocks.MockHeaderRlp)
 	})
-
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
 		dumpData(t)

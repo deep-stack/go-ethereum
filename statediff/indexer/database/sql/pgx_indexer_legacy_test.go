@@ -60,7 +60,7 @@ func setupLegacyPGX(t *testing.T) {
 }
 
 func TestPGXIndexerLegacy(t *testing.T) {
-	t.Run("Publish and index header IPLDs in a legacy tx", func(t *testing.T) {
+	t.Run("Publish and index header IPLDs", func(t *testing.T) {
 		setupLegacyPGX(t)
 		defer tearDown(t)
 		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, base_fee

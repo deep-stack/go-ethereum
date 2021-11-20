@@ -1,28 +1,64 @@
 package file
 
-import "io"
+import (
+	"testing"
 
-type MemWriter struct {
-	bytes []byte
-}
+	"github.com/jmoiron/sqlx"
+)
 
-func NewMemWriter() io.WriteCloser {
-	return &MemWriter{}
-}
+// TearDownDB is used to tear down the watcher dbs after tests
+func TearDownDB(t *testing.T, db *sqlx.DB) {
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// Write satisfies io.WriteCloser
-func (mw *MemWriter) Write(b []byte) (int, error) {
-	mw.bytes = append(mw.bytes, b...)
-	return len(b), nil
-}
-
-// Close satisfies io.WriteCloser
-func (mw *MemWriter) Close() error {
-	mw.bytes = []byte{}
-	return nil
-}
-
-// ReadAll returns all the bytes written to the memory writer
-func (mw *MemWriter) ReadAll() []byte {
-	return mw.bytes
+	_, err = tx.Exec(`DELETE FROM eth.header_cids`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM eth.uncle_cids`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM eth.transaction_cids`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM eth.receipt_cids`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM eth.state_cids`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM eth.storage_cids`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM eth.state_accounts`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM eth.access_list_elements`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM eth.log_cids`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM blocks`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.Exec(`DELETE FROM nodes`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tx.Commit()
+	if err != nil {
+		t.Fatal(err)
+	}
 }

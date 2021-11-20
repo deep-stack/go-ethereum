@@ -109,15 +109,11 @@ func TestPostgresSQLX(t *testing.T) {
 		badHash := fmt.Sprintf("x %s", strings.Repeat("1", 100))
 		badInfo := node.Info{GenesisBlock: badHash, NetworkID: "1", ID: "x123", ClientName: "geth"}
 
-		d, err := postgres.NewSQLXDriver(ctx, postgres.DefaultConfig, badInfo)
+		_, err := postgres.NewSQLXDriver(ctx, postgres.DefaultConfig, badInfo)
 		if err == nil {
 			t.Fatal("Expected an error")
 		}
 
 		expectContainsSubstring(t, err.Error(), postgres.SettingNodeFailedMsg)
-		err = d.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
 	})
 }

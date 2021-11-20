@@ -185,8 +185,8 @@ func TestSQLXIndexer(t *testing.T) {
 			CID       string
 			TD        string
 			Reward    string
-			BlockHash string `db:"block_hash"`
-			BaseFee   *int64 `db:"base_fee"`
+			BlockHash string  `db:"block_hash"`
+			BaseFee   *string `db:"base_fee"`
 		}
 		header := new(res)
 		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
@@ -196,7 +196,7 @@ func TestSQLXIndexer(t *testing.T) {
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
-		test_helpers.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.Int64())
+		test_helpers.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.String())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
