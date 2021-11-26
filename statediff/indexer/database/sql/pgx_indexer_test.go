@@ -150,7 +150,7 @@ func TestPGXIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setupPGX(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, cast(base_fee AS TEXT)
+		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, coinbase
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
@@ -158,8 +158,8 @@ func TestPGXIndexer(t *testing.T) {
 			CID       string
 			TD        string
 			Reward    string
-			BlockHash string  `db:"block_hash"`
-			BaseFee   *string `db:"base_fee"`
+			BlockHash string `db:"block_hash"`
+			Coinbase  string `db:"coinbase"`
 		}
 		header := new(res)
 		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).Scan(
@@ -167,14 +167,14 @@ func TestPGXIndexer(t *testing.T) {
 			&header.TD,
 			&header.Reward,
 			&header.BlockHash,
-			&header.BaseFee)
+			&header.Coinbase)
 		if err != nil {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
-		test_helpers.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.String())
+		test_helpers.ExpectEqual(t, header.Coinbase, mocks.MockHeader.Coinbase.String())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)

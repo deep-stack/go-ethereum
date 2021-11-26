@@ -184,12 +184,6 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, headerNode node.Node, reward, td *big.Int) (string, error) {
 	tx.cacheIPLD(headerNode)
 
-	var baseFee *string
-	if header.BaseFee != nil {
-		baseFee = new(string)
-		*baseFee = header.BaseFee.String()
-	}
-
 	headerID := header.Hash().String()
 	mod := models.HeaderModel{
 		CID:             headerNode.Cid().String(),
@@ -205,7 +199,7 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 		TxRoot:          header.TxHash.String(),
 		UncleRoot:       header.UncleHash.String(),
 		Timestamp:       header.Time,
-		BaseFee:         baseFee,
+		Coinbase:        header.Coinbase.String(),
 	}
 	_, err := fmt.Fprintf(sdi.dump, "%+v\r\n", mod)
 	return headerID, err
@@ -268,6 +262,12 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 		// index tx
 		trx := args.txs[i]
 		trxID := trx.Hash().String()
+
+		var val string
+		if trx.Value() != nil {
+			val = trx.Value().String()
+		}
+
 		// derive sender for the tx that corresponds with this receipt
 		from, err := types.Sender(signer, trx)
 		if err != nil {
@@ -283,6 +283,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			CID:      txNode.Cid().String(),
 			MhKey:    shared.MultihashKeyFromCID(txNode.Cid()),
 			Type:     trx.Type(),
+			Value:    val,
 		}
 		if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", txModel); err != nil {
 			return err

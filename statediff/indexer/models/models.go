@@ -26,22 +26,22 @@ type IPLDModel struct {
 
 // HeaderModel is the db model for eth.header_cids
 type HeaderModel struct {
-	BlockNumber     string  `db:"block_number"`
-	BlockHash       string  `db:"block_hash"`
-	ParentHash      string  `db:"parent_hash"`
-	CID             string  `db:"cid"`
-	MhKey           string  `db:"mh_key"`
-	TotalDifficulty string  `db:"td"`
-	NodeID          string  `db:"node_id"`
-	Reward          string  `db:"reward"`
-	StateRoot       string  `db:"state_root"`
-	UncleRoot       string  `db:"uncle_root"`
-	TxRoot          string  `db:"tx_root"`
-	RctRoot         string  `db:"receipt_root"`
-	Bloom           []byte  `db:"bloom"`
-	Timestamp       uint64  `db:"timestamp"`
-	TimesValidated  int64   `db:"times_validated"`
-	BaseFee         *string `db:"base_fee"`
+	BlockNumber     string `db:"block_number"`
+	BlockHash       string `db:"block_hash"`
+	ParentHash      string `db:"parent_hash"`
+	CID             string `db:"cid"`
+	MhKey           string `db:"mh_key"`
+	TotalDifficulty string `db:"td"`
+	NodeID          string `db:"node_id"`
+	Reward          string `db:"reward"`
+	StateRoot       string `db:"state_root"`
+	UncleRoot       string `db:"uncle_root"`
+	TxRoot          string `db:"tx_root"`
+	RctRoot         string `db:"receipt_root"`
+	Bloom           []byte `db:"bloom"`
+	Timestamp       uint64 `db:"timestamp"`
+	TimesValidated  int64  `db:"times_validated"`
+	Coinbase        string `db:"coinbase"`
 }
 
 // UncleModel is the db model for eth.uncle_cids
@@ -65,6 +65,7 @@ type TxModel struct {
 	Src      string `db:"src"`
 	Data     []byte `db:"tx_data"`
 	Type     uint8  `db:"tx_type"`
+	Value    string `db:"value"`
 }
 
 // AccessListElementModel is the db model for eth.access_list_entry

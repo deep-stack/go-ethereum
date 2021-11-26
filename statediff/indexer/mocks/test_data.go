@@ -49,6 +49,7 @@ var (
 		Difficulty:  big.NewInt(5000000),
 		Extra:       []byte{},
 		BaseFee:     big.NewInt(params.InitialBaseFee),
+		Coinbase:    common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476777"),
 	}
 	MockTransactions, MockReceipts, SenderAddr        = createTransactionsAndReceipts(TestConfig, BlockNumber)
 	MockBlock                                         = types.NewBlock(&MockHeader, MockTransactions, nil, MockReceipts, new(trie.Trie))
@@ -216,6 +217,7 @@ func NewLegacyData() *LegacyData {
 		ReceiptHash: common.HexToHash("0x0"),
 		Difficulty:  big.NewInt(5000000),
 		Extra:       []byte{},
+		Coinbase:    common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476888"),
 	}
 
 	mockTransactions, mockReceipts, senderAddr := createLegacyTransactionsAndReceipts(config, blockNumber)

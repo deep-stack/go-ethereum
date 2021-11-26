@@ -177,7 +177,7 @@ func TestSQLXIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, block_hash, base_fee
+		pgStr := `SELECT cid, td, reward, block_hash, coinbase
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
@@ -185,8 +185,8 @@ func TestSQLXIndexer(t *testing.T) {
 			CID       string
 			TD        string
 			Reward    string
-			BlockHash string  `db:"block_hash"`
-			BaseFee   *string `db:"base_fee"`
+			BlockHash string `db:"block_hash"`
+			Coinbase  string `db:"coinbase"`
 		}
 		header := new(res)
 		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
@@ -196,7 +196,7 @@ func TestSQLXIndexer(t *testing.T) {
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
-		test_helpers.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.String())
+		test_helpers.ExpectEqual(t, header.Coinbase, mocks.MockHeader.Coinbase.String())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)

@@ -73,7 +73,7 @@ func TestSQLXIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs", func(t *testing.T) {
 		setupLegacySQLX(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, block_hash, base_fee
+		pgStr := `SELECT cid, td, reward, block_hash, coinbase
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
@@ -82,7 +82,7 @@ func TestSQLXIndexerLegacy(t *testing.T) {
 			TD        string
 			Reward    string
 			BlockHash string `db:"block_hash"`
-			BaseFee   *int64 `db:"base_fee"`
+			Coinbase  string `db:"coinbase"`
 		}
 		header := new(res)
 		err = db.QueryRow(context.Background(), pgStr, legacyData.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
@@ -91,7 +91,7 @@ func TestSQLXIndexerLegacy(t *testing.T) {
 		test_helpers.ExpectEqual(t, header.CID, legacyHeaderCID.String())
 		test_helpers.ExpectEqual(t, header.TD, legacyData.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "5000000000000011250")
+		test_helpers.ExpectEqual(t, header.Coinbase, legacyData.MockHeader.Coinbase.String())
 		require.Nil(t, legacyData.MockHeader.BaseFee)
-		require.Nil(t, header.BaseFee)
 	})
 }
