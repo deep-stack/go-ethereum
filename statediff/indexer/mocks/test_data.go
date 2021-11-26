@@ -308,7 +308,7 @@ func createTransactionsAndReceipts(config *params.ChainConfig, blockNumber *big.
 		GasPrice: big.NewInt(100),
 		Gas:      50,
 		To:       &AnotherAddress,
-		Value:    big.NewInt(1000),
+		Value:    big.NewInt(999),
 		Data:     []byte{},
 		AccessList: types.AccessList{
 			AccessListEntry1,
