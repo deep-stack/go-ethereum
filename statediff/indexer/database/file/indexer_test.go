@@ -52,6 +52,8 @@ var (
 	ipfsPgGet = `SELECT data FROM public.blocks
 					WHERE key = $1`
 	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5  []byte
+	txs                                                    types.Transactions
+	rcts                                                   types.Receipts
 	mockBlock                                              *types.Block
 	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID cid.Cid
 	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID            cid.Cid
@@ -65,7 +67,7 @@ func init() {
 	}
 
 	mockBlock = mocks.MockBlock
-	txs, rcts := mocks.MockBlock.Transactions(), mocks.MockReceipts
+	txs, rcts = mocks.MockBlock.Transactions(), mocks.MockReceipts
 
 	buf := new(bytes.Buffer)
 	txs.EncodeIndex(0, buf)
@@ -177,7 +179,7 @@ func TestFileIndexer(t *testing.T) {
 		setup(t)
 		dumpData(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, block_hash, base_fee
+		pgStr := `SELECT cid, td, reward, block_hash, coinbase
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
@@ -185,8 +187,8 @@ func TestFileIndexer(t *testing.T) {
 			CID       string
 			TD        string
 			Reward    string
-			BlockHash string  `db:"block_hash"`
-			BaseFee   *string `db:"base_fee"`
+			BlockHash string `db:"block_hash"`
+			Coinbase  string `db:"coinbase"`
 		}
 		header := new(res)
 		err = sqlxdb.QueryRowx(pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
@@ -197,7 +199,7 @@ func TestFileIndexer(t *testing.T) {
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
-		test_helpers.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.String())
+		test_helpers.ExpectEqual(t, header.Coinbase, mocks.MockHeader.Coinbase.String())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
@@ -231,6 +233,10 @@ func TestFileIndexer(t *testing.T) {
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx4CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx5CID.String()))
 		// and published
+		type txResult struct {
+			TxType uint8 `db:"tx_type"`
+			Value  string
+		}
 		for _, c := range trxs {
 			dc, err := cid.Decode(c)
 			if err != nil {
@@ -243,47 +249,59 @@ func TestFileIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			txTypePgStr := `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
+			txTypeAndValueStr := `SELECT tx_type, value FROM eth.transaction_cids WHERE cid = $1`
 			switch c {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
-				var txType uint8
-				err = sqlxdb.Get(&txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != 0 {
-					t.Fatalf("expected LegacyTxType (0), got %d", txType)
+				if txRes.TxType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
+				}
+				if txRes.Value != txs[0].Value().String() {
+					t.Fatalf("expected tx value %s got %s", txs[0].Value().String(), txRes.Value)
 				}
 			case trx2CID.String():
 				test_helpers.ExpectEqual(t, data, tx2)
-				var txType uint8
-				err = sqlxdb.Get(&txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != 0 {
-					t.Fatalf("expected LegacyTxType (0), got %d", txType)
+				if txRes.TxType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
+				}
+				if txRes.Value != txs[1].Value().String() {
+					t.Fatalf("expected tx value %s got %s", txs[1].Value().String(), txRes.Value)
 				}
 			case trx3CID.String():
 				test_helpers.ExpectEqual(t, data, tx3)
-				var txType uint8
-				err = sqlxdb.Get(&txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != 0 {
-					t.Fatalf("expected LegacyTxType (0), got %d", txType)
+				if txRes.TxType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
+				}
+				if txRes.Value != txs[2].Value().String() {
+					t.Fatalf("expected tx value %s got %s", txs[2].Value().String(), txRes.Value)
 				}
 			case trx4CID.String():
 				test_helpers.ExpectEqual(t, data, tx4)
-				var txType uint8
-				err = sqlxdb.Get(&txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != types.AccessListTxType {
-					t.Fatalf("expected AccessListTxType (1), got %d", txType)
+				if txRes.TxType != types.AccessListTxType {
+					t.Fatalf("expected AccessListTxType (1), got %d", txRes.TxType)
+				}
+				if txRes.Value != txs[3].Value().String() {
+					t.Fatalf("expected tx value %s got %s", txs[3].Value().String(), txRes.Value)
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
@@ -307,13 +325,16 @@ func TestFileIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, model2, mocks.AccessListEntry2Model)
 			case trx5CID.String():
 				test_helpers.ExpectEqual(t, data, tx5)
-				var txType *uint8
-				err = sqlxdb.Get(&txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if *txType != types.DynamicFeeTxType {
-					t.Fatalf("expected DynamicFeeTxType (2), got %d", *txType)
+				if txRes.TxType != types.DynamicFeeTxType {
+					t.Fatalf("expected DynamicFeeTxType (2), got %d", txRes.TxType)
+				}
+				if txRes.Value != txs[4].Value().String() {
+					t.Fatalf("expected tx value %s got %s", txs[4].Value().String(), txRes.Value)
 				}
 			}
 		}

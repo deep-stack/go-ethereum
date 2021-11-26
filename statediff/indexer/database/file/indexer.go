@@ -212,7 +212,7 @@ func (sdi *StateDiffIndexer) processHeader(header *types.Header, headerNode node
 		TxRoot:          header.TxHash.String(),
 		UncleRoot:       header.UncleHash.String(),
 		Timestamp:       header.Time,
-		BaseFee:         baseFee,
+		Coinbase:        header.Coinbase.String(),
 	})
 	return headerID
 }
@@ -269,6 +269,12 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 		// index tx
 		trx := args.txs[i]
 		txID := trx.Hash().String()
+
+		var val string
+		if trx.Value() != nil {
+			val = trx.Value().String()
+		}
+
 		// derive sender for the tx that corresponds with this receipt
 		from, err := types.Sender(signer, trx)
 		if err != nil {
@@ -284,6 +290,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 			CID:      txNode.Cid().String(),
 			MhKey:    shared.MultihashKeyFromCID(txNode.Cid()),
 			Type:     trx.Type(),
+			Value:    val,
 		}
 		sdi.fileWriter.upsertTransactionCID(txModel)
 

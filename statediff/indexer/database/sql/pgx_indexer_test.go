@@ -150,7 +150,7 @@ func TestPGXIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setupPGX(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, cast(base_fee AS TEXT)
+		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, coinbase
 				FROM eth.header_cids
 				WHERE block_number = $1`
 		// check header was properly indexed
@@ -158,8 +158,8 @@ func TestPGXIndexer(t *testing.T) {
 			CID       string
 			TD        string
 			Reward    string
-			BlockHash string  `db:"block_hash"`
-			BaseFee   *string `db:"base_fee"`
+			BlockHash string `db:"block_hash"`
+			Coinbase  string `db:"coinbase"`
 		}
 		header := new(res)
 		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).Scan(
@@ -167,14 +167,14 @@ func TestPGXIndexer(t *testing.T) {
 			&header.TD,
 			&header.Reward,
 			&header.BlockHash,
-			&header.BaseFee)
+			&header.Coinbase)
 		if err != nil {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
-		test_helpers.ExpectEqual(t, *header.BaseFee, mocks.MockHeader.BaseFee.String())
+		test_helpers.ExpectEqual(t, header.Coinbase, mocks.MockHeader.Coinbase.String())
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
@@ -207,6 +207,11 @@ func TestPGXIndexer(t *testing.T) {
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx4CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx5CID.String()))
 		// and published
+		transactions := mocks.MockBlock.Transactions()
+		type txResult struct {
+			TxType uint8 `db:"tx_type"`
+			Value  string
+		}
 		for _, c := range trxs {
 			dc, err := cid.Decode(c)
 			if err != nil {
@@ -219,47 +224,59 @@ func TestPGXIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			txTypePgStr := `SELECT tx_type FROM eth.transaction_cids WHERE cid = $1`
+			txTypeAndValueStr := `SELECT tx_type, CAST(value as TEXT) FROM eth.transaction_cids WHERE cid = $1`
 			switch c {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
-				var txType uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).Scan(&txRes.TxType, &txRes.Value)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != 0 {
-					t.Fatalf("expected tx_type 0, got %d", txType)
+				if txRes.TxType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
+				}
+				if txRes.Value != transactions[0].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[0].Value().String(), txRes.Value)
 				}
 			case trx2CID.String():
 				test_helpers.ExpectEqual(t, data, tx2)
-				var txType uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).Scan(&txRes.TxType, &txRes.Value)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != 0 {
-					t.Fatalf("expected tx_type 0, got %d", txType)
+				if txRes.TxType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
+				}
+				if txRes.Value != transactions[1].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[1].Value().String(), txRes.Value)
 				}
 			case trx3CID.String():
 				test_helpers.ExpectEqual(t, data, tx3)
-				var txType uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).Scan(&txRes.TxType, &txRes.Value)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != 0 {
-					t.Fatalf("expected tx_type 0, got %d", txType)
+				if txRes.TxType != 0 {
+					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
+				}
+				if txRes.Value != transactions[2].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[2].Value().String(), txRes.Value)
 				}
 			case trx4CID.String():
 				test_helpers.ExpectEqual(t, data, tx4)
-				var txType uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).Scan(&txRes.TxType, &txRes.Value)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if txType != types.AccessListTxType {
-					t.Fatalf("expected AccessListTxType (1), got %d", txType)
+				if txRes.TxType != types.AccessListTxType {
+					t.Fatalf("expected AccessListTxType (1), got %d", txRes.TxType)
+				}
+				if txRes.Value != transactions[3].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[3].Value().String(), txRes.Value)
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
@@ -283,13 +300,16 @@ func TestPGXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, model2, mocks.AccessListEntry2Model)
 			case trx5CID.String():
 				test_helpers.ExpectEqual(t, data, tx5)
-				var txType *uint8
-				err = db.Get(context.Background(), &txType, txTypePgStr, c)
+				txRes := new(txResult)
+				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).Scan(&txRes.TxType, &txRes.Value)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if *txType != types.DynamicFeeTxType {
-					t.Fatalf("expected DynamicFeeTxType (2), got %d", *txType)
+				if txRes.TxType != types.DynamicFeeTxType {
+					t.Fatalf("expected DynamicFeeTxType (2), got %d", txRes.TxType)
+				}
+				if txRes.Value != transactions[4].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[4].Value().String(), txRes.Value)
 				}
 			}
 		}

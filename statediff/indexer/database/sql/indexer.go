@@ -256,7 +256,7 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 		TxRoot:          header.TxHash.String(),
 		UncleRoot:       header.UncleHash.String(),
 		Timestamp:       header.Time,
-		BaseFee:         baseFee,
+		Coinbase:        header.Coinbase.String(),
 	})
 }
 
@@ -316,6 +316,12 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 		// index tx
 		trx := args.txs[i]
 		txID := trx.Hash().String()
+
+		var val string
+		if trx.Value() != nil {
+			val = trx.Value().String()
+		}
+
 		// derive sender for the tx that corresponds with this receipt
 		from, err := types.Sender(signer, trx)
 		if err != nil {
@@ -331,6 +337,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			CID:      txNode.Cid().String(),
 			MhKey:    shared.MultihashKeyFromCID(txNode.Cid()),
 			Type:     trx.Type(),
+			Value:    val,
 		}
 		if err := sdi.dbWriter.upsertTransactionCID(tx.dbtx, txModel); err != nil {
 			return err
