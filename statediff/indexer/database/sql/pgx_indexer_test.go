@@ -17,16 +17,12 @@
 package sql_test
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os"
 	"testing"
 
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
-	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,88 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
-	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
-
-func init() {
-	if os.Getenv("MODE") != "statediff" {
-		fmt.Println("Skipping statediff test")
-		os.Exit(0)
-	}
-
-	mockBlock = mocks.MockBlock
-	txs, rcts := mocks.MockBlock.Transactions(), mocks.MockReceipts
-
-	buf := new(bytes.Buffer)
-	txs.EncodeIndex(0, buf)
-	tx1 = make([]byte, buf.Len())
-	copy(tx1, buf.Bytes())
-	buf.Reset()
-
-	txs.EncodeIndex(1, buf)
-	tx2 = make([]byte, buf.Len())
-	copy(tx2, buf.Bytes())
-	buf.Reset()
-
-	txs.EncodeIndex(2, buf)
-	tx3 = make([]byte, buf.Len())
-	copy(tx3, buf.Bytes())
-	buf.Reset()
-
-	txs.EncodeIndex(3, buf)
-	tx4 = make([]byte, buf.Len())
-	copy(tx4, buf.Bytes())
-	buf.Reset()
-
-	txs.EncodeIndex(4, buf)
-	tx5 = make([]byte, buf.Len())
-	copy(tx5, buf.Bytes())
-	buf.Reset()
-
-	rcts.EncodeIndex(0, buf)
-	rct1 = make([]byte, buf.Len())
-	copy(rct1, buf.Bytes())
-	buf.Reset()
-
-	rcts.EncodeIndex(1, buf)
-	rct2 = make([]byte, buf.Len())
-	copy(rct2, buf.Bytes())
-	buf.Reset()
-
-	rcts.EncodeIndex(2, buf)
-	rct3 = make([]byte, buf.Len())
-	copy(rct3, buf.Bytes())
-	buf.Reset()
-
-	rcts.EncodeIndex(3, buf)
-	rct4 = make([]byte, buf.Len())
-	copy(rct4, buf.Bytes())
-	buf.Reset()
-
-	rcts.EncodeIndex(4, buf)
-	rct5 = make([]byte, buf.Len())
-	copy(rct5, buf.Bytes())
-	buf.Reset()
-
-	headerCID, _ = ipld.RawdataToCid(ipld.MEthHeader, mocks.MockHeaderRlp, multihash.KECCAK_256)
-	trx1CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx1, multihash.KECCAK_256)
-	trx2CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx2, multihash.KECCAK_256)
-	trx3CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx3, multihash.KECCAK_256)
-	trx4CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx4, multihash.KECCAK_256)
-	trx5CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx5, multihash.KECCAK_256)
-	rct1CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct1, multihash.KECCAK_256)
-	rct2CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct2, multihash.KECCAK_256)
-	rct3CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct3, multihash.KECCAK_256)
-	rct4CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct4, multihash.KECCAK_256)
-	rct5CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct5, multihash.KECCAK_256)
-	state1CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.ContractLeafNode, multihash.KECCAK_256)
-	state2CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.AccountLeafNode, multihash.KECCAK_256)
-	storageCID, _ = ipld.RawdataToCid(ipld.MEthStorageTrie, mocks.StorageLeafNode, multihash.KECCAK_256)
-}
 
 func setupPGX(t *testing.T) {
 	db, err = postgres.SetupPGXDB()
