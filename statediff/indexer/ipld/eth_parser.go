@@ -238,14 +238,24 @@ func processReceiptsAndLogs(rcts []*types.Receipt, expectedRctRoot []byte) ([]*E
 	return ethRctNodes, rctTrieNodes, ethLogTrieNodes, ethLogleafNodeCids, ethRctleafNodeCids, err
 }
 
+const keccak256Length = 32
+
 func processLogs(logs []*types.Log) ([]*EthLogTrie, []cid.Cid, common.Hash, error) {
 	logTr := newLogTrie()
+	shortLogCIDs := make(map[uint64]cid.Cid, len(logs))
 	for idx, log := range logs {
-		ethLog, err := NewLog(log)
+		logRaw, err := rlp.EncodeToBytes(log)
 		if err != nil {
 			return nil, nil, common.Hash{}, err
 		}
-		if err = logTr.Add(idx, ethLog.RawData()); err != nil {
+		if len(logRaw) <= keccak256Length {
+			logNode, err := NewLog(log)
+			if err != nil {
+				return nil, nil, common.Hash{}, err
+			}
+			shortLogCIDs[uint64(idx)] = logNode.Cid()
+		}
+		if err = logTr.Add(idx, logRaw); err != nil {
 			return nil, nil, common.Hash{}, err
 		}
 	}
@@ -259,8 +269,7 @@ func processLogs(logs []*types.Log) ([]*EthLogTrie, []cid.Cid, common.Hash, erro
 	if err != nil {
 		return nil, nil, common.Hash{}, err
 	}
-
-	leafNodeCids := make([]cid.Cid, len(leafNodes))
+	leafNodeCids := make([]cid.Cid, len(logs))
 	for i, ln := range leafNodes {
 		var idx uint
 
@@ -270,6 +279,9 @@ func processLogs(logs []*types.Log) ([]*EthLogTrie, []cid.Cid, common.Hash, erro
 			return nil, nil, common.Hash{}, err
 		}
 		leafNodeCids[idx] = ln.Cid()
+	}
+	for idx, lCID := range shortLogCIDs {
+		leafNodeCids[idx] = lCID
 	}
 
 	return logTrieNodes, leafNodeCids, common.BytesToHash(logTr.rootHash()), err
