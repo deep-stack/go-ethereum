@@ -114,14 +114,8 @@ func (rt *logTrie) getNodeFromDB(key []byte) (*EthLogTrie, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	c, err := RawdataToCid(MEthLogTrie, rawdata, multihash.KECCAK_256)
-	if err != nil {
-		return nil, err
-	}
-
 	tn := &TrieNode{
-		cid:     c,
+		cid:     keccak256ToCid(MEthLogTrie, key),
 		rawdata: rawdata,
 	}
 	return &EthLogTrie{TrieNode: tn}, nil
@@ -134,7 +128,6 @@ func (rt *logTrie) getLeafNodes() ([]*EthLogTrie, []*nodeKey, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
 	out := make([]*EthLogTrie, 0, len(keys))
 	for _, k := range keys {
 		n, err := rt.getNodeFromDB(k.dbKey)
