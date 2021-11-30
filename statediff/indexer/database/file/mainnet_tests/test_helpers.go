@@ -17,7 +17,6 @@
 package mainnet_tests
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -37,18 +36,21 @@ const (
 const (
 	TEST_RAW_URL      = "TEST_RAW_URL"
 	TEST_BLOCK_NUMBER = "TEST_BLOCK_NUMBER"
+	TEST_LOCAL_CACHE  = "TEST_LOCAL_CACHE"
 )
 
 // TestConfig holds configuration params for mainnet tests
 type TestConfig struct {
 	RawURL      string
 	BlockNumber *big.Int
+	LocalCache  bool
 }
 
 // DefaultTestConfig is the default TestConfig
 var DefaultTestConfig = TestConfig{
 	RawURL:      "http://127.0.0.1:8545",
-	BlockNumber: big.NewInt(12914665),
+	BlockNumber: big.NewInt(12914664),
+	LocalCache:  true,
 }
 
 // TestBlocksAndReceiptsFromEnv retrieves the block and receipts using env variables to override default config
@@ -56,14 +58,16 @@ func TestBlocksAndReceiptsFromEnv() (*types.Block, types.Receipts, error) {
 	conf := DefaultTestConfig
 	rawURL := os.Getenv(TEST_RAW_URL)
 	if rawURL == "" {
-		fmt.Println("Warning: no raw url configured for statediffing mainnet tests")
+		fmt.Printf("Warning: no raw url configured for statediffing mainnet tests, will look for local file and"+
+			"then try default endpoint (%s)\r\n", DefaultTestConfig.RawURL)
 	} else {
 		conf.RawURL = rawURL
 	}
 	blockNumberStr := os.Getenv(TEST_BLOCK_NUMBER)
 	blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
 	if !ok {
-		fmt.Println("Warning: no blockNumber configured for statediffing mainnet tests")
+		fmt.Printf("Warning: no blockNumber configured for statediffing mainnet tests, using default (%d)\r\n",
+			DefaultTestConfig.BlockNumber)
 	} else {
 		conf.BlockNumber = blockNumber
 	}
@@ -77,10 +81,12 @@ func TestBlocksAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error
 	var err error
 	var block *types.Block
 	var receipts types.Receipts
-	blockFilePath := fmt.Sprintf("%s.%s.rlp", defaultBlockFilePath, conf.BlockNumber.String())
+	blockFilePath := fmt.Sprintf("%s_%s.rlp", defaultBlockFilePath, conf.BlockNumber.String())
 	if _, err = os.Stat(blockFilePath); !errors.Is(err, os.ErrNotExist) {
+		fmt.Printf("local file (%s) found for block %s\n", blockFilePath, conf.BlockNumber.String())
 		block, err = LoadBlockRLP(blockFilePath)
 		if err != nil {
+			fmt.Printf("loading local file (%s) failed (%s), dialing remote client at %s\n", blockFilePath, err.Error(), conf.RawURL)
 			cli, err = ethclient.Dial(conf.RawURL)
 			if err != nil {
 				return nil, nil, err
@@ -89,8 +95,14 @@ func TestBlocksAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error
 			if err != nil {
 				return nil, nil, err
 			}
+			if conf.LocalCache {
+				if err := WriteBlockRLP(blockFilePath, block); err != nil {
+					return nil, nil, err
+				}
+			}
 		}
 	} else {
+		fmt.Printf("no local file found for block %s, dialing remote client at %s\n", conf.BlockNumber.String(), conf.RawURL)
 		cli, err = ethclient.Dial(conf.RawURL)
 		if err != nil {
 			return nil, nil, err
@@ -99,11 +111,18 @@ func TestBlocksAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error
 		if err != nil {
 			return nil, nil, err
 		}
+		if conf.LocalCache {
+			if err := WriteBlockRLP(blockFilePath, block); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
-	receiptsFilePath := fmt.Sprintf("%s.%s.enc", defaultReceiptsFilePath, conf.BlockNumber.String())
+	receiptsFilePath := fmt.Sprintf("%s_%s.rlp", defaultReceiptsFilePath, conf.BlockNumber.String())
 	if _, err = os.Stat(receiptsFilePath); !errors.Is(err, os.ErrNotExist) {
+		fmt.Printf("local file (%s) found for block %s receipts\n", receiptsFilePath, conf.BlockNumber.String())
 		receipts, err = LoadReceiptsEncoding(receiptsFilePath, len(block.Transactions()))
 		if err != nil {
+			fmt.Printf("loading local file (%s) failed (%s), dialing remote client at %s\n", receiptsFilePath, err.Error(), conf.RawURL)
 			if cli == nil {
 				cli, err = ethclient.Dial(conf.RawURL)
 				if err != nil {
@@ -114,8 +133,14 @@ func TestBlocksAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error
 			if err != nil {
 				return nil, nil, err
 			}
+			if conf.LocalCache {
+				if err := WriteReceiptsEncoding(receiptsFilePath, block.Number(), receipts); err != nil {
+					return nil, nil, err
+				}
+			}
 		}
 	} else {
+		fmt.Printf("no local file found for block %s receipts, dialing remote client at %s\n", conf.BlockNumber.String(), conf.RawURL)
 		if cli == nil {
 			cli, err = ethclient.Dial(conf.RawURL)
 			if err != nil {
@@ -125,6 +150,11 @@ func TestBlocksAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error
 		receipts, err = FetchReceipts(cli, block)
 		if err != nil {
 			return nil, nil, err
+		}
+		if conf.LocalCache {
+			if err := WriteReceiptsEncoding(receiptsFilePath, block.Number(), receipts); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	return block, receipts, nil
@@ -160,6 +190,7 @@ func WriteBlockRLP(filePath string, block *types.Block) error {
 	if err != nil {
 		return fmt.Errorf("unable to create file (%s), err: %v", filePath, err)
 	}
+	fmt.Printf("writing block rlp to file at %s\r\n", filePath)
 	if err := block.EncodeRLP(file); err != nil {
 		return err
 	}
@@ -178,28 +209,18 @@ func LoadBlockRLP(filePath string) (*types.Block, error) {
 
 // LoadReceiptsEncoding loads receipts from the encoding at filePath
 func LoadReceiptsEncoding(filePath string, cap int) (types.Receipts, error) {
-	file, err := os.Open(filePath)
+	rctsBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	receipts := make(types.Receipts, 0, cap)
-	for scanner.Scan() {
-		rctBinary := scanner.Bytes()
-		rct := new(types.Receipt)
-		if err := rct.UnmarshalBinary(rctBinary); err != nil {
-			return nil, err
-		}
-		receipts = append(receipts, rct)
-	}
-	return receipts, nil
+	receipts := new(types.Receipts)
+	return *receipts, rlp.DecodeBytes(rctsBytes, receipts)
 }
 
 // WriteReceiptsEncoding writes out the consensus encoding of the receipts to the provided io.WriteCloser
 func WriteReceiptsEncoding(filePath string, blockNumber *big.Int, receipts types.Receipts) error {
 	if filePath == "" {
-		filePath = fmt.Sprintf("%s_%s.enc", defaultReceiptsFilePath, blockNumber.String())
+		filePath = fmt.Sprintf("%s_%s.rlp", defaultReceiptsFilePath, blockNumber.String())
 	}
 	if _, err := os.Stat(filePath); !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("cannot create file, file (%s) already exists", filePath)
@@ -208,17 +229,7 @@ func WriteReceiptsEncoding(filePath string, blockNumber *big.Int, receipts types
 	if err != nil {
 		return fmt.Errorf("unable to create file (%s), err: %v", filePath, err)
 	}
-	for _, rct := range receipts {
-		rctEncoding, err := rct.MarshalBinary()
-		if err != nil {
-			return err
-		}
-		if _, err := file.Write(rctEncoding); err != nil {
-			return err
-		}
-		if _, err := file.Write([]byte("\n")); err != nil {
-			return err
-		}
-	}
-	return file.Close()
+	defer file.Close()
+	fmt.Printf("writing receipts rlp to file at %s\r\n", filePath)
+	return rlp.Encode(file, receipts)
 }
