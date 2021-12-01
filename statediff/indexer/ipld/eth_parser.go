@@ -248,6 +248,12 @@ func processLogs(logs []*types.Log) ([]*EthLogTrie, []cid.Cid, common.Hash, erro
 		if err != nil {
 			return nil, nil, common.Hash{}, err
 		}
+		// if len(logRaw) <= keccak256Length it is possible this value's "leaf node"
+		// will be stored in its parent branch but only if len(partialPathOfTheNode) + len(logRaw) <= keccak256Length
+		// But we can't tell what the partial path will be until the trie is Commit()-ed
+		// So wait until we collect all the leaf nodes, and if we are missing any at the indexes we note in shortLogCIDs
+		// we know that these "leaf nodes" were internalized into their parent branch node and we move forward with
+		// using the cid.Cid we cached in shortLogCIDs
 		if len(logRaw) <= keccak256Length {
 			logNode, err := NewLog(log)
 			if err != nil {
@@ -280,8 +286,12 @@ func processLogs(logs []*types.Log) ([]*EthLogTrie, []cid.Cid, common.Hash, erro
 		}
 		leafNodeCids[idx] = ln.Cid()
 	}
+	// this is where we check which logs <= keccak256Length were actually internalized into parent branch node
+	// and replace those that were with the cid.Cid for the raw log IPLD
 	for idx, lCID := range shortLogCIDs {
-		leafNodeCids[idx] = lCID
+		if !leafNodeCids[idx].Defined() {
+			leafNodeCids[idx] = lCID
+		}
 	}
 
 	return logTrieNodes, leafNodeCids, common.BytesToHash(logTr.rootHash()), err
