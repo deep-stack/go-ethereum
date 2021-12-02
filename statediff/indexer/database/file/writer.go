@@ -33,7 +33,7 @@ import (
 var (
 	nullHash        = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 	pipeSize        = 65336 // min(linuxPipeSize, macOSPipeSize)
-	writeBufferSize = pipeSize * 16 * 48
+	writeBufferSize = pipeSize * 16 * 96
 )
 
 // SQLWriter writes sql statements to a file
