@@ -9,10 +9,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	block "github.com/ipfs/go-block-format"
 	node "github.com/ipfs/go-ipld-format"
 	"github.com/multiformats/go-multihash"
+
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestBlockBodyRlpParsing(t *testing.T) {

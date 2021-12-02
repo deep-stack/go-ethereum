@@ -21,10 +21,11 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ipfs/go-cid"
 	node "github.com/ipfs/go-ipld-format"
 	mh "github.com/multiformats/go-multihash"
+
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type EthReceipt struct {

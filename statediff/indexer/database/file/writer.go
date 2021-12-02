@@ -31,9 +31,9 @@ import (
 )
 
 var (
-	nullHash         = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
-	pipeSize         = 65336 // min(linuxPipeSize, macOSPipeSize)
-	collatedStmtSize = pipeSize * 16
+	nullHash        = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+	pipeSize        = 65336 // min(linuxPipeSize, macOSPipeSize)
+	writeBufferSize = pipeSize * 16 * 48
 )
 
 // SQLWriter writes sql statements to a file
@@ -54,7 +54,7 @@ func NewSQLWriter(wc io.WriteCloser) *SQLWriter {
 	return &SQLWriter{
 		wc:            wc,
 		stmts:         make(chan []byte),
-		collatedStmt:  make([]byte, collatedStmtSize),
+		collatedStmt:  make([]byte, writeBufferSize),
 		flushChan:     make(chan struct{}),
 		flushFinished: make(chan struct{}),
 		quitChan:      make(chan struct{}),
@@ -74,7 +74,7 @@ func (sqw *SQLWriter) Loop() {
 			select {
 			case stmt := <-sqw.stmts:
 				l = len(stmt)
-				if l+sqw.collationIndex+1 > collatedStmtSize {
+				if sqw.collationIndex+l > writeBufferSize {
 					if err := sqw.flush(); err != nil {
 						panic(fmt.Sprintf("error writing sql stmts buffer to file: %v", err))
 					}
