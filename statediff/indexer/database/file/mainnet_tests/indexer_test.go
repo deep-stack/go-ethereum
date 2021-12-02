@@ -20,32 +20,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"testing"
 
-	"github.com/ipfs/go-cid"
 	"github.com/jmoiron/sqlx"
-	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
-	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
 var (
-	testBlock     *types.Block
-	testReceipts  types.Receipts
-	testHeaderCID cid.Cid
-	sqlxdb        *sqlx.DB
-	err           error
-	chainConf     = params.MainnetChainConfig
+	sqlxdb    *sqlx.DB
+	chainConf = params.MainnetChainConfig
 )
 
 func init() {
@@ -55,13 +48,35 @@ func init() {
 	}
 }
 
-func setup(t *testing.T) {
-	testBlock, testReceipts, err = TestBlocksAndReceiptsFromEnv()
+func TestPushBlockAndState(t *testing.T) {
+	conf := DefaultTestConfig
+	rawURL := os.Getenv(TEST_RAW_URL)
+	if rawURL == "" {
+		fmt.Printf("Warning: no raw url configured for statediffing mainnet tests, will look for local file and"+
+			"then try default endpoint (%s)\r\n", DefaultTestConfig.RawURL)
+	} else {
+		conf.RawURL = rawURL
+	}
+	for _, blockNumber := range problemBlocks {
+		conf.BlockNumber = big.NewInt(blockNumber)
+		tb, trs, err := TestBlockAndReceipts(conf)
+		require.NoError(t, err)
+		testPushBlockAndState(t, tb, trs)
+	}
+	testBlock, testReceipts, err := TestBlockAndReceiptsFromEnv(conf)
 	require.NoError(t, err)
-	headerRLP, err := rlp.EncodeToBytes(testBlock.Header())
-	require.NoError(t, err)
+	testPushBlockAndState(t, testBlock, testReceipts)
+}
 
-	testHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, headerRLP, multihash.KECCAK_256)
+func testPushBlockAndState(t *testing.T, block *types.Block, receipts types.Receipts) {
+	t.Run("Test PushBlock and PushStateNode", func(t *testing.T) {
+		setup(t, block, receipts)
+		dumpData(t)
+		tearDown(t)
+	})
+}
+
+func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
 		err := os.Remove(file.TestConfig.FilePath)
 		require.NoError(t, err)
@@ -112,12 +127,4 @@ func tearDown(t *testing.T) {
 	require.NoError(t, err)
 	err = sqlxdb.Close()
 	require.NoError(t, err)
-}
-
-func TestPushBlockAndState(t *testing.T) {
-	t.Run("Test PushBlock and PushStateNode", func(t *testing.T) {
-		setup(t)
-		dumpData(t)
-		tearDown(t)
-	})
 }

@@ -23,11 +23,12 @@ import (
 	"io"
 	"io/ioutil"
 
+	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multihash"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ipfs/go-cid"
-	"github.com/multiformats/go-multihash"
 )
 
 // FromBlockRLP takes an RLP message representing

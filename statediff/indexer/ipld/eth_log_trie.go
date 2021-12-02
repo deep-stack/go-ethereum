@@ -3,10 +3,11 @@ package ipld
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // EthLogTrie (eth-tx-trie codec 0x9p) represents

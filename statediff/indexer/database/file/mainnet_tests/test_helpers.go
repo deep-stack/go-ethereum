@@ -36,8 +36,16 @@ const (
 const (
 	TEST_RAW_URL      = "TEST_RAW_URL"
 	TEST_BLOCK_NUMBER = "TEST_BLOCK_NUMBER"
-	TEST_LOCAL_CACHE  = "TEST_LOCAL_CACHE"
 )
+
+var problemBlocks = []int64{
+	12600011,
+	12619985,
+	12625121,
+	12655432,
+	12579670,
+	12914664,
+}
 
 // TestConfig holds configuration params for mainnet tests
 type TestConfig struct {
@@ -53,16 +61,8 @@ var DefaultTestConfig = TestConfig{
 	LocalCache:  true,
 }
 
-// TestBlocksAndReceiptsFromEnv retrieves the block and receipts using env variables to override default config
-func TestBlocksAndReceiptsFromEnv() (*types.Block, types.Receipts, error) {
-	conf := DefaultTestConfig
-	rawURL := os.Getenv(TEST_RAW_URL)
-	if rawURL == "" {
-		fmt.Printf("Warning: no raw url configured for statediffing mainnet tests, will look for local file and"+
-			"then try default endpoint (%s)\r\n", DefaultTestConfig.RawURL)
-	} else {
-		conf.RawURL = rawURL
-	}
+// TestBlockAndReceiptsFromEnv retrieves the block and receipts using env variables to override default config block number
+func TestBlockAndReceiptsFromEnv(conf TestConfig) (*types.Block, types.Receipts, error) {
 	blockNumberStr := os.Getenv(TEST_BLOCK_NUMBER)
 	blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
 	if !ok {
@@ -71,12 +71,12 @@ func TestBlocksAndReceiptsFromEnv() (*types.Block, types.Receipts, error) {
 	} else {
 		conf.BlockNumber = blockNumber
 	}
-	return TestBlocksAndReceipts(conf)
+	return TestBlockAndReceipts(conf)
 }
 
-// TestBlocksAndReceipts retrieves the block and receipts for the provided test config
+// TestBlockAndReceipts retrieves the block and receipts for the provided test config
 // It first tries to load files from the local system before setting up and using an ethclient.Client to pull the data
-func TestBlocksAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error) {
+func TestBlockAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error) {
 	var cli *ethclient.Client
 	var err error
 	var block *types.Block

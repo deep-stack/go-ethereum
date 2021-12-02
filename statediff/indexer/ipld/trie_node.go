@@ -20,9 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ipfs/go-cid"
 	node "github.com/ipfs/go-ipld-format"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
