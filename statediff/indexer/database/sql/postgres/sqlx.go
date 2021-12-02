@@ -169,6 +169,10 @@ type sqlxTxWrapper struct {
 	tx *sqlx.Tx
 }
 
+func (t sqlxTxWrapper) Select(ctx context.Context, dest interface{}, sql string, args ...interface{}) error {
+	return t.tx.Select(dest, sql, args...)
+}
+
 // QueryRow satisfies sql.Tx
 func (t sqlxTxWrapper) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
 	return t.tx.QueryRowx(sql, args...)

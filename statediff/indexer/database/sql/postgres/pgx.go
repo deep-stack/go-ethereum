@@ -18,6 +18,8 @@ package postgres
 
 import (
 	"context"
+	dbsql "database/sql"
+	"errors"
 	"time"
 
 	"github.com/georgysavva/scany/pgxscan"
@@ -88,69 +90,84 @@ func MakeConfig(config Config) (*pgxpool.Config, error) {
 	return conf, nil
 }
 
-func (pgx *PGXDriver) createNode() error {
-	_, err := pgx.pool.Exec(
-		pgx.ctx,
+func (d *PGXDriver) createNode() error {
+	_, err := d.pool.Exec(
+		d.ctx,
 		createNodeStm,
-		pgx.nodeInfo.GenesisBlock, pgx.nodeInfo.NetworkID,
-		pgx.nodeInfo.ID, pgx.nodeInfo.ClientName,
-		pgx.nodeInfo.ChainID)
+		d.nodeInfo.GenesisBlock, d.nodeInfo.NetworkID,
+		d.nodeInfo.ID, d.nodeInfo.ClientName,
+		d.nodeInfo.ChainID)
 	if err != nil {
 		return ErrUnableToSetNode(err)
 	}
-	pgx.nodeID = pgx.nodeInfo.ID
+	d.nodeID = d.nodeInfo.ID
 	return nil
 }
 
 // QueryRow satisfies sql.Database
-func (pgx *PGXDriver) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
-	return pgx.pool.QueryRow(ctx, sql, args...)
+func (d *PGXDriver) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
+	return d.pool.QueryRow(ctx, sql, args...)
 }
 
 // Exec satisfies sql.Database
-func (pgx *PGXDriver) Exec(ctx context.Context, sql string, args ...interface{}) (sql.Result, error) {
-	res, err := pgx.pool.Exec(ctx, sql, args...)
+func (d *PGXDriver) Exec(ctx context.Context, sql string, args ...interface{}) (sql.Result, error) {
+	res, err := d.pool.Exec(ctx, sql, args...)
 	return resultWrapper{ct: res}, err
 }
 
 // Select satisfies sql.Database
-func (pgx *PGXDriver) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return pgxscan.Select(ctx, pgx.pool, dest, query, args...)
+func (d *PGXDriver) Select(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
+	err := pgxscan.Select(ctx, d.pool, dest, query, args...)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dbsql.ErrNoRows
+		}
+		return err
+	}
+
+	return nil
 }
 
 // Get satisfies sql.Database
-func (pgx *PGXDriver) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return pgxscan.Get(ctx, pgx.pool, dest, query, args...)
+func (d *PGXDriver) Get(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
+	err := pgxscan.Get(ctx, d.pool, dest, query, args...)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dbsql.ErrNoRows
+		}
+		return err
+	}
+	return nil
 }
 
 // Begin satisfies sql.Database
-func (pgx *PGXDriver) Begin(ctx context.Context) (sql.Tx, error) {
-	tx, err := pgx.pool.Begin(ctx)
+func (d *PGXDriver) Begin(ctx context.Context) (sql.Tx, error) {
+	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return pgxTxWrapper{tx: tx}, nil
 }
 
-func (pgx *PGXDriver) Stats() sql.Stats {
-	stats := pgx.pool.Stat()
+func (d *PGXDriver) Stats() sql.Stats {
+	stats := d.pool.Stat()
 	return pgxStatsWrapper{stats: stats}
 }
 
 // NodeID satisfies sql.Database
-func (pgx *PGXDriver) NodeID() string {
-	return pgx.nodeID
+func (d *PGXDriver) NodeID() string {
+	return d.nodeID
 }
 
 // Close satisfies sql.Database/io.Closer
-func (pgx *PGXDriver) Close() error {
-	pgx.pool.Close()
+func (d *PGXDriver) Close() error {
+	d.pool.Close()
 	return nil
 }
 
 // Context satisfies sql.Database
-func (pgx *PGXDriver) Context() context.Context {
-	return pgx.ctx
+func (d *PGXDriver) Context() context.Context {
+	return d.ctx
 }
 
 type resultWrapper struct {
@@ -209,6 +226,17 @@ func (s pgxStatsWrapper) MaxLifetimeClosed() int64 {
 
 type pgxTxWrapper struct {
 	tx pgx.Tx
+}
+
+func (t pgxTxWrapper) Select(ctx context.Context, dest interface{}, sql string, args ...interface{}) error {
+	err := pgxscan.Select(ctx, t.tx, dest, sql, args...)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dbsql.ErrNoRows
+		}
+		return err
+	}
+	return nil
 }
 
 // QueryRow satisfies sql.Tx
