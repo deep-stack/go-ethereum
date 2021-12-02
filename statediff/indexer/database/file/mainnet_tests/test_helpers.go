@@ -45,7 +45,6 @@ var problemBlocks = []int64{
 	12625121,
 	12655432,
 	12579670,
-	12914664,
 }
 
 // TestConfig holds configuration params for mainnet tests

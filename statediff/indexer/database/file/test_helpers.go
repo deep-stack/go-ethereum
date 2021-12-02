@@ -2,7 +2,6 @@ package file
 
 import (
 	"testing"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -62,6 +61,4 @@ func TearDownDB(t *testing.T, db *sqlx.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	time.Sleep(2 * time.Second)
 }
