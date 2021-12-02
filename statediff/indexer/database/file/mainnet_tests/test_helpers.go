@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -62,31 +63,31 @@ var DefaultTestConfig = TestConfig{
 }
 
 // TestBlockAndReceiptsFromEnv retrieves the block and receipts using env variables to override default config block number
-func TestBlockAndReceiptsFromEnv(conf TestConfig) (*types.Block, types.Receipts, error) {
+func TestBlockAndReceiptsFromEnv(t *testing.T, conf TestConfig) (*types.Block, types.Receipts, error) {
 	blockNumberStr := os.Getenv(TEST_BLOCK_NUMBER)
 	blockNumber, ok := new(big.Int).SetString(blockNumberStr, 10)
 	if !ok {
-		fmt.Printf("Warning: no blockNumber configured for statediffing mainnet tests, using default (%d)\r\n",
+		t.Logf("Warning: no blockNumber configured for statediffing mainnet tests, using default (%d)\r\n",
 			DefaultTestConfig.BlockNumber)
 	} else {
 		conf.BlockNumber = blockNumber
 	}
-	return TestBlockAndReceipts(conf)
+	return TestBlockAndReceipts(t, conf)
 }
 
 // TestBlockAndReceipts retrieves the block and receipts for the provided test config
 // It first tries to load files from the local system before setting up and using an ethclient.Client to pull the data
-func TestBlockAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error) {
+func TestBlockAndReceipts(t *testing.T, conf TestConfig) (*types.Block, types.Receipts, error) {
 	var cli *ethclient.Client
 	var err error
 	var block *types.Block
 	var receipts types.Receipts
 	blockFilePath := fmt.Sprintf("%s_%s.rlp", defaultBlockFilePath, conf.BlockNumber.String())
 	if _, err = os.Stat(blockFilePath); !errors.Is(err, os.ErrNotExist) {
-		fmt.Printf("local file (%s) found for block %s\n", blockFilePath, conf.BlockNumber.String())
+		t.Logf("local file (%s) found for block %s\n", blockFilePath, conf.BlockNumber.String())
 		block, err = LoadBlockRLP(blockFilePath)
 		if err != nil {
-			fmt.Printf("loading local file (%s) failed (%s), dialing remote client at %s\n", blockFilePath, err.Error(), conf.RawURL)
+			t.Logf("loading local file (%s) failed (%s), dialing remote client at %s\n", blockFilePath, err.Error(), conf.RawURL)
 			cli, err = ethclient.Dial(conf.RawURL)
 			if err != nil {
 				return nil, nil, err
@@ -102,7 +103,7 @@ func TestBlockAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error)
 			}
 		}
 	} else {
-		fmt.Printf("no local file found for block %s, dialing remote client at %s\n", conf.BlockNumber.String(), conf.RawURL)
+		t.Logf("no local file found for block %s, dialing remote client at %s\n", conf.BlockNumber.String(), conf.RawURL)
 		cli, err = ethclient.Dial(conf.RawURL)
 		if err != nil {
 			return nil, nil, err
@@ -119,10 +120,10 @@ func TestBlockAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error)
 	}
 	receiptsFilePath := fmt.Sprintf("%s_%s.rlp", defaultReceiptsFilePath, conf.BlockNumber.String())
 	if _, err = os.Stat(receiptsFilePath); !errors.Is(err, os.ErrNotExist) {
-		fmt.Printf("local file (%s) found for block %s receipts\n", receiptsFilePath, conf.BlockNumber.String())
+		t.Logf("local file (%s) found for block %s receipts\n", receiptsFilePath, conf.BlockNumber.String())
 		receipts, err = LoadReceiptsEncoding(receiptsFilePath, len(block.Transactions()))
 		if err != nil {
-			fmt.Printf("loading local file (%s) failed (%s), dialing remote client at %s\n", receiptsFilePath, err.Error(), conf.RawURL)
+			t.Logf("loading local file (%s) failed (%s), dialing remote client at %s\n", receiptsFilePath, err.Error(), conf.RawURL)
 			if cli == nil {
 				cli, err = ethclient.Dial(conf.RawURL)
 				if err != nil {
@@ -140,7 +141,7 @@ func TestBlockAndReceipts(conf TestConfig) (*types.Block, types.Receipts, error)
 			}
 		}
 	} else {
-		fmt.Printf("no local file found for block %s receipts, dialing remote client at %s\n", conf.BlockNumber.String(), conf.RawURL)
+		t.Logf("no local file found for block %s receipts, dialing remote client at %s\n", conf.BlockNumber.String(), conf.RawURL)
 		if cli == nil {
 			cli, err = ethclient.Dial(conf.RawURL)
 			if err != nil {

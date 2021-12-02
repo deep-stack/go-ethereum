@@ -59,6 +59,7 @@ type Statements interface {
 // Tx interface to accommodate different concrete SQL transaction types
 type Tx interface {
 	QueryRow(ctx context.Context, sql string, args ...interface{}) ScannableRow
+	Select(ctx context.Context, dest interface{}, sql string, args ...interface{}) error
 	Exec(ctx context.Context, sql string, args ...interface{}) (Result, error)
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error

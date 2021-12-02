@@ -52,28 +52,26 @@ func TestPushBlockAndState(t *testing.T) {
 	conf := DefaultTestConfig
 	rawURL := os.Getenv(TEST_RAW_URL)
 	if rawURL == "" {
-		fmt.Printf("Warning: no raw url configured for statediffing mainnet tests, will look for local file and"+
+		t.Logf("Warning: no raw url configured for statediffing mainnet tests, will look for local file and"+
 			"then try default endpoint (%s)\r\n", DefaultTestConfig.RawURL)
 	} else {
 		conf.RawURL = rawURL
 	}
 	for _, blockNumber := range problemBlocks {
 		conf.BlockNumber = big.NewInt(blockNumber)
-		tb, trs, err := TestBlockAndReceipts(conf)
+		tb, trs, err := TestBlockAndReceipts(t, conf)
 		require.NoError(t, err)
 		testPushBlockAndState(t, tb, trs)
 	}
-	testBlock, testReceipts, err := TestBlockAndReceiptsFromEnv(conf)
+	testBlock, testReceipts, err := TestBlockAndReceiptsFromEnv(t, conf)
 	require.NoError(t, err)
 	testPushBlockAndState(t, testBlock, testReceipts)
 }
 
 func testPushBlockAndState(t *testing.T, block *types.Block, receipts types.Receipts) {
-	t.Run("Test PushBlock and PushStateNode", func(t *testing.T) {
-		setup(t, block, receipts)
-		dumpData(t)
-		tearDown(t)
-	})
+	setup(t, block, receipts)
+	dumpData(t)
+	tearDown(t)
 }
 
 func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
