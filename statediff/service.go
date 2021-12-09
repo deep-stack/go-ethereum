@@ -50,8 +50,8 @@ import (
 const (
 	chainEventChanSize = 20000
 	genesisBlockNumber = 0
-	defaultRetryLimit  = 3 // default retry limit once deadlock is detected.
-	deadlockDetected = "deadlock detected" // 40P01 https://www.postgresql.org/docs/current/errcodes-appendix.html
+	defaultRetryLimit  = 3                   // default retry limit once deadlock is detected.
+	deadlockDetected   = "deadlock detected" // 40P01 https://www.postgresql.org/docs/current/errcodes-appendix.html
 )
 
 var writeLoopParams = Params{
