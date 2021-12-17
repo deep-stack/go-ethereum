@@ -135,12 +135,8 @@ func (tt *txTrie) getNodes() ([]*EthTxTrie, error) {
 		if err != nil {
 			return nil, err
 		}
-		c, err := RawdataToCid(MEthTxTrie, rawdata, multihash.KECCAK_256)
-		if err != nil {
-			return nil, err
-		}
 		tn := &TrieNode{
-			cid:     c,
+			cid:     keccak256ToCid(MEthTxTrie, k),
 			rawdata: rawdata,
 		}
 		out = append(out, &EthTxTrie{TrieNode: tn})
