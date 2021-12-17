@@ -49,9 +49,9 @@ func ResolveDriverType(str string) (DriverType, error) {
 var DefaultConfig = Config{
 	Hostname:     "localhost",
 	Port:         5432,
-	DatabaseName: "vulcanize_testing",
-	Username:     "postgres",
-	Password:     "",
+	DatabaseName: "vulcanize_public",
+	Username:     "vdbm",
+	Password:     "password",
 }
 
 // Config holds params for a Postgres db

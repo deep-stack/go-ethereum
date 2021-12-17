@@ -37,6 +37,7 @@ import (
 var (
 	err       error
 	db        sql.Database
+	ind       interfaces.StateDiffIndexer
 	chainConf = params.MainnetChainConfig
 )
 
@@ -79,7 +80,7 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ind, err := sql.NewStateDiffIndexer(context.Background(), chainConf, db)
+	ind, err = sql.NewStateDiffIndexer(context.Background(), chainConf, db)
 	require.NoError(t, err)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
@@ -90,9 +91,6 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 
 	defer func() {
 		if err := tx.Submit(err); err != nil {
-			t.Fatal(err)
-		}
-		if err := ind.Close(); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -106,4 +104,6 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 
 func tearDown(t *testing.T) {
 	sql.TearDownDB(t, db)
+	err = ind.Close()
+	require.NoError(t, err)
 }

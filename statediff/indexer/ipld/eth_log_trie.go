@@ -3,6 +3,8 @@ package ipld
 import (
 	"fmt"
 
+	node "github.com/ipfs/go-ipld-format"
+
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 
@@ -92,13 +94,13 @@ func newLogTrie() *logTrie {
 // getNodes invokes the localTrie, which computes the root hash of the
 // log trie and returns its sql keys, to return a slice
 // of EthLogTrie nodes.
-func (rt *logTrie) getNodes() ([]*EthLogTrie, error) {
+func (rt *logTrie) getNodes() ([]node.Node, error) {
 	keys, err := rt.getKeys()
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]*EthLogTrie, 0, len(keys))
+	out := make([]node.Node, 0, len(keys))
 	for _, k := range keys {
 		n, err := rt.getNodeFromDB(k)
 		if err != nil {
