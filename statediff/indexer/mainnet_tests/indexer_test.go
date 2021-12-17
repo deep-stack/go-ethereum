@@ -33,8 +33,8 @@ import (
 )
 
 var (
-	err error
-	db    *postgres.DB
+	err       error
+	db        *postgres.DB
 	chainConf = params.MainnetChainConfig
 )
 
@@ -86,7 +86,7 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 		testBlock.Difficulty())
 	require.NoError(t, err)
 
-	defer func(){
+	defer func() {
 		if err := tx.Close(err); err != nil {
 			t.Fatal(err)
 		}

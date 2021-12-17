@@ -299,7 +299,7 @@ type processArgs struct {
 	rctTrieNodes    []*ipld.EthRctTrie
 	txNodes         []*ipld.EthTx
 	txTrieNodes     []*ipld.EthTxTrie
-	logTrieNodes    [][]*ipld.EthLogTrie
+	logTrieNodes    [][]node.Node
 	logLeafNodeCIDs [][]cid.Cid
 	rctLeafNodeCIDs []cid.Cid
 }
