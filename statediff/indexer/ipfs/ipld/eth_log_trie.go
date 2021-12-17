@@ -3,6 +3,8 @@ package ipld
 import (
 	"fmt"
 
+	node "github.com/ipfs/go-ipld-format"
+
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ipfs/go-cid"
@@ -91,13 +93,13 @@ func newLogTrie() *logTrie {
 // getNodes invokes the localTrie, which computes the root hash of the
 // log trie and returns its database keys, to return a slice
 // of EthLogTrie nodes.
-func (rt *logTrie) getNodes() ([]*EthLogTrie, error) {
+func (rt *logTrie) getNodes() ([]node.Node, error) {
 	keys, err := rt.getKeys()
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]*EthLogTrie, 0, len(keys))
+	out := make([]node.Node, 0, len(keys))
 	for _, k := range keys {
 		n, err := rt.getNodeFromDB(k)
 		if err != nil {
@@ -114,14 +116,8 @@ func (rt *logTrie) getNodeFromDB(key []byte) (*EthLogTrie, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	c, err := RawdataToCid(MEthLogTrie, rawdata, multihash.KECCAK_256)
-	if err != nil {
-		return nil, err
-	}
-
 	tn := &TrieNode{
-		cid:     c,
+		cid:     keccak256ToCid(MEthLogTrie, key),
 		rawdata: rawdata,
 	}
 	return &EthLogTrie{TrieNode: tn}, nil

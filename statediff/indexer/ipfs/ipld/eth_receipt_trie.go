@@ -166,14 +166,8 @@ func (rt *rctTrie) getNodeFromDB(key []byte) (*EthRctTrie, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	cid, err := RawdataToCid(MEthTxReceiptTrie, rawdata, multihash.KECCAK_256)
-	if err != nil {
-		return nil, err
-	}
-
 	tn := &TrieNode{
-		cid:     cid,
+		cid:     keccak256ToCid(MEthTxReceiptTrie, key),
 		rawdata: rawdata,
 	}
 

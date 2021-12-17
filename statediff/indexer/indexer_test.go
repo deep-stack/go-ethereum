@@ -49,6 +49,7 @@ var (
 	mockBlock                                              *types.Block
 	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID cid.Cid
 	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID            cid.Cid
+	rctLeaf1, rctLeaf2, rctLeaf3, rctLeaf4, rctLeaf5       []byte
 	state1CID, state2CID, storageCID                       cid.Cid
 )
 
@@ -124,14 +125,49 @@ func init() {
 	trx3CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx3, multihash.KECCAK_256)
 	trx4CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx4, multihash.KECCAK_256)
 	trx5CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx5, multihash.KECCAK_256)
-	rct1CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct1, multihash.KECCAK_256)
-	rct2CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct2, multihash.KECCAK_256)
-	rct3CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct3, multihash.KECCAK_256)
-	rct4CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct4, multihash.KECCAK_256)
-	rct5CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct5, multihash.KECCAK_256)
+	/*
+		rct1Node, _ := ipld.NewReceipt(rcts[0])
+		rct2Node, _ := ipld.NewReceipt(rcts[1])
+		rct3Node, _ := ipld.NewReceipt(rcts[2])
+		rct4Node, _ := ipld.NewReceipt(rcts[3])
+		rct5Node, _ := ipld.NewReceipt(rcts[4])
+	*/
 	state1CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.ContractLeafNode, multihash.KECCAK_256)
 	state2CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.AccountLeafNode, multihash.KECCAK_256)
 	storageCID, _ = ipld.RawdataToCid(ipld.MEthStorageTrie, mocks.StorageLeafNode, multihash.KECCAK_256)
+
+	receiptTrie := ipld.NewRctTrie()
+
+	receiptTrie.Add(0, rct1)
+	receiptTrie.Add(1, rct2)
+	receiptTrie.Add(2, rct3)
+	receiptTrie.Add(3, rct4)
+	receiptTrie.Add(4, rct5)
+
+	rctLeafNodes, keys, _ := receiptTrie.GetLeafNodes()
+
+	rctleafNodeCids := make([]cid.Cid, len(rctLeafNodes))
+	orderedRctLeafNodes := make([][]byte, len(rctLeafNodes))
+	for i, rln := range rctLeafNodes {
+		var idx uint
+
+		r := bytes.NewReader(keys[i].TrieKey)
+		rlp.Decode(r, &idx)
+		rctleafNodeCids[idx] = rln.Cid()
+		orderedRctLeafNodes[idx] = rln.RawData()
+	}
+
+	rct1CID = rctleafNodeCids[0]
+	rct2CID = rctleafNodeCids[1]
+	rct3CID = rctleafNodeCids[2]
+	rct4CID = rctleafNodeCids[3]
+	rct5CID = rctleafNodeCids[4]
+
+	rctLeaf1 = orderedRctLeafNodes[0]
+	rctLeaf2 = orderedRctLeafNodes[1]
+	rctLeaf3 = orderedRctLeafNodes[2]
+	rctLeaf4 = orderedRctLeafNodes[3]
+	rctLeaf5 = orderedRctLeafNodes[4]
 }
 
 func setup(t *testing.T) {
@@ -416,7 +452,7 @@ func TestPublishAndIndexer(t *testing.T) {
 
 			switch c {
 			case rct1CID.String():
-				shared.ExpectEqual(t, data, rct1)
+				shared.ExpectEqual(t, data, rctLeaf1)
 				var postStatus uint64
 				pgStr = `SELECT post_status FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = db.Get(&postStatus, pgStr, c)
@@ -425,7 +461,7 @@ func TestPublishAndIndexer(t *testing.T) {
 				}
 				shared.ExpectEqual(t, postStatus, mocks.ExpectedPostStatus)
 			case rct2CID.String():
-				shared.ExpectEqual(t, data, rct2)
+				shared.ExpectEqual(t, data, rctLeaf2)
 				var postState string
 				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = db.Get(&postState, pgStr, c)
@@ -434,7 +470,7 @@ func TestPublishAndIndexer(t *testing.T) {
 				}
 				shared.ExpectEqual(t, postState, mocks.ExpectedPostState1)
 			case rct3CID.String():
-				shared.ExpectEqual(t, data, rct3)
+				shared.ExpectEqual(t, data, rctLeaf3)
 				var postState string
 				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = db.Get(&postState, pgStr, c)
@@ -443,7 +479,7 @@ func TestPublishAndIndexer(t *testing.T) {
 				}
 				shared.ExpectEqual(t, postState, mocks.ExpectedPostState2)
 			case rct4CID.String():
-				shared.ExpectEqual(t, data, rct4)
+				shared.ExpectEqual(t, data, rctLeaf4)
 				var postState string
 				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = db.Get(&postState, pgStr, c)
@@ -452,7 +488,7 @@ func TestPublishAndIndexer(t *testing.T) {
 				}
 				shared.ExpectEqual(t, postState, mocks.ExpectedPostState3)
 			case rct5CID.String():
-				shared.ExpectEqual(t, data, rct5)
+				shared.ExpectEqual(t, data, rctLeaf5)
 				var postState string
 				pgStr = `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = db.Get(&postState, pgStr, c)
