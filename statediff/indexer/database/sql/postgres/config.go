@@ -49,7 +49,7 @@ func ResolveDriverType(str string) (DriverType, error) {
 var DefaultConfig = Config{
 	Hostname:     "localhost",
 	Port:         5432,
-	DatabaseName: "vulcanize_test",
+	DatabaseName: "vulcanize_testing",
 	Username:     "postgres",
 	Password:     "",
 }
