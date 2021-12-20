@@ -56,7 +56,11 @@ ios:
 
 .PHONY: statedifftest
 statedifftest: | $(GOOSE)
-	MODE=statediff go test ./statediff/... -v
+	MODE=statediff go test -p 1 ./statediff/... -v
+
+.PHONY: statediff_filewriting_test
+statediff_filetest: | $(GOOSE)
+	MODE=statediff STATEDIFF_DB=file go test -p 1 ./statediff/... -v
 
 test: all
 	$(GORUN) build/ci.go test

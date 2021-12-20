@@ -46,6 +46,10 @@ func init() {
 		fmt.Println("Skipping statediff test")
 		os.Exit(0)
 	}
+	if os.Getenv("STATEDIFF_DB") != "file" {
+		fmt.Println("Skipping statediff .sql file writing mode test")
+		os.Exit(0)
+	}
 }
 
 func TestPushBlockAndState(t *testing.T) {
