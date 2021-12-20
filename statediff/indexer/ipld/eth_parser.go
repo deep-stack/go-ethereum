@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 
 	"github.com/ipfs/go-cid"
+	node "github.com/ipfs/go-ipld-format"
 	"github.com/multiformats/go-multihash"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -124,7 +125,7 @@ func FromBlockJSON(r io.Reader) (*EthHeader, []*EthTx, []*EthTxTrie, error) {
 
 // FromBlockAndReceipts takes a block and processes it
 // to return it a set of IPLD nodes for further processing.
-func FromBlockAndReceipts(block *types.Block, receipts []*types.Receipt) (*EthHeader, []*EthHeader, []*EthTx, []*EthTxTrie, []*EthReceipt, []*EthRctTrie, [][]*EthLogTrie, [][]cid.Cid, []cid.Cid, error) {
+func FromBlockAndReceipts(block *types.Block, receipts []*types.Receipt) (*EthHeader, []*EthHeader, []*EthTx, []*EthTxTrie, []*EthReceipt, []*EthRctTrie, [][]node.Node, [][]cid.Cid, []cid.Cid, error) {
 	// Process the header
 	headerNode, err := NewEthHeader(block.Header())
 	if err != nil {
@@ -149,10 +150,10 @@ func FromBlockAndReceipts(block *types.Block, receipts []*types.Receipt) (*EthHe
 	}
 
 	// Process the receipts and logs
-	rctNodes, tctTrieNodes, logTrieNodes, logLeafNodeCIDs, rctLeafNodeCIDs, err := processReceiptsAndLogs(receipts,
+	rctNodes, tctTrieNodes, logTrieAndLogNodes, logLeafNodeCIDs, rctLeafNodeCIDs, err := processReceiptsAndLogs(receipts,
 		block.Header().ReceiptHash[:])
 
-	return headerNode, uncleNodes, txNodes, txTrieNodes, rctNodes, tctTrieNodes, logTrieNodes, logLeafNodeCIDs, rctLeafNodeCIDs, err
+	return headerNode, uncleNodes, txNodes, txTrieNodes, rctNodes, tctTrieNodes, logTrieAndLogNodes, logLeafNodeCIDs, rctLeafNodeCIDs, err
 }
 
 // processTransactions will take the found transactions in a parsed block body
@@ -181,11 +182,11 @@ func processTransactions(txs []*types.Transaction, expectedTxRoot []byte) ([]*Et
 
 // processReceiptsAndLogs will take in receipts
 // to return IPLD node slices for eth-rct, eth-rct-trie, eth-log, eth-log-trie, eth-log-trie-CID, eth-rct-trie-CID
-func processReceiptsAndLogs(rcts []*types.Receipt, expectedRctRoot []byte) ([]*EthReceipt, []*EthRctTrie, [][]*EthLogTrie, [][]cid.Cid, []cid.Cid, error) {
+func processReceiptsAndLogs(rcts []*types.Receipt, expectedRctRoot []byte) ([]*EthReceipt, []*EthRctTrie, [][]node.Node, [][]cid.Cid, []cid.Cid, error) {
 	// Pre allocating memory.
 	ethRctNodes := make([]*EthReceipt, 0, len(rcts))
 	ethLogleafNodeCids := make([][]cid.Cid, 0, len(rcts))
-	ethLogTrieNodes := make([][]*EthLogTrie, 0, len(rcts))
+	ethLogTrieAndLogNodes := make([][]node.Node, 0, len(rcts))
 
 	receiptTrie := NewRctTrie()
 
@@ -196,7 +197,7 @@ func processReceiptsAndLogs(rcts []*types.Receipt, expectedRctRoot []byte) ([]*E
 			return nil, nil, nil, nil, nil, err
 		}
 		rct.LogRoot = logTrieHash
-		ethLogTrieNodes = append(ethLogTrieNodes, logTrieNodes)
+		ethLogTrieAndLogNodes = append(ethLogTrieAndLogNodes, logTrieNodes)
 		ethLogleafNodeCids = append(ethLogleafNodeCids, leafNodeCids)
 
 		ethRct, err := NewReceipt(rct)
@@ -236,14 +237,14 @@ func processReceiptsAndLogs(rcts []*types.Receipt, expectedRctRoot []byte) ([]*E
 		ethRctleafNodeCids[idx] = rln.Cid()
 	}
 
-	return ethRctNodes, rctTrieNodes, ethLogTrieNodes, ethLogleafNodeCids, ethRctleafNodeCids, err
+	return ethRctNodes, rctTrieNodes, ethLogTrieAndLogNodes, ethLogleafNodeCids, ethRctleafNodeCids, err
 }
 
 const keccak256Length = 32
 
-func processLogs(logs []*types.Log) ([]*EthLogTrie, []cid.Cid, common.Hash, error) {
+func processLogs(logs []*types.Log) ([]node.Node, []cid.Cid, common.Hash, error) {
 	logTr := newLogTrie()
-	shortLogCIDs := make(map[uint64]cid.Cid, len(logs))
+	shortLog := make(map[uint64]*EthLog, len(logs))
 	for idx, log := range logs {
 		logRaw, err := rlp.EncodeToBytes(log)
 		if err != nil {
@@ -260,7 +261,7 @@ func processLogs(logs []*types.Log) ([]*EthLogTrie, []cid.Cid, common.Hash, erro
 			if err != nil {
 				return nil, nil, common.Hash{}, err
 			}
-			shortLogCIDs[uint64(idx)] = logNode.Cid()
+			shortLog[uint64(idx)] = logNode
 		}
 		if err = logTr.Add(idx, logRaw); err != nil {
 			return nil, nil, common.Hash{}, err
@@ -289,9 +290,11 @@ func processLogs(logs []*types.Log) ([]*EthLogTrie, []cid.Cid, common.Hash, erro
 	}
 	// this is where we check which logs <= keccak256Length were actually internalized into parent branch node
 	// and replace those that were with the cid.Cid for the raw log IPLD
-	for idx, lCID := range shortLogCIDs {
-		if !leafNodeCids[idx].Defined() {
-			leafNodeCids[idx] = lCID
+	for i, l := range shortLog {
+		if !leafNodeCids[i].Defined() {
+			leafNodeCids[i] = l.Cid()
+			// if the leaf node was internalized, we append an IPLD for log itself to the list of IPLDs we need to publish
+			logTrieNodes = append(logTrieNodes, l)
 		}
 	}
 

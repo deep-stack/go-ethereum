@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package mainnet_tests
+package test_helpers
 
 import (
 	"context"
@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	defaultBlockFilePath    = "./block"
-	defaultReceiptsFilePath = "./receipts"
+	defaultBlockFilePath    = "../../../mainnet_data/block"
+	defaultReceiptsFilePath = "../../../mainnet_data/receipts"
 )
 
 const (
@@ -38,7 +38,8 @@ const (
 	TEST_BLOCK_NUMBER = "TEST_BLOCK_NUMBER"
 )
 
-var problemBlocks = []int64{
+// ProblemBlocks list of known problem blocks, with funky edge cases
+var ProblemBlocks = []int64{
 	12600011,
 	12619985,
 	12625121,

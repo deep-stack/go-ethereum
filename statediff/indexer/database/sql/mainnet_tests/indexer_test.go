@@ -18,18 +18,16 @@ package mainnet_tests
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"testing"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
@@ -37,7 +35,9 @@ import (
 )
 
 var (
-	sqlxdb    *sqlx.DB
+	err       error
+	db        sql.Database
+	ind       interfaces.StateDiffIndexer
 	chainConf = params.MainnetChainConfig
 )
 
@@ -71,17 +71,16 @@ func TestPushBlockAndState(t *testing.T) {
 func testPushBlockAndState(t *testing.T, block *types.Block, receipts types.Receipts) {
 	t.Run("Test PushBlock and PushStateNode", func(t *testing.T) {
 		setup(t, block, receipts)
-		dumpData(t)
 		tearDown(t)
 	})
 }
 
 func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
-	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
-		err := os.Remove(file.TestConfig.FilePath)
-		require.NoError(t, err)
+	db, err = postgres.SetupSQLXDB()
+	if err != nil {
+		t.Fatal(err)
 	}
-	ind, err := file.NewStateDiffIndexer(context.Background(), chainConf, file.TestConfig)
+	ind, err = sql.NewStateDiffIndexer(context.Background(), chainConf, db)
 	require.NoError(t, err)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
@@ -94,37 +93,17 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 		if err := tx.Submit(err); err != nil {
 			t.Fatal(err)
 		}
-		if err := ind.Close(); err != nil {
-			t.Fatal(err)
-		}
 	}()
 	for _, node := range mocks.StateDiffs {
 		err = ind.PushStateNode(tx, node, testBlock.Hash().String())
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*file.BatchTx).BlockNumber, testBlock.Number().Uint64())
-
-	connStr := postgres.DefaultConfig.DbConnectionString()
-
-	sqlxdb, err = sqlx.Connect("postgres", connStr)
-	if err != nil {
-		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
-	}
-}
-
-func dumpData(t *testing.T) {
-	sqlFileBytes, err := os.ReadFile(file.TestConfig.FilePath)
-	require.NoError(t, err)
-
-	_, err = sqlxdb.Exec(string(sqlFileBytes))
-	require.NoError(t, err)
+	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, testBlock.Number().Uint64())
 }
 
 func tearDown(t *testing.T) {
-	file.TearDownDB(t, sqlxdb)
-	err := os.Remove(file.TestConfig.FilePath)
-	require.NoError(t, err)
-	err = sqlxdb.Close()
+	sql.TearDownDB(t, db)
+	err = ind.Close()
 	require.NoError(t, err)
 }
