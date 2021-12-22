@@ -78,6 +78,12 @@ func (sqw *SQLWriter) Loop() {
 					if err := sqw.flush(); err != nil {
 						panic(fmt.Sprintf("error writing sql stmts buffer to file: %v", err))
 					}
+					if l > writeBufferSize {
+						if _, err := sqw.wc.Write(stmt); err != nil {
+							panic(fmt.Sprintf("error writing large sql stmt to file: %v", err))
+						}
+						continue
+					}
 				}
 				copy(sqw.collatedStmt[sqw.collationIndex:sqw.collationIndex+l], stmt)
 				sqw.collationIndex += l
