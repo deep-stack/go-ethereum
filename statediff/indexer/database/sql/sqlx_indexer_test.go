@@ -114,7 +114,7 @@ func TestSQLXIndexer(t *testing.T) {
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
-		// check that txs were properly indexed
+		// check that txs were properly indexed and published
 		trxs := make([]string, 0)
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1`
@@ -128,7 +128,7 @@ func TestSQLXIndexer(t *testing.T) {
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx3CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx4CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx5CID.String()))
-		// and published
+
 		transactions := mocks.MockBlock.Transactions()
 		type txResult struct {
 			TxType uint8 `db:"tx_type"`
@@ -291,7 +291,7 @@ func TestSQLXIndexer(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
 
-		// check receipts were properly indexed
+		// check receipts were properly indexed and published
 		rcts := make([]string, 0)
 		pgStr := `SELECT receipt_cids.leaf_cid FROM eth.receipt_cids, eth.transaction_cids, eth.header_cids
 				WHERE receipt_cids.tx_id = transaction_cids.tx_hash
@@ -302,14 +302,19 @@ func TestSQLXIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, len(rcts), 5)
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct1CID.String()))
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct2CID.String()))
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct3CID.String()))
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct4CID.String()))
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct5CID.String()))
 
-		for idx, rctLeafCID := range rcts {
+		for idx, c := range rcts {
 			result := make([]models.IPLDModel, 0)
 			pgStr = `SELECT data
 					FROM eth.receipt_cids
 					INNER JOIN public.blocks ON (receipt_cids.leaf_mh_key = public.blocks.key)
 					WHERE receipt_cids.leaf_cid = $1`
-			err = db.Select(context.Background(), &result, pgStr, rctLeafCID)
+			err = db.Select(context.Background(), &result, pgStr, c)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -323,10 +328,7 @@ func TestSQLXIndexer(t *testing.T) {
 			require.NoError(t, err)
 
 			test_helpers.ExpectEqual(t, expectedRct, nodeElements[1].([]byte))
-		}
 
-		// and published
-		for _, c := range rcts {
 			dc, err := cid.Decode(c)
 			if err != nil {
 				t.Fatal(err)
@@ -341,7 +343,7 @@ func TestSQLXIndexer(t *testing.T) {
 			postStatePgStr := `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 			switch c {
 			case rct1CID.String():
-				test_helpers.ExpectEqual(t, data, rct1)
+				test_helpers.ExpectEqual(t, data, rctLeaf1)
 				var postStatus uint64
 				pgStr = `SELECT post_status FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = db.Get(context.Background(), &postStatus, pgStr, c)
@@ -350,7 +352,7 @@ func TestSQLXIndexer(t *testing.T) {
 				}
 				test_helpers.ExpectEqual(t, postStatus, mocks.ExpectedPostStatus)
 			case rct2CID.String():
-				test_helpers.ExpectEqual(t, data, rct2)
+				test_helpers.ExpectEqual(t, data, rctLeaf2)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
@@ -358,7 +360,7 @@ func TestSQLXIndexer(t *testing.T) {
 				}
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState1)
 			case rct3CID.String():
-				test_helpers.ExpectEqual(t, data, rct3)
+				test_helpers.ExpectEqual(t, data, rctLeaf3)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
@@ -366,7 +368,7 @@ func TestSQLXIndexer(t *testing.T) {
 				}
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState2)
 			case rct4CID.String():
-				test_helpers.ExpectEqual(t, data, rct4)
+				test_helpers.ExpectEqual(t, data, rctLeaf4)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {
@@ -374,7 +376,7 @@ func TestSQLXIndexer(t *testing.T) {
 				}
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState3)
 			case rct5CID.String():
-				test_helpers.ExpectEqual(t, data, rct5)
+				test_helpers.ExpectEqual(t, data, rctLeaf5)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
 				if err != nil {

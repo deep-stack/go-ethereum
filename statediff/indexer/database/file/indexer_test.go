@@ -52,11 +52,10 @@ var (
 	ipfsPgGet = `SELECT data FROM public.blocks
 					WHERE key = $1`
 	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5  []byte
-	txs                                                    types.Transactions
-	rcts                                                   types.Receipts
 	mockBlock                                              *types.Block
 	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID cid.Cid
 	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID            cid.Cid
+	rctLeaf1, rctLeaf2, rctLeaf3, rctLeaf4, rctLeaf5       []byte
 	state1CID, state2CID, storageCID                       cid.Cid
 )
 
@@ -67,7 +66,7 @@ func init() {
 	}
 
 	mockBlock = mocks.MockBlock
-	txs, rcts = mocks.MockBlock.Transactions(), mocks.MockReceipts
+	txs, rcts := mocks.MockBlock.Transactions(), mocks.MockReceipts
 
 	buf := new(bytes.Buffer)
 	txs.EncodeIndex(0, buf)
@@ -126,14 +125,42 @@ func init() {
 	trx3CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx3, multihash.KECCAK_256)
 	trx4CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx4, multihash.KECCAK_256)
 	trx5CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx5, multihash.KECCAK_256)
-	rct1CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct1, multihash.KECCAK_256)
-	rct2CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct2, multihash.KECCAK_256)
-	rct3CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct3, multihash.KECCAK_256)
-	rct4CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct4, multihash.KECCAK_256)
-	rct5CID, _ = ipld.RawdataToCid(ipld.MEthTxReceipt, rct5, multihash.KECCAK_256)
 	state1CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.ContractLeafNode, multihash.KECCAK_256)
 	state2CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.AccountLeafNode, multihash.KECCAK_256)
 	storageCID, _ = ipld.RawdataToCid(ipld.MEthStorageTrie, mocks.StorageLeafNode, multihash.KECCAK_256)
+
+	receiptTrie := ipld.NewRctTrie()
+
+	receiptTrie.Add(0, rct1)
+	receiptTrie.Add(1, rct2)
+	receiptTrie.Add(2, rct3)
+	receiptTrie.Add(3, rct4)
+	receiptTrie.Add(4, rct5)
+
+	rctLeafNodes, keys, _ := receiptTrie.GetLeafNodes()
+
+	rctleafNodeCids := make([]cid.Cid, len(rctLeafNodes))
+	orderedRctLeafNodes := make([][]byte, len(rctLeafNodes))
+	for i, rln := range rctLeafNodes {
+		var idx uint
+
+		r := bytes.NewReader(keys[i].TrieKey)
+		rlp.Decode(r, &idx)
+		rctleafNodeCids[idx] = rln.Cid()
+		orderedRctLeafNodes[idx] = rln.RawData()
+	}
+
+	rct1CID = rctleafNodeCids[0]
+	rct2CID = rctleafNodeCids[1]
+	rct3CID = rctleafNodeCids[2]
+	rct4CID = rctleafNodeCids[3]
+	rct5CID = rctleafNodeCids[4]
+
+	rctLeaf1 = orderedRctLeafNodes[0]
+	rctLeaf2 = orderedRctLeafNodes[1]
+	rctLeaf3 = orderedRctLeafNodes[2]
+	rctLeaf4 = orderedRctLeafNodes[3]
+	rctLeaf5 = orderedRctLeafNodes[4]
 }
 
 func setup(t *testing.T) {
@@ -218,7 +245,7 @@ func TestFileIndexer(t *testing.T) {
 		dumpData(t)
 		defer tearDown(t)
 
-		// check that txs were properly indexed
+		// check that txs were properly indexed and published
 		trxs := make([]string, 0)
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1`
@@ -232,7 +259,8 @@ func TestFileIndexer(t *testing.T) {
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx3CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx4CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx5CID.String()))
-		// and published
+
+		transactions := mocks.MockBlock.Transactions()
 		type txResult struct {
 			TxType uint8 `db:"tx_type"`
 			Value  string
@@ -261,8 +289,8 @@ func TestFileIndexer(t *testing.T) {
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
-				if txRes.Value != txs[0].Value().String() {
-					t.Fatalf("expected tx value %s got %s", txs[0].Value().String(), txRes.Value)
+				if txRes.Value != transactions[0].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[0].Value().String(), txRes.Value)
 				}
 			case trx2CID.String():
 				test_helpers.ExpectEqual(t, data, tx2)
@@ -274,8 +302,8 @@ func TestFileIndexer(t *testing.T) {
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
-				if txRes.Value != txs[1].Value().String() {
-					t.Fatalf("expected tx value %s got %s", txs[1].Value().String(), txRes.Value)
+				if txRes.Value != transactions[1].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[1].Value().String(), txRes.Value)
 				}
 			case trx3CID.String():
 				test_helpers.ExpectEqual(t, data, tx3)
@@ -287,8 +315,8 @@ func TestFileIndexer(t *testing.T) {
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
-				if txRes.Value != txs[2].Value().String() {
-					t.Fatalf("expected tx value %s got %s", txs[2].Value().String(), txRes.Value)
+				if txRes.Value != transactions[2].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[2].Value().String(), txRes.Value)
 				}
 			case trx4CID.String():
 				test_helpers.ExpectEqual(t, data, tx4)
@@ -300,8 +328,8 @@ func TestFileIndexer(t *testing.T) {
 				if txRes.TxType != types.AccessListTxType {
 					t.Fatalf("expected AccessListTxType (1), got %d", txRes.TxType)
 				}
-				if txRes.Value != txs[3].Value().String() {
-					t.Fatalf("expected tx value %s got %s", txs[3].Value().String(), txRes.Value)
+				if txRes.Value != transactions[3].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[3].Value().String(), txRes.Value)
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
@@ -333,8 +361,8 @@ func TestFileIndexer(t *testing.T) {
 				if txRes.TxType != types.DynamicFeeTxType {
 					t.Fatalf("expected DynamicFeeTxType (2), got %d", txRes.TxType)
 				}
-				if txRes.Value != txs[4].Value().String() {
-					t.Fatalf("expected tx value %s got %s", txs[4].Value().String(), txRes.Value)
+				if txRes.Value != transactions[4].Value().String() {
+					t.Fatalf("expected tx value %s got %s", transactions[4].Value().String(), txRes.Value)
 				}
 			}
 		}
@@ -396,7 +424,7 @@ func TestFileIndexer(t *testing.T) {
 		dumpData(t)
 		defer tearDown(t)
 
-		// check receipts were properly indexed
+		// check receipts were properly indexed and published
 		rcts := make([]string, 0)
 		pgStr := `SELECT receipt_cids.leaf_cid FROM eth.receipt_cids, eth.transaction_cids, eth.header_cids
 				WHERE receipt_cids.tx_id = transaction_cids.tx_hash
@@ -407,14 +435,19 @@ func TestFileIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, len(rcts), 5)
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct1CID.String()))
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct2CID.String()))
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct3CID.String()))
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct4CID.String()))
+		expectTrue(t, test_helpers.ListContainsString(rcts, rct5CID.String()))
 
-		for idx, rctLeafCID := range rcts {
+		for idx, c := range rcts {
 			result := make([]models.IPLDModel, 0)
 			pgStr = `SELECT data
 					FROM eth.receipt_cids
 					INNER JOIN public.blocks ON (receipt_cids.leaf_mh_key = public.blocks.key)
 					WHERE receipt_cids.leaf_cid = $1`
-			err = sqlxdb.Select(&result, pgStr, rctLeafCID)
+			err = sqlxdb.Select(&result, pgStr, c)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -428,10 +461,7 @@ func TestFileIndexer(t *testing.T) {
 			require.NoError(t, err)
 
 			test_helpers.ExpectEqual(t, expectedRct, nodeElements[1].([]byte))
-		}
 
-		// and published
-		for _, c := range rcts {
 			dc, err := cid.Decode(c)
 			if err != nil {
 				t.Fatal(err)
@@ -446,7 +476,7 @@ func TestFileIndexer(t *testing.T) {
 			postStatePgStr := `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 			switch c {
 			case rct1CID.String():
-				test_helpers.ExpectEqual(t, data, rct1)
+				test_helpers.ExpectEqual(t, data, rctLeaf1)
 				var postStatus uint64
 				pgStr = `SELECT post_status FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = sqlxdb.Get(&postStatus, pgStr, c)
@@ -455,7 +485,7 @@ func TestFileIndexer(t *testing.T) {
 				}
 				test_helpers.ExpectEqual(t, postStatus, mocks.ExpectedPostStatus)
 			case rct2CID.String():
-				test_helpers.ExpectEqual(t, data, rct2)
+				test_helpers.ExpectEqual(t, data, rctLeaf2)
 				var postState string
 				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
@@ -463,7 +493,7 @@ func TestFileIndexer(t *testing.T) {
 				}
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState1)
 			case rct3CID.String():
-				test_helpers.ExpectEqual(t, data, rct3)
+				test_helpers.ExpectEqual(t, data, rctLeaf3)
 				var postState string
 				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
@@ -471,7 +501,7 @@ func TestFileIndexer(t *testing.T) {
 				}
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState2)
 			case rct4CID.String():
-				test_helpers.ExpectEqual(t, data, rct4)
+				test_helpers.ExpectEqual(t, data, rctLeaf4)
 				var postState string
 				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
@@ -479,7 +509,7 @@ func TestFileIndexer(t *testing.T) {
 				}
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState3)
 			case rct5CID.String():
-				test_helpers.ExpectEqual(t, data, rct5)
+				test_helpers.ExpectEqual(t, data, rctLeaf5)
 				var postState string
 				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
