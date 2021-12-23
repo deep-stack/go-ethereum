@@ -73,24 +73,43 @@ type Payload struct {
 ## Usage
 This state diffing service runs as an auxiliary service concurrent to the regular syncing process of the geth node.
 
-
 ### CLI configuration
 This service introduces a CLI flag namespace `statediff`
 
 `--statediff` flag is used to turn on the service
 `--statediff.writing` is used to tell the service to write state diff objects it produces from synced ChainEvents directly to a configured Postgres database
 `--statediff.workers` is used to set the number of concurrent workers to process state diff objects and write them into the database
-`--statediff.db` is the connection string for the Postgres database to write to
-`--statediff.db.init` indicates whether we need to initialize a new database; set true if its the first time running the process on a given database
-`--statediff.dbnodeid` is the node id to use in the Postgres database
-`--statediff.dbclientname` is the client name to use in the Postgres database
+`--statediff.db.type` is the type of database we write out to (current options: postgres, dump, file)
+`--statediff.dump.dst` is the destination to write to when operating in database dump mode (stdout, stderr, discard)
+`--statediff.db.driver` is the specific driver to use for the database (current options for postgres: pgx and sqlx)
+`--statediff.db.host` is the hostname/ip to dial to connect to the database
+`--statediff.db.port` is the port to dial to connect to the database
+`--statediff.db.name` is the name of the database to connect to
+`--statediff.db.user` is the user to connect to the database as
+`--statediff.db.password` is the password to use to connect to the database
+`--statediff.db.conntimeout` is the connection timeout (in seconds)
+`--statediff.db.maxconns` is the maximum number of database connections
+`--statediff.db.minconns` is the minimum number of database connections
+`--statediff.db.maxidleconns` is the maximum number of idle connections
+`--statediff.db.maxconnidletime` is the maximum lifetime for an idle connection (in seconds)
+`--statediff.db.maxconnlifetime` is the maximum lifetime for a connection (in seconds)
+`--statediff.db.nodeid` is the node id to use in the Postgres database
+`--statediff.db.clientname` is the client name to use in the Postgres database
+`--statediff.file.path` full path (including filename) to write statediff data out to when operating in file mode
 
 The service can only operate in full sync mode (`--syncmode=full`), but only the historical RPC endpoints require an archive node (`--gcmode=archive`)
 
 e.g.
 `
-./build/bin/geth --syncmode=full --gcmode=archive --statediff --statediff.writing --statediff.db=postgres://localhost:5432/vulcanize_testing?sslmode=disable --statediff.db.init=true --statediff.dbnodeid={nodeId} --statediff.dbclientname={dbClientName}
+./build/bin/geth --syncmode=full --gcmode=archive --statediff --statediff.writing --statediff.db.type=postgres --statediff.db.driver=sqlx --statediff.db.host=localhost --statediff.db.port=5432 --statediff.db.name=vulcanize_test --statediff.db.user=postgres --statediff.db.nodeid=nodeid --statediff.db.clientname=clientname
 `
+
+When operating in `--statediff.db.type=file` mode, the service will write SQL statements out to the file designated by
+`--statediff.file.path`. Please note that it writes out SQL statements with all `ON CONFLICT` constraint checks dropped.
+This is done so that we can scale out the production of the SQL statements horizontally, merge the separate SQL files produced,
+de-duplicate using unix tools (`sort statediff.sql | uniq` or `sort -u statediff.sql`), bulk load using psql
+(`psql db_name --set ON_ERROR_STOP=on -f statediff.sql`), and then add our primary and foreign key constraints and indexes
+back afterwards.
 
 ### RPC endpoints
 The state diffing service exposes both a WS subscription endpoint, and a number of HTTP unary endpoints.

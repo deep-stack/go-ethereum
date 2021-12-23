@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/statediff"
-	"github.com/ethereum/go-ethereum/statediff/testhelpers"
+	"github.com/ethereum/go-ethereum/statediff/test_helpers"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
 
@@ -53,8 +53,8 @@ var (
 	block1CoinbaseAccount, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(5000000000000000000),
-		CodeHash: testhelpers.NullCodeHash.Bytes(),
-		Root:     testhelpers.EmptyContractRoot,
+		CodeHash: test_helpers.NullCodeHash.Bytes(),
+		Root:     test_helpers.EmptyContractRoot,
 	})
 	block1CoinbaseLeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("38251692195afc818c92b485fcb8a4691af89cbe5a2ab557b83a4261be2a9a"),
@@ -125,8 +125,8 @@ var (
 	block2CoinbaseAccount, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(5000000000000000000),
-		CodeHash: testhelpers.NullCodeHash.Bytes(),
-		Root:     testhelpers.EmptyContractRoot,
+		CodeHash: test_helpers.NullCodeHash.Bytes(),
+		Root:     test_helpers.EmptyContractRoot,
 	})
 	block2CoinbaseLeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("20679cbcf198c1741a6f4e4473845659a30caa8b26f8d37a0be2e2bc0d8892"),
@@ -137,8 +137,8 @@ var (
 	block2MovedPremineAccount, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    0,
 		Balance:  block2MovedPremineBalance,
-		CodeHash: testhelpers.NullCodeHash.Bytes(),
-		Root:     testhelpers.EmptyContractRoot,
+		CodeHash: test_helpers.NullCodeHash.Bytes(),
+		Root:     test_helpers.EmptyContractRoot,
 	})
 	block2MovedPremineLeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("20f2e24db7943eab4415f99e109698863b0fecca1cf9ffc500f38cefbbe29e"),
@@ -231,8 +231,8 @@ var (
 	block3CoinbaseAccount, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    0,
 		Balance:  blcok3CoinbaseBalance,
-		CodeHash: testhelpers.NullCodeHash.Bytes(),
-		Root:     testhelpers.EmptyContractRoot,
+		CodeHash: test_helpers.NullCodeHash.Bytes(),
+		Root:     test_helpers.EmptyContractRoot,
 	})
 	block3CoinbaseLeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("3a174f00e64521a535f35e67c1aa241951c791639b2f3d060f49c5d9fa8b9e"),
@@ -244,8 +244,8 @@ var (
 	block3MovedPremineAccount1, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    0,
 		Balance:  block3MovedPremineBalance1,
-		CodeHash: testhelpers.NullCodeHash.Bytes(),
-		Root:     testhelpers.EmptyContractRoot,
+		CodeHash: test_helpers.NullCodeHash.Bytes(),
+		Root:     test_helpers.EmptyContractRoot,
 	})
 	block3MovedPremineLeafNode1, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("3ced93917e658d10e2d9009470dad72b63c898d173721194a12f2ae5e190"), // ce573ced93917e658d10e2d9009470dad72b63c898d173721194a12f2ae5e190
@@ -257,8 +257,8 @@ var (
 	block3MovedPremineAccount2, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    0,
 		Balance:  block3MovedPremineBalance2,
-		CodeHash: testhelpers.NullCodeHash.Bytes(),
-		Root:     testhelpers.EmptyContractRoot,
+		CodeHash: test_helpers.NullCodeHash.Bytes(),
+		Root:     test_helpers.EmptyContractRoot,
 	})
 	block3MovedPremineLeafNode2, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("33bc1e69eedf90f402e11f6862da14ed8e50156635a04d6393bbae154012"), // ce5783bc1e69eedf90f402e11f6862da14ed8e50156635a04d6393bbae154012
@@ -480,7 +480,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 	var tests = []struct {
 		name              string
 		startingArguments statediff.Args
-		expected          *statediff.StateObject
+		expected          *sdtypes.StateObject
 	}{
 		// note that block0 (genesis) has over 1000 nodes due to the pre-allocation for the crowd-sale
 		// it is not feasible to write a unit test of that size at this time
@@ -493,7 +493,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 				BlockNumber:  block1.Number(),
 				BlockHash:    block1.Hash(),
 			},
-			&statediff.StateObject{
+			&sdtypes.StateObject{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
 				Nodes: []sdtypes.StateNode{
@@ -536,7 +536,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 				BlockNumber:  block2.Number(),
 				BlockHash:    block2.Hash(),
 			},
-			&statediff.StateObject{
+			&sdtypes.StateObject{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
 				Nodes: []sdtypes.StateNode{
@@ -594,7 +594,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 				BlockNumber:  block3.Number(),
 				BlockHash:    block3.Hash(),
 			},
-			&statediff.StateObject{
+			&sdtypes.StateObject{
 				BlockNumber: block3.Number(),
 				BlockHash:   block3.Hash(),
 				Nodes: []sdtypes.StateNode{

@@ -24,6 +24,8 @@ import (
 	"sync"
 	"testing"
 
+	types2 "github.com/ethereum/go-ethereum/statediff/types"
+
 	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	statediff "github.com/ethereum/go-ethereum/statediff"
-	"github.com/ethereum/go-ethereum/statediff/testhelpers/mocks"
+	"github.com/ethereum/go-ethereum/statediff/test_helpers/mocks"
 )
 
 func TestServiceLoop(t *testing.T) {
@@ -218,7 +220,7 @@ func TestGetStateDiffAt(t *testing.T) {
 }
 
 func testErrorInStateDiffAt(t *testing.T) {
-	mockStateDiff := statediff.StateObject{
+	mockStateDiff := types2.StateObject{
 		BlockNumber: testBlock1.Number(),
 		BlockHash:   testBlock1.Hash(),
 	}

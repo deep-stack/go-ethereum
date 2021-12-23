@@ -22,18 +22,16 @@ import (
 	"crypto/rand"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
-
-	"github.com/ethereum/go-ethereum/trie"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/statediff/testhelpers"
+	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	"github.com/ethereum/go-ethereum/statediff/test_helpers"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // Test variables
@@ -51,6 +49,7 @@ var (
 		Difficulty:  big.NewInt(5000000),
 		Extra:       []byte{},
 		BaseFee:     big.NewInt(params.InitialBaseFee),
+		Coinbase:    common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476777"),
 	}
 	MockTransactions, MockReceipts, SenderAddr        = createTransactionsAndReceipts(TestConfig, BlockNumber)
 	MockBlock                                         = types.NewBlock(&MockHeader, MockTransactions, nil, MockReceipts, new(trie.Trie))
@@ -111,7 +110,7 @@ var (
 	nonce1             = uint64(1)
 	ContractRoot       = "0x821e2556a290c86405f8160a2d662042a431ba456b9db265c79bb837c04be5f0"
 	ContractCodeHash   = common.HexToHash("0x753f98a8d4328b15636e46f66f2cb4bc860100aa17967cc145fcd17d1d4710ea")
-	ContractLeafKey    = testhelpers.AddressToLeafKey(ContractAddress)
+	ContractLeafKey    = test_helpers.AddressToLeafKey(ContractAddress)
 	ContractAccount, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    nonce1,
 		Balance:  big.NewInt(0),
@@ -127,8 +126,8 @@ var (
 	nonce0          = uint64(0)
 	AccountRoot     = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 	AccountCodeHash = common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
-	AccountLeafKey  = testhelpers.Account2LeafKey
-	RemovedLeafKey  = testhelpers.Account1LeafKey
+	AccountLeafKey  = test_helpers.Account2LeafKey
+	RemovedLeafKey  = test_helpers.Account1LeafKey
 	Account, _      = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    nonce0,
 		Balance:  big.NewInt(1000),
@@ -218,6 +217,7 @@ func NewLegacyData() *LegacyData {
 		ReceiptHash: common.HexToHash("0x0"),
 		Difficulty:  big.NewInt(5000000),
 		Extra:       []byte{},
+		Coinbase:    common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476888"),
 	}
 
 	mockTransactions, mockReceipts, senderAddr := createLegacyTransactionsAndReceipts(config, blockNumber)
@@ -308,7 +308,7 @@ func createTransactionsAndReceipts(config *params.ChainConfig, blockNumber *big.
 		GasPrice: big.NewInt(100),
 		Gas:      50,
 		To:       &AnotherAddress,
-		Value:    big.NewInt(1000),
+		Value:    big.NewInt(999),
 		Data:     []byte{},
 		AccessList: types.AccessList{
 			AccessListEntry1,
