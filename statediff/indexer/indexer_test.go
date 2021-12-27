@@ -125,13 +125,6 @@ func init() {
 	trx3CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx3, multihash.KECCAK_256)
 	trx4CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx4, multihash.KECCAK_256)
 	trx5CID, _ = ipld.RawdataToCid(ipld.MEthTx, tx5, multihash.KECCAK_256)
-	/*
-		rct1Node, _ := ipld.NewReceipt(rcts[0])
-		rct2Node, _ := ipld.NewReceipt(rcts[1])
-		rct3Node, _ := ipld.NewReceipt(rcts[2])
-		rct4Node, _ := ipld.NewReceipt(rcts[3])
-		rct5Node, _ := ipld.NewReceipt(rcts[4])
-	*/
 	state1CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.ContractLeafNode, multihash.KECCAK_256)
 	state2CID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, mocks.AccountLeafNode, multihash.KECCAK_256)
 	storageCID, _ = ipld.RawdataToCid(ipld.MEthStorageTrie, mocks.StorageLeafNode, multihash.KECCAK_256)
@@ -241,7 +234,7 @@ func TestPublishAndIndexer(t *testing.T) {
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
 		defer tearDown(t)
-		// check that txs were properly indexed
+		// check that txs were properly indexed and published
 		trxs := make([]string, 0)
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.id)
 				WHERE header_cids.block_number = $1`
@@ -255,7 +248,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		expectTrue(t, shared.ListContainsString(trxs, trx3CID.String()))
 		expectTrue(t, shared.ListContainsString(trxs, trx4CID.String()))
 		expectTrue(t, shared.ListContainsString(trxs, trx5CID.String()))
-		// and published
+
 		for _, c := range trxs {
 			dc, err := cid.Decode(c)
 			if err != nil {
@@ -402,7 +395,7 @@ func TestPublishAndIndexer(t *testing.T) {
 		setup(t)
 		defer tearDown(t)
 
-		// check receipts were properly indexed
+		// check receipts were properly indexed and published
 		rcts := make([]string, 0)
 		pgStr := `SELECT receipt_cids.leaf_cid FROM eth.receipt_cids, eth.transaction_cids, eth.header_cids
 				WHERE receipt_cids.tx_id = transaction_cids.id
@@ -413,14 +406,19 @@ func TestPublishAndIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 		shared.ExpectEqual(t, len(rcts), 5)
+		expectTrue(t, shared.ListContainsString(rcts, rct1CID.String()))
+		expectTrue(t, shared.ListContainsString(rcts, rct2CID.String()))
+		expectTrue(t, shared.ListContainsString(rcts, rct3CID.String()))
+		expectTrue(t, shared.ListContainsString(rcts, rct4CID.String()))
+		expectTrue(t, shared.ListContainsString(rcts, rct5CID.String()))
 
-		for idx, rctLeafCID := range rcts {
+		for idx, c := range rcts {
 			result := make([]ipfs.BlockModel, 0)
 			pgStr = `SELECT data
 					FROM eth.receipt_cids
 					INNER JOIN public.blocks ON (receipt_cids.leaf_mh_key = public.blocks.key)
 					WHERE receipt_cids.leaf_cid = $1`
-			err = db.Select(&result, pgStr, rctLeafCID)
+			err = db.Select(&result, pgStr, c)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -434,10 +432,7 @@ func TestPublishAndIndexer(t *testing.T) {
 			require.NoError(t, err)
 
 			shared.ExpectEqual(t, expectedRct, nodeElements[1].([]byte))
-		}
 
-		// and published
-		for _, c := range rcts {
 			dc, err := cid.Decode(c)
 			if err != nil {
 				t.Fatal(err)
