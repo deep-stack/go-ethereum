@@ -796,6 +796,7 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+
 	StateDiffFlag = cli.BoolFlag{
 		Name:  "statediff",
 		Usage: "Enables the processing of state diffs between each block",
