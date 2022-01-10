@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - statediff
-      - statediff-v2.0.0
-      - v1.10.15-statediff
+      - statediff-v2
+      - v1.10.15-statediff-v2
       - v1.10.14-statediff
       - v1.10.13-statediff
       - v1.10.12-statediff
