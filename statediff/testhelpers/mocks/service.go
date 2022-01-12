@@ -332,3 +332,11 @@ func sendNonBlockingQuit(id rpc.ID, sub statediff.Subscription) {
 		log.Info("unable to close subscription %s; channel has no receiver", id)
 	}
 }
+
+func (sds *MockStateDiffService) WatchAddress(address common.Address) error {
+	return nil
+}
+
+func (sds *MockStateDiffService) GetWathchedAddresses() []common.Address {
+	return []common.Address{}
+}
