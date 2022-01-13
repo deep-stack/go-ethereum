@@ -18,11 +18,8 @@ package statediff
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,9 +54,6 @@ const (
 	defaultRetryLimit  = 3                   // default retry limit once deadlock is detected.
 	deadlockDetected   = "deadlock detected" // 40P01 https://www.postgresql.org/docs/current/errcodes-appendix.html
 )
-
-// TODO: Take the watched addresses file path as a CLI arg.
-const watchedAddressesFile = "./watched-addresses.json"
 
 var writeLoopParams = Params{
 	IntermediateStateNodes:   true,
@@ -109,7 +103,7 @@ type IService interface {
 	// Event loop for progressively processing and writing diffs directly to DB
 	WriteLoop(chainEventCh chan core.ChainEvent)
 	// Method to add an address to be watched to write loop params
-	WatchAddress(address common.Address) error
+	WatchAddress(operation OperationType, addresses []common.Address) error
 	// Method to get currently watched addresses from write loop params
 	GetWathchedAddresses() []common.Address
 }
@@ -170,6 +164,7 @@ func NewBlockCache(max uint) blockCache {
 func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params ServiceParams) error {
 	blockChain := ethServ.BlockChain()
 	var indexer ind.Indexer
+	var db *postgres.DB
 	quitCh := make(chan bool)
 	if params.DBParams != nil {
 		info := nodeinfo.Info{
@@ -212,7 +207,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	stack.RegisterLifecycle(sds)
 	stack.RegisterAPIs(sds.APIs())
 
-	err := loadWatchedAddresses()
+	err := loadWatchedAddresses(db)
 	if err != nil {
 		return err
 	}
@@ -731,38 +726,55 @@ func (sds *Service) writeStateDiffWithRetry(block *types.Block, parentRoot commo
 	return err
 }
 
-// Adds the provided address to the list of watched addresses in write loop params and to the watched addresses file
-func (sds *Service) WatchAddress(address common.Address) error {
-	// Check if address is already being watched
-	if containsAddress(writeLoopParams.WatchedAddresses, address) {
-		return fmt.Errorf("Address %s already watched", address)
-	}
+// Performs Add | Remove | Set | Clear operation on the watched addresses in writeLoopParams and the db with provided addresses
+func (sds *Service) WatchAddress(operation OperationType, addresses []common.Address) error {
+	// check operation
+	switch operation {
+	case Add:
+		for _, address := range addresses {
+			// Check if address is already being watched
+			if containsAddress(writeLoopParams.WatchedAddresses, address) != -1 {
+				return fmt.Errorf("Address %s already watched", address)
+			}
+		}
 
-	// Check if the watched addresses file exists
-	fileExists, err := doesFileExist(watchedAddressesFile)
-	if err != nil {
-		return err
-	}
-
-	// Create the watched addresses file if doesn't exist
-	if !fileExists {
-		_, err := os.Create(watchedAddressesFile)
+		// TODO: Make sure WriteLoop doesn't call statediffing before the params are updated for the current block
+		// TODO: Get the current block
+		err := sds.indexer.InsertWatchedAddresses(addresses, common.Big1)
 		if err != nil {
 			return err
 		}
+
+		writeLoopParams.WatchedAddresses = append(writeLoopParams.WatchedAddresses, addresses...)
+	case Remove:
+		err := sds.indexer.RemoveWatchedAddresses(addresses)
+		if err != nil {
+			return err
+		}
+
+		removeWatchedAddresses(writeLoopParams.WatchedAddresses, addresses)
+	case Set:
+		err := sds.indexer.ClearWatchedAddresses()
+		if err != nil {
+			return err
+		}
+
+		err = sds.indexer.InsertWatchedAddresses(addresses, common.Big1)
+		if err != nil {
+			return err
+		}
+
+		writeLoopParams.WatchedAddresses = addresses
+	case Clear:
+		err := sds.indexer.ClearWatchedAddresses()
+		if err != nil {
+			return err
+		}
+
+		writeLoopParams.WatchedAddresses = nil
+	default:
+		return fmt.Errorf("Unexpected operation %s", operation)
 	}
-
-	watchedAddresses := append(writeLoopParams.WatchedAddresses, address)
-
-	// Write the updated list of watched address to a json file
-	content, err := json.Marshal(watchedAddresses)
-	err = ioutil.WriteFile(watchedAddressesFile, content, 0644)
-	if err != nil {
-		return err
-	}
-
-	// Update the in-memory params as well
-	writeLoopParams.WatchedAddresses = watchedAddresses
 
 	return nil
 }
@@ -770,51 +782,4 @@ func (sds *Service) WatchAddress(address common.Address) error {
 // Gets currently watched addresses from the in-memory write loop params
 func (sds *Service) GetWathchedAddresses() []common.Address {
 	return writeLoopParams.WatchedAddresses
-}
-
-// loadWatchedAddresses is used to load watched addresses to the in-memory write loop params from a json file if it exists
-func loadWatchedAddresses() error {
-	// Check if the watched addresses file exists
-	fileExists, err := doesFileExist(watchedAddressesFile)
-	if err != nil {
-		return err
-	}
-
-	if fileExists {
-		content, err := ioutil.ReadFile(watchedAddressesFile)
-		if err != nil {
-			return err
-		}
-
-		var watchedAddresses []common.Address
-		err = json.Unmarshal(content, &watchedAddresses)
-		if err != nil {
-			return err
-		}
-
-		writeLoopParams.WatchedAddresses = watchedAddresses
-	}
-
-	return nil
-}
-
-// containsAddress is used to check if an address is present in the provided list of watched addresses
-func containsAddress(watchedAddresses []common.Address, address common.Address) bool {
-	for _, addr := range watchedAddresses {
-		if addr == address {
-			return true
-		}
-	}
-	return false
-}
-
-// doesFileExist is used to check if file at a given path exists
-func doesFileExist(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	} else if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
 }

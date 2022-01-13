@@ -59,6 +59,9 @@ type Indexer interface {
 	PushStateNode(tx *BlockTx, stateNode sdtypes.StateNode) error
 	PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sdtypes.CodeAndCodeHash) error
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
+	InsertWatchedAddresses(addresses []common.Address, currentBlock *big.Int) error
+	RemoveWatchedAddresses(addresses []common.Address) error
+	ClearWatchedAddresses() error
 }
 
 // StateDiffIndexer satisfies the Indexer interface for ethereum statediff objects
@@ -547,5 +550,66 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sd
 	if err := shared.PublishDirect(tx.dbtx, mhKey, codeAndCodeHash.Code); err != nil {
 		return fmt.Errorf("error publishing code IPLD: %v", err)
 	}
+	return nil
+}
+
+func (sdi *StateDiffIndexer) InsertWatchedAddresses(addresses []common.Address, currentBlock *big.Int) error {
+	tx, err := sdi.dbWriter.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, address := range addresses {
+		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, added_at) VALUES ($1, $2)`, address, currentBlock)
+		if err != nil {
+			return fmt.Errorf("error inserting watched_addresses entry: %v", err)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (sdi *StateDiffIndexer) RemoveWatchedAddresses(addresses []common.Address) error {
+	tx, err := sdi.dbWriter.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, address := range addresses {
+		_, err = tx.Exec(`DELETE FROM eth.watched_addresses WHERE address = $1`, address)
+		if err != nil {
+			return fmt.Errorf("error removing watched_addresses entry: %v", err)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
+	tx, err := sdi.dbWriter.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`DELETE FROM eth.watched_addresses`)
+	if err != nil {
+		return fmt.Errorf("error clearing watched_addresses table: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

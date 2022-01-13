@@ -48,6 +48,7 @@ var (
 	service = statediff.Service{}
 )
 
+// TODO: Update tests for the updated API
 func TestWatchAddress(t *testing.T) {
 	watchedAddresses := service.GetWathchedAddresses()
 	if !reflect.DeepEqual(watchedAddresses, watchedAddresses0) {
@@ -60,7 +61,7 @@ func TestWatchAddress(t *testing.T) {
 }
 
 func testWatchUnwatchedAddress(t *testing.T) {
-	err := service.WatchAddress(address1)
+	err := service.WatchAddress(statediff.Add, []common.Address{address1})
 	if err != nil {
 		t.Error("Test failure:", t.Name())
 		t.Logf("Unexpected error %s thrown on an attempt to watch an unwatched address.", err.Error())
@@ -71,7 +72,7 @@ func testWatchUnwatchedAddress(t *testing.T) {
 		t.Logf("Actual watched addresses not equal expected watched addresses.\nactual: %+v\nexpected: %+v", watchedAddresses, watchedAddresses1)
 	}
 
-	err = service.WatchAddress(address2)
+	err = service.WatchAddress(statediff.Add, []common.Address{address2})
 	if err != nil {
 		t.Error("Test failure:", t.Name())
 		t.Logf("Unexpected error %s thrown on an attempt to watch an unwatched address.", err.Error())
@@ -84,7 +85,7 @@ func testWatchUnwatchedAddress(t *testing.T) {
 }
 
 func testWatchWatchedAddress(t *testing.T) {
-	err := service.WatchAddress(address1)
+	err := service.WatchAddress(statediff.Add, []common.Address{address1})
 	if err == nil {
 		t.Error("Test failure:", t.Name())
 		t.Logf("Expected error %s not thrown on an attempt to watch an already watched address.", expectedError.Error())
