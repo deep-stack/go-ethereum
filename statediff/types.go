@@ -111,3 +111,13 @@ type accountWrapper struct {
 	NodeValue []byte
 	LeafKey   []byte
 }
+
+// OperationType for type of WatchAddress operation
+type OperationType string
+
+const (
+	Add    OperationType = "Add"
+	Remove OperationType = "Remove"
+	Set    OperationType = "Set"
+	Clear  OperationType = "Clear"
+)

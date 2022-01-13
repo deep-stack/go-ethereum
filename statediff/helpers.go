@@ -20,8 +20,12 @@
 package statediff
 
 import (
+	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/statediff/indexer/postgres"
 )
 
 func sortKeys(data AccountMap) []string {
@@ -69,5 +73,51 @@ func findIntersection(a, b []string) []string {
 			}
 		}
 	}
+}
 
+// loadWatchedAddresses is used to load watched addresses to the in-memory write loop params from the db
+func loadWatchedAddresses(db *postgres.DB) error {
+	rows, err := db.Query("SELECT address FROM eth.watched_addresses")
+	if err != nil {
+		return fmt.Errorf("error loading watched addresses: %v", err)
+	}
+
+	var watchedAddresses []common.Address
+	for rows.Next() {
+		var addressHex string
+		err := rows.Scan(&addressHex)
+		if err != nil {
+			return err
+		}
+
+		watchedAddresses = append(watchedAddresses, common.HexToAddress(addressHex))
+	}
+
+	writeLoopParams.WatchedAddresses = watchedAddresses
+
+	return nil
+}
+
+func removeWatchedAddresses(watchedAddresses []common.Address, addressesToRemove []common.Address) []common.Address {
+	addresses := make([]common.Address, len(addressesToRemove))
+	copy(addresses, watchedAddresses)
+
+	for _, address := range addressesToRemove {
+		if idx := containsAddress(addresses, address); idx != -1 {
+			addresses = append(addresses[:idx], addresses[idx+1:]...)
+		}
+	}
+
+	return addresses
+}
+
+// containsAddress is used to check if an address is present in the provided list of watched addresses
+// return the index if found else -1
+func containsAddress(watchedAddresses []common.Address, address common.Address) int {
+	for idx, addr := range watchedAddresses {
+		if addr == address {
+			return idx
+		}
+	}
+	return -1
 }
