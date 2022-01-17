@@ -93,28 +93,31 @@ func loadWatchedAddresses(db *postgres.DB) error {
 		watchedAddresses = append(watchedAddresses, common.HexToAddress(addressHex))
 	}
 
+	writeLoopParams.mu.Lock()
 	writeLoopParams.WatchedAddresses = watchedAddresses
+	writeLoopParams.mu.Unlock()
 
 	return nil
 }
 
-func removeWatchedAddresses(watchedAddresses []common.Address, addressesToRemove []common.Address) []common.Address {
-	addresses := make([]common.Address, len(addressesToRemove))
-	copy(addresses, watchedAddresses)
+// removeAddresses is used to remove given addresses from a list of addresses
+func removeAddresses(addresses []common.Address, addressesToRemove []common.Address) []common.Address {
+	addressesCopy := make([]common.Address, len(addresses))
+	copy(addressesCopy, addresses)
 
 	for _, address := range addressesToRemove {
-		if idx := containsAddress(addresses, address); idx != -1 {
-			addresses = append(addresses[:idx], addresses[idx+1:]...)
+		if idx := containsAddress(addressesCopy, address); idx != -1 {
+			addressesCopy = append(addressesCopy[:idx], addressesCopy[idx+1:]...)
 		}
 	}
 
-	return addresses
+	return addressesCopy
 }
 
-// containsAddress is used to check if an address is present in the provided list of watched addresses
+// containsAddress is used to check if an address is present in the provided list of addresses
 // return the index if found else -1
-func containsAddress(watchedAddresses []common.Address, address common.Address) int {
-	for idx, addr := range watchedAddresses {
+func containsAddress(addresses []common.Address, address common.Address) int {
+	for idx, addr := range addresses {
 		if addr == address {
 			return idx
 		}

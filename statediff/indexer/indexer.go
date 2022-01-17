@@ -553,6 +553,7 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sd
 	return nil
 }
 
+// InsertWatchedAddresses inserts the given addresses in the database
 func (sdi *StateDiffIndexer) InsertWatchedAddresses(addresses []common.Address, currentBlock *big.Int) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
@@ -560,7 +561,8 @@ func (sdi *StateDiffIndexer) InsertWatchedAddresses(addresses []common.Address, 
 	}
 
 	for _, address := range addresses {
-		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, added_at) VALUES ($1, $2)`, address, currentBlock)
+		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, added_at)VALUES ($1, $2) ON CONFLICT (address) DO NOTHING`,
+			address.Hex(), currentBlock.Uint64())
 		if err != nil {
 			return fmt.Errorf("error inserting watched_addresses entry: %v", err)
 		}
@@ -574,6 +576,7 @@ func (sdi *StateDiffIndexer) InsertWatchedAddresses(addresses []common.Address, 
 	return nil
 }
 
+// RemoveWatchedAddresses removes the given addresses from the database
 func (sdi *StateDiffIndexer) RemoveWatchedAddresses(addresses []common.Address) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
@@ -581,7 +584,7 @@ func (sdi *StateDiffIndexer) RemoveWatchedAddresses(addresses []common.Address) 
 	}
 
 	for _, address := range addresses {
-		_, err = tx.Exec(`DELETE FROM eth.watched_addresses WHERE address = $1`, address)
+		_, err = tx.Exec(`DELETE FROM eth.watched_addresses WHERE address = $1`, address.Hex())
 		if err != nil {
 			return fmt.Errorf("error removing watched_addresses entry: %v", err)
 		}
@@ -595,20 +598,11 @@ func (sdi *StateDiffIndexer) RemoveWatchedAddresses(addresses []common.Address) 
 	return nil
 }
 
+// ClearWatchedAddresses clears all the addresses from the database
 func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
-	tx, err := sdi.dbWriter.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(`DELETE FROM eth.watched_addresses`)
+	_, err := sdi.dbWriter.db.Exec(`DELETE FROM eth.watched_addresses`)
 	if err != nil {
 		return fmt.Errorf("error clearing watched_addresses table: %v", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
 	}
 
 	return nil
