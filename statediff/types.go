@@ -22,6 +22,7 @@ package statediff
 import (
 	"encoding/json"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	ctypes "github.com/ethereum/go-ethereum/core/types"
@@ -51,6 +52,12 @@ type Params struct {
 	IncludeCode              bool
 	WatchedAddresses         []common.Address
 	WatchedStorageSlots      []common.Hash
+}
+
+// ParamsWithMutex allows to lock the parameters while they are being updated | read from
+type ParamsWithMutex struct {
+	Params
+	mu sync.RWMutex
 }
 
 // Args bundles the arguments for the state diff builder

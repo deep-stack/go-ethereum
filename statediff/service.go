@@ -55,13 +55,15 @@ const (
 	deadlockDetected   = "deadlock detected" // 40P01 https://www.postgresql.org/docs/current/errcodes-appendix.html
 )
 
-var writeLoopParams = Params{
-	IntermediateStateNodes:   true,
-	IntermediateStorageNodes: true,
-	IncludeBlock:             true,
-	IncludeReceipts:          true,
-	IncludeTD:                true,
-	IncludeCode:              true,
+var writeLoopParams = ParamsWithMutex{
+	Params: Params{
+		IntermediateStateNodes:   true,
+		IntermediateStorageNodes: true,
+		IncludeBlock:             true,
+		IncludeReceipts:          true,
+		IncludeTD:                true,
+		IncludeCode:              true,
+	},
 }
 
 var statediffMetrics = RegisterStatediffMetrics(metrics.DefaultRegistry)
@@ -74,6 +76,7 @@ type blockChain interface {
 	GetTd(hash common.Hash, number uint64) *big.Int
 	UnlockTrie(root common.Hash)
 	StateCache() state.Database
+	CurrentBlock() *types.Block
 }
 
 // IService is the state-diffing service interface
@@ -102,7 +105,7 @@ type IService interface {
 	WriteStateDiffFor(blockHash common.Hash, params Params) error
 	// Event loop for progressively processing and writing diffs directly to DB
 	WriteLoop(chainEventCh chan core.ChainEvent)
-	// Method to add an address to be watched to write loop params
+	// Method to change the addresses being watched in write loop params
 	WatchAddress(operation OperationType, addresses []common.Address) error
 	// Method to get currently watched addresses from write loop params
 	GetWathchedAddresses() []common.Address
@@ -165,6 +168,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	blockChain := ethServ.BlockChain()
 	var indexer ind.Indexer
 	var db *postgres.DB
+	var err error
 	quitCh := make(chan bool)
 	if params.DBParams != nil {
 		info := nodeinfo.Info{
@@ -176,7 +180,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		}
 
 		// TODO: pass max idle, open, lifetime?
-		db, err := postgres.NewDB(params.DBParams.ConnectionURL, postgres.ConnectionConfig{}, info)
+		db, err = postgres.NewDB(params.DBParams.ConnectionURL, postgres.ConnectionConfig{}, info)
 		if err != nil {
 			return err
 		}
@@ -207,7 +211,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	stack.RegisterLifecycle(sds)
 	stack.RegisterAPIs(sds.APIs())
 
-	err := loadWatchedAddresses(db)
+	err = loadWatchedAddresses(db)
 	if err != nil {
 		return err
 	}
@@ -290,7 +294,9 @@ func (sds *Service) WriteLoop(chainEventCh chan core.ChainEvent) {
 func (sds *Service) writeGenesisStateDiff(currBlock *types.Block, workerId uint) {
 	// For genesis block we need to return the entire state trie hence we diff it with an empty trie.
 	log.Info("Writing state diff", "block height", genesisBlockNumber, "worker", workerId)
-	err := sds.writeStateDiffWithRetry(currBlock, common.Hash{}, writeLoopParams)
+	writeLoopParams.mu.RLock()
+	err := sds.writeStateDiffWithRetry(currBlock, common.Hash{}, writeLoopParams.Params)
+	writeLoopParams.mu.RUnlock()
 	if err != nil {
 		log.Error("statediff.Service.WriteLoop: processing error", "block height",
 			genesisBlockNumber, "error", err.Error(), "worker", workerId)
@@ -319,7 +325,9 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 			}
 
 			log.Info("Writing state diff", "block height", currentBlock.Number().Uint64(), "worker", params.id)
-			err := sds.writeStateDiffWithRetry(currentBlock, parentBlock.Root(), writeLoopParams)
+			writeLoopParams.mu.RLock()
+			err := sds.writeStateDiffWithRetry(currentBlock, parentBlock.Root(), writeLoopParams.Params)
+			writeLoopParams.mu.RUnlock()
 			if err != nil {
 				log.Error("statediff.Service.WriteLoop: processing error", "block height", currentBlock.Number().Uint64(), "error", err.Error(), "worker", params.id)
 				continue
@@ -555,7 +563,7 @@ func (sds *Service) Start() error {
 	go sds.Loop(chainEventCh)
 
 	if sds.enableWriteLoop {
-		log.Info("Starting statediff DB write loop", "params", writeLoopParams)
+		log.Info("Starting statediff DB write loop", "params", writeLoopParams.Params)
 		chainEventCh := make(chan core.ChainEvent, chainEventChanSize)
 		go sds.WriteLoop(chainEventCh)
 	}
@@ -728,19 +736,32 @@ func (sds *Service) writeStateDiffWithRetry(block *types.Block, parentRoot commo
 
 // Performs Add | Remove | Set | Clear operation on the watched addresses in writeLoopParams and the db with provided addresses
 func (sds *Service) WatchAddress(operation OperationType, addresses []common.Address) error {
-	// check operation
+	// lock writeLoopParams for a write
+	writeLoopParams.mu.Lock()
+	defer writeLoopParams.mu.Unlock()
+
+	// get the current block number
+	currentBlock := sds.BlockChain.CurrentBlock()
+	currentBlockNumber := currentBlock.Number()
+
 	switch operation {
 	case Add:
+		addressesToRemove := []common.Address{}
 		for _, address := range addresses {
 			// Check if address is already being watched
+			// Throw a warning and continue if found
 			if containsAddress(writeLoopParams.WatchedAddresses, address) != -1 {
-				return fmt.Errorf("Address %s already watched", address)
+				// log.Warn(fmt.Sprint("Address ", address.Hex(), " already being watched"))
+				log.Warn("Address already being watched", "address", address.Hex())
+				addressesToRemove = append(addressesToRemove, address)
+				continue
 			}
 		}
 
-		// TODO: Make sure WriteLoop doesn't call statediffing before the params are updated for the current block
-		// TODO: Get the current block
-		err := sds.indexer.InsertWatchedAddresses(addresses, common.Big1)
+		// remove already watched addresses
+		addresses = removeAddresses(addresses, addressesToRemove)
+
+		err := sds.indexer.InsertWatchedAddresses(addresses, currentBlockNumber)
 		if err != nil {
 			return err
 		}
@@ -752,14 +773,14 @@ func (sds *Service) WatchAddress(operation OperationType, addresses []common.Add
 			return err
 		}
 
-		removeWatchedAddresses(writeLoopParams.WatchedAddresses, addresses)
+		writeLoopParams.WatchedAddresses = removeAddresses(writeLoopParams.WatchedAddresses, addresses)
 	case Set:
 		err := sds.indexer.ClearWatchedAddresses()
 		if err != nil {
 			return err
 		}
 
-		err = sds.indexer.InsertWatchedAddresses(addresses, common.Big1)
+		err = sds.indexer.InsertWatchedAddresses(addresses, currentBlockNumber)
 		if err != nil {
 			return err
 		}

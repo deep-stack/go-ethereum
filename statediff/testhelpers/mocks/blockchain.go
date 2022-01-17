@@ -128,6 +128,11 @@ func (bc *BlockChain) GetTd(hash common.Hash, blockNum uint64) *big.Int {
 	return nil
 }
 
+// CurrentBlock mock method
+func (bc *BlockChain) CurrentBlock() *types.Block {
+	return nil
+}
+
 func (bc *BlockChain) SetTd(hash common.Hash, blockNum uint64, td *big.Int) {
 	if bc.TDByHash == nil {
 		bc.TDByHash = make(map[common.Hash]*big.Int)
