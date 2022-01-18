@@ -74,3 +74,9 @@ type CodeAndCodeHash struct {
 type StateNodeSink func(StateNode) error
 type StorageNodeSink func(StorageNode) error
 type CodeSink func(CodeAndCodeHash) error
+
+// WatchAddressArg is a arg type for WatchAddress API
+type WatchAddressArg struct {
+	Address   common.Address
+	CreatedAt uint64
+}

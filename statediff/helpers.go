@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/statediff/indexer/postgres"
+	"github.com/ethereum/go-ethereum/statediff/types"
 )
 
 func sortKeys(data AccountMap) []string {
@@ -102,16 +103,15 @@ func loadWatchedAddresses(db *postgres.DB) error {
 
 // removeAddresses is used to remove given addresses from a list of addresses
 func removeAddresses(addresses []common.Address, addressesToRemove []common.Address) []common.Address {
-	addressesCopy := make([]common.Address, len(addresses))
-	copy(addressesCopy, addresses)
+	filteredAddresses := []common.Address{}
 
-	for _, address := range addressesToRemove {
-		if idx := containsAddress(addressesCopy, address); idx != -1 {
-			addressesCopy = append(addressesCopy[:idx], addressesCopy[idx+1:]...)
+	for _, address := range addresses {
+		if idx := containsAddress(addressesToRemove, address); idx == -1 {
+			filteredAddresses = append(filteredAddresses, address)
 		}
 	}
 
-	return addressesCopy
+	return filteredAddresses
 }
 
 // containsAddress is used to check if an address is present in the provided list of addresses
@@ -123,4 +123,29 @@ func containsAddress(addresses []common.Address, address common.Address) int {
 		}
 	}
 	return -1
+}
+
+// getArgAddresses is used to get the list of addresses from a list of WatchAddressArgs
+func getArgAddresses(args []types.WatchAddressArg) []common.Address {
+	addresses := make([]common.Address, len(args))
+	for idx, arg := range args {
+		addresses[idx] = arg.Address
+	}
+
+	return addresses
+}
+
+// filterArgs filters out the args having an address from a given list of addresses
+func filterArgs(args []types.WatchAddressArg, addressesToRemove []common.Address) ([]types.WatchAddressArg, []common.Address) {
+	filteredArgs := []types.WatchAddressArg{}
+	filteredAddresses := []common.Address{}
+
+	for _, arg := range args {
+		if idx := containsAddress(addressesToRemove, arg.Address); idx == -1 {
+			filteredArgs = append(filteredArgs, arg)
+			filteredAddresses = append(filteredAddresses, arg.Address)
+		}
+	}
+
+	return filteredArgs, filteredAddresses
 }
