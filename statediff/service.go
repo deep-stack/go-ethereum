@@ -106,7 +106,7 @@ type IService interface {
 	// Event loop for progressively processing and writing diffs directly to DB
 	WriteLoop(chainEventCh chan core.ChainEvent)
 	// Method to change the addresses being watched in write loop params
-	WatchAddress(operation OperationType, addresses []common.Address) error
+	WatchAddress(operation OperationType, args []WatchAddressArg) error
 	// Method to get currently watched addresses from write loop params
 	GetWathchedAddresses() []common.Address
 }
@@ -735,39 +735,40 @@ func (sds *Service) writeStateDiffWithRetry(block *types.Block, parentRoot commo
 }
 
 // Performs Add | Remove | Set | Clear operation on the watched addresses in writeLoopParams and the db with provided addresses
-func (sds *Service) WatchAddress(operation OperationType, addresses []common.Address) error {
+func (sds *Service) WatchAddress(operation OperationType, args []WatchAddressArg) error {
 	// lock writeLoopParams for a write
 	writeLoopParams.mu.Lock()
 	defer writeLoopParams.mu.Unlock()
 
 	// get the current block number
-	currentBlock := sds.BlockChain.CurrentBlock()
-	currentBlockNumber := currentBlock.Number()
+	currentBlockNumber := sds.BlockChain.CurrentBlock().Number()
 
 	switch operation {
 	case Add:
 		addressesToRemove := []common.Address{}
-		for _, address := range addresses {
+		for _, arg := range args {
 			// Check if address is already being watched
 			// Throw a warning and continue if found
-			if containsAddress(writeLoopParams.WatchedAddresses, address) != -1 {
+			if containsAddress(writeLoopParams.WatchedAddresses, arg.Address) != -1 {
 				// log.Warn(fmt.Sprint("Address ", address.Hex(), " already being watched"))
-				log.Warn("Address already being watched", "address", address.Hex())
-				addressesToRemove = append(addressesToRemove, address)
+				log.Warn("Address already being watched", "address", arg.Address.Hex())
+				addressesToRemove = append(addressesToRemove, arg.Address)
 				continue
 			}
 		}
 
 		// remove already watched addresses
-		addresses = removeAddresses(addresses, addressesToRemove)
+		filteredArgs, filteredAddresses := filterArgs(args, addressesToRemove)
 
-		err := sds.indexer.InsertWatchedAddresses(addresses, currentBlockNumber)
+		err := sds.indexer.InsertWatchedAddresses(filteredArgs, currentBlockNumber)
 		if err != nil {
 			return err
 		}
 
-		writeLoopParams.WatchedAddresses = append(writeLoopParams.WatchedAddresses, addresses...)
+		writeLoopParams.WatchedAddresses = append(writeLoopParams.WatchedAddresses, filteredAddresses...)
 	case Remove:
+		addresses := getArgAddresses(args)
+
 		err := sds.indexer.RemoveWatchedAddresses(addresses)
 		if err != nil {
 			return err
@@ -780,11 +781,12 @@ func (sds *Service) WatchAddress(operation OperationType, addresses []common.Add
 			return err
 		}
 
-		err = sds.indexer.InsertWatchedAddresses(addresses, currentBlockNumber)
+		err = sds.indexer.InsertWatchedAddresses(args, currentBlockNumber)
 		if err != nil {
 			return err
 		}
 
+		addresses := getArgAddresses(args)
 		writeLoopParams.WatchedAddresses = addresses
 	case Clear:
 		err := sds.indexer.ClearWatchedAddresses()

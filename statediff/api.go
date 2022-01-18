@@ -151,6 +151,6 @@ func (api *PublicStateDiffAPI) WriteStateDiffFor(ctx context.Context, blockHash 
 }
 
 // WatchAddress changes the list of watched addresses to which the direct indexing is restricted according to given operation
-func (api *PublicStateDiffAPI) WatchAddress(operation OperationType, addresses []common.Address) error {
-	return api.sds.WatchAddress(operation, addresses)
+func (api *PublicStateDiffAPI) WatchAddress(operation OperationType, args []WatchAddressArg) error {
+	return api.sds.WatchAddress(operation, args)
 }

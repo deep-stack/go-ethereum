@@ -59,7 +59,7 @@ type Indexer interface {
 	PushStateNode(tx *BlockTx, stateNode sdtypes.StateNode) error
 	PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sdtypes.CodeAndCodeHash) error
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
-	InsertWatchedAddresses(addresses []common.Address, currentBlock *big.Int) error
+	InsertWatchedAddresses(addresses []sdtypes.WatchAddressArg, currentBlock *big.Int) error
 	RemoveWatchedAddresses(addresses []common.Address) error
 	ClearWatchedAddresses() error
 }
@@ -554,15 +554,15 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sd
 }
 
 // InsertWatchedAddresses inserts the given addresses in the database
-func (sdi *StateDiffIndexer) InsertWatchedAddresses(addresses []common.Address, currentBlock *big.Int) error {
+func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
 		return err
 	}
 
-	for _, address := range addresses {
-		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, added_at)VALUES ($1, $2) ON CONFLICT (address) DO NOTHING`,
-			address.Hex(), currentBlock.Uint64())
+	for _, arg := range args {
+		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, created_at, watched_at)VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
+			arg.Address.Hex(), arg.CreatedAt, currentBlockNumber.Uint64())
 		if err != nil {
 			return fmt.Errorf("error inserting watched_addresses entry: %v", err)
 		}

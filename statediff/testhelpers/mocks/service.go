@@ -333,7 +333,7 @@ func sendNonBlockingQuit(id rpc.ID, sub statediff.Subscription) {
 	}
 }
 
-func (sds *MockStateDiffService) WatchAddress(operation statediff.OperationType, addresses []common.Address) error {
+func (sds *MockStateDiffService) WatchAddress(operation statediff.OperationType, addresses []sdtypes.WatchAddressArg) error {
 	return nil
 }
 
