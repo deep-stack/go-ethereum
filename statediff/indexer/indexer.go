@@ -61,10 +61,10 @@ type Indexer interface {
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
 
 	// Methods used by WatchAddress API/functionality.
-	InsertWatchedAddresses(addresses []sdtypes.WatchAddressArg, currentBlock *big.Int) error
-	RemoveWatchedAddresses(addresses []common.Address) error
-	SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error
-	ClearWatchedAddresses() error
+	InsertWatched(addresses []sdtypes.WatchAddressArg, currentBlock *big.Int, kind sdtypes.WatchedAddressType) error
+	RemoveWatched(addresses []sdtypes.WatchAddressArg, kind sdtypes.WatchedAddressType) error
+	SetWatched(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error
+	ClearWatched(kind sdtypes.WatchedAddressType) error
 }
 
 // StateDiffIndexer satisfies the Indexer interface for ethereum statediff objects
@@ -556,8 +556,8 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sd
 	return nil
 }
 
-// InsertWatchedAddresses inserts the given addresses in the database
-func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+// InsertWatchedAddresses inserts the given addresses | storage slots in the database
+func (sdi *StateDiffIndexer) InsertWatched(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
 		return err
@@ -565,8 +565,8 @@ func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressA
 	defer tx.Rollback()
 
 	for _, arg := range args {
-		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
-			arg.Address.Hex(), arg.CreatedAt, currentBlockNumber.Uint64())
+		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, kind, created_at, watched_at) VALUES ($1, $2, $3, $4) ON CONFLICT (address) DO NOTHING`,
+			arg.Address, kind.Int(), arg.CreatedAt, currentBlockNumber.Uint64())
 		if err != nil {
 			return fmt.Errorf("error inserting watched_addresses entry: %v", err)
 		}
@@ -580,16 +580,16 @@ func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressA
 	return nil
 }
 
-// RemoveWatchedAddresses removes the given addresses from the database
-func (sdi *StateDiffIndexer) RemoveWatchedAddresses(addresses []common.Address) error {
+// RemoveWatchedAddresses removes the given addresses | storage slots from the database
+func (sdi *StateDiffIndexer) RemoveWatched(args []sdtypes.WatchAddressArg, kind sdtypes.WatchedAddressType) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	for _, address := range addresses {
-		_, err = tx.Exec(`DELETE FROM eth.watched_addresses WHERE address = $1`, address.Hex())
+	for _, arg := range args {
+		_, err = tx.Exec(`DELETE FROM eth.watched_addresses WHERE address = $1 AND kind = $2`, arg.Address, kind.Int())
 		if err != nil {
 			return fmt.Errorf("error removing watched_addresses entry: %v", err)
 		}
@@ -603,21 +603,22 @@ func (sdi *StateDiffIndexer) RemoveWatchedAddresses(addresses []common.Address) 
 	return nil
 }
 
-func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+// SetWatched clears and inserts the given addresses | storage slots in the database
+func (sdi *StateDiffIndexer) SetWatched(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec(`DELETE FROM eth.watched_addresses`)
+	_, err = tx.Exec(`DELETE FROM eth.watched_addresses WHERE kind = $1`, kind.Int())
 	if err != nil {
 		return fmt.Errorf("error setting watched_addresses table: %v", err)
 	}
 
 	for _, arg := range args {
-		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
-			arg.Address.Hex(), arg.CreatedAt, currentBlockNumber.Uint64())
+		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, kind, created_at, watched_at) VALUES ($1, $2, $3, $4) ON CONFLICT (address) DO NOTHING`,
+			arg.Address, kind.Int(), arg.CreatedAt, currentBlockNumber.Uint64())
 		if err != nil {
 			return fmt.Errorf("error setting watched_addresses table: %v", err)
 		}
@@ -631,9 +632,9 @@ func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg,
 	return nil
 }
 
-// ClearWatchedAddresses clears all the addresses from the database
-func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
-	_, err := sdi.dbWriter.db.Exec(`DELETE FROM eth.watched_addresses`)
+// ClearWatchedAddresses clears all the addresses | storage slots from the database
+func (sdi *StateDiffIndexer) ClearWatched(kind sdtypes.WatchedAddressType) error {
+	_, err := sdi.dbWriter.db.Exec(`DELETE FROM eth.watched_addresses WHERE kind = $1`, kind.Int())
 	if err != nil {
 		return fmt.Errorf("error clearing watched_addresses table: %v", err)
 	}

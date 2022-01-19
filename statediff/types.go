@@ -123,8 +123,13 @@ type accountWrapper struct {
 type OperationType string
 
 const (
-	Add    OperationType = "Add"
-	Remove OperationType = "Remove"
-	Set    OperationType = "Set"
-	Clear  OperationType = "Clear"
+	AddAddresses    OperationType = "AddAddresses"
+	RemoveAddresses OperationType = "RemoveAddresses"
+	SetAddresses    OperationType = "SetAddresses"
+	ClearAddresses  OperationType = "ClearAddresses"
+
+	AddStorageSlots    OperationType = "AddStorageSlots"
+	RemoveStorageSlots OperationType = "RemoveStorageSlots"
+	SetStorageSlots    OperationType = "SetStorageSlots"
+	ClearStorageSlots  OperationType = "ClearStorageSlots"
 )

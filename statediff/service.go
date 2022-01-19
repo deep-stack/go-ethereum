@@ -211,7 +211,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	stack.RegisterLifecycle(sds)
 	stack.RegisterAPIs(sds.APIs())
 
-	err = loadWatchedAddresses(db)
+	err = loadWatched(db)
 	if err != nil {
 		return err
 	}
@@ -734,7 +734,9 @@ func (sds *Service) writeStateDiffWithRetry(block *types.Block, parentRoot commo
 	return err
 }
 
-// Performs Add | Remove | Set | Clear operation on the watched addresses in writeLoopParams and the db with provided addresses
+// Performs one of foll. operations on the watched addresses | storage slots in writeLoopParams and the db:
+// AddAddresses | RemoveAddresses | SetAddresses | ClearAddresses
+// AddStorageSlots | RemoveStorageSlots | SetStorageSlots | ClearStorageSlots
 func (sds *Service) WatchAddress(operation OperationType, args []WatchAddressArg) error {
 	// lock writeLoopParams for a write
 	writeLoopParams.Lock()
@@ -744,51 +746,100 @@ func (sds *Service) WatchAddress(operation OperationType, args []WatchAddressArg
 	currentBlockNumber := sds.BlockChain.CurrentBlock().Number()
 
 	switch operation {
-	case Add:
+	case AddAddresses:
 		addressesToRemove := []common.Address{}
 		for _, arg := range args {
 			// Check if address is already being watched
 			// Throw a warning and continue if found
-			if containsAddress(writeLoopParams.WatchedAddresses, arg.Address) != -1 {
-				log.Warn("Address already being watched", "address", arg.Address.Hex())
-				addressesToRemove = append(addressesToRemove, arg.Address)
+			address := common.HexToAddress(arg.Address)
+			if containsAddress(writeLoopParams.WatchedAddresses, address) != -1 {
+				log.Warn("Address already being watched", "address", arg.Address)
+				addressesToRemove = append(addressesToRemove, address)
 				continue
 			}
 		}
 
 		// remove already watched addresses
-		filteredArgs, filteredAddresses := filterArgs(args, addressesToRemove)
+		filteredArgs, filteredAddresses := filterAddressArgs(args, addressesToRemove)
 
-		err := sds.indexer.InsertWatchedAddresses(filteredArgs, currentBlockNumber)
+		err := sds.indexer.InsertWatched(filteredArgs, currentBlockNumber, WatchedAddress)
 		if err != nil {
 			return err
 		}
 
 		writeLoopParams.WatchedAddresses = append(writeLoopParams.WatchedAddresses, filteredAddresses...)
-	case Remove:
+	case RemoveAddresses:
 		addresses := getAddresses(args)
 
-		err := sds.indexer.RemoveWatchedAddresses(addresses)
+		err := sds.indexer.RemoveWatched(args, WatchedAddress)
 		if err != nil {
 			return err
 		}
 
 		writeLoopParams.WatchedAddresses = removeAddresses(writeLoopParams.WatchedAddresses, addresses)
-	case Set:
-		err := sds.indexer.SetWatchedAddresses(args, currentBlockNumber)
+	case SetAddresses:
+		err := sds.indexer.SetWatched(args, currentBlockNumber, WatchedAddress)
 		if err != nil {
 			return err
 		}
 
 		addresses := getAddresses(args)
 		writeLoopParams.WatchedAddresses = addresses
-	case Clear:
-		err := sds.indexer.ClearWatchedAddresses()
+	case ClearAddresses:
+		err := sds.indexer.ClearWatched(WatchedAddress)
 		if err != nil {
 			return err
 		}
 
 		writeLoopParams.WatchedAddresses = nil
+
+	case AddStorageSlots:
+		storageSlotsToRemove := []common.Hash{}
+		for _, arg := range args {
+			// Check if address is already being watched
+			// Throw a warning and continue if found
+			storageSlot := common.HexToHash(arg.Address)
+			if containsStorageSlot(writeLoopParams.WatchedStorageSlots, storageSlot) != -1 {
+				log.Warn("StorageSlot already being watched", "storage slot", arg.Address)
+				storageSlotsToRemove = append(storageSlotsToRemove, storageSlot)
+				continue
+			}
+		}
+
+		// remove already watched addresses
+		filteredArgs, filteredStorageSlots := filterStorageSlotArgs(args, storageSlotsToRemove)
+
+		err := sds.indexer.InsertWatched(filteredArgs, currentBlockNumber, WatchedStorageSlot)
+		if err != nil {
+			return err
+		}
+
+		writeLoopParams.WatchedStorageSlots = append(writeLoopParams.WatchedStorageSlots, filteredStorageSlots...)
+	case RemoveStorageSlots:
+		storageSlots := getStorageSlots(args)
+
+		err := sds.indexer.RemoveWatched(args, WatchedStorageSlot)
+		if err != nil {
+			return err
+		}
+
+		writeLoopParams.WatchedStorageSlots = removeStorageSlots(writeLoopParams.WatchedStorageSlots, storageSlots)
+	case SetStorageSlots:
+		err := sds.indexer.SetWatched(args, currentBlockNumber, WatchedStorageSlot)
+		if err != nil {
+			return err
+		}
+
+		storageSlots := getStorageSlots(args)
+		writeLoopParams.WatchedStorageSlots = storageSlots
+	case ClearStorageSlots:
+		err := sds.indexer.ClearWatched(WatchedStorageSlot)
+		if err != nil {
+			return err
+		}
+
+		writeLoopParams.WatchedStorageSlots = nil
+
 	default:
 		return fmt.Errorf("Unexpected operation %s", operation)
 	}
