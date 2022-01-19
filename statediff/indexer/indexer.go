@@ -59,8 +59,11 @@ type Indexer interface {
 	PushStateNode(tx *BlockTx, stateNode sdtypes.StateNode) error
 	PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sdtypes.CodeAndCodeHash) error
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
+
+	// Methods used by WatchAddress API/functionality.
 	InsertWatchedAddresses(addresses []sdtypes.WatchAddressArg, currentBlock *big.Int) error
 	RemoveWatchedAddresses(addresses []common.Address) error
+	SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error
 	ClearWatchedAddresses() error
 }
 
@@ -559,9 +562,10 @@ func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressA
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 
 	for _, arg := range args {
-		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, created_at, watched_at)VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
+		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
 			arg.Address.Hex(), arg.CreatedAt, currentBlockNumber.Uint64())
 		if err != nil {
 			return fmt.Errorf("error inserting watched_addresses entry: %v", err)
@@ -582,11 +586,40 @@ func (sdi *StateDiffIndexer) RemoveWatchedAddresses(addresses []common.Address) 
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 
 	for _, address := range addresses {
 		_, err = tx.Exec(`DELETE FROM eth.watched_addresses WHERE address = $1`, address.Hex())
 		if err != nil {
 			return fmt.Errorf("error removing watched_addresses entry: %v", err)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+	tx, err := sdi.dbWriter.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`DELETE FROM eth.watched_addresses`)
+	if err != nil {
+		return fmt.Errorf("error setting watched_addresses table: %v", err)
+	}
+
+	for _, arg := range args {
+		_, err = tx.Exec(`INSERT INTO eth.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
+			arg.Address.Hex(), arg.CreatedAt, currentBlockNumber.Uint64())
+		if err != nil {
+			return fmt.Errorf("error setting watched_addresses table: %v", err)
 		}
 	}
 

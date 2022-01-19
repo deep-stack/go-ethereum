@@ -78,25 +78,21 @@ func findIntersection(a, b []string) []string {
 
 // loadWatchedAddresses is used to load watched addresses to the in-memory write loop params from the db
 func loadWatchedAddresses(db *postgres.DB) error {
-	rows, err := db.Query("SELECT address FROM eth.watched_addresses")
+	var watchedAddressStrings []string
+	pgStr := "SELECT address FROM eth.watched_addresses"
+	err := db.Select(&watchedAddressStrings, pgStr)
 	if err != nil {
 		return fmt.Errorf("error loading watched addresses: %v", err)
 	}
 
 	var watchedAddresses []common.Address
-	for rows.Next() {
-		var addressHex string
-		err := rows.Scan(&addressHex)
-		if err != nil {
-			return err
-		}
-
-		watchedAddresses = append(watchedAddresses, common.HexToAddress(addressHex))
+	for _, watchedAddressString := range watchedAddressStrings {
+		watchedAddresses = append(watchedAddresses, common.HexToAddress(watchedAddressString))
 	}
 
-	writeLoopParams.mu.Lock()
+	writeLoopParams.Lock()
+	defer writeLoopParams.Unlock()
 	writeLoopParams.WatchedAddresses = watchedAddresses
-	writeLoopParams.mu.Unlock()
 
 	return nil
 }
@@ -126,7 +122,7 @@ func containsAddress(addresses []common.Address, address common.Address) int {
 }
 
 // getArgAddresses is used to get the list of addresses from a list of WatchAddressArgs
-func getArgAddresses(args []types.WatchAddressArg) []common.Address {
+func getAddresses(args []types.WatchAddressArg) []common.Address {
 	addresses := make([]common.Address, len(args))
 	for idx, arg := range args {
 		addresses[idx] = arg.Address

@@ -337,6 +337,6 @@ func (sds *MockStateDiffService) WatchAddress(operation statediff.OperationType,
 	return nil
 }
 
-func (sds *MockStateDiffService) GetWathchedAddresses() []common.Address {
+func (sds *MockStateDiffService) GetWatchedAddresses() []common.Address {
 	return []common.Address{}
 }

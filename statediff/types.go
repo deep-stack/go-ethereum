@@ -57,7 +57,7 @@ type Params struct {
 // ParamsWithMutex allows to lock the parameters while they are being updated | read from
 type ParamsWithMutex struct {
 	Params
-	mu sync.RWMutex
+	sync.RWMutex
 }
 
 // Args bundles the arguments for the state diff builder
