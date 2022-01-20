@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/thoas/go-funk"
 
 	ind "github.com/ethereum/go-ethereum/statediff/indexer"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
@@ -49,10 +50,11 @@ import (
 )
 
 const (
-	chainEventChanSize = 20000
-	genesisBlockNumber = 0
-	defaultRetryLimit  = 3                   // default retry limit once deadlock is detected.
-	deadlockDetected   = "deadlock detected" // 40P01 https://www.postgresql.org/docs/current/errcodes-appendix.html
+	chainEventChanSize  = 20000
+	genesisBlockNumber  = 0
+	defaultRetryLimit   = 3                   // default retry limit once deadlock is detected.
+	deadlockDetected    = "deadlock detected" // 40P01 https://www.postgresql.org/docs/current/errcodes-appendix.html
+	typeAssertionFailed = "type assertion failed"
 )
 
 var writeLoopParams = ParamsWithMutex{
@@ -211,7 +213,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	stack.RegisterLifecycle(sds)
 	stack.RegisterAPIs(sds.APIs())
 
-	err = loadWatched(db)
+	err = loadWatchedAddresses(db)
 	if err != nil {
 		return err
 	}
@@ -734,7 +736,7 @@ func (sds *Service) writeStateDiffWithRetry(block *types.Block, parentRoot commo
 	return err
 }
 
-// Performs one of foll. operations on the watched addresses | storage slots in writeLoopParams and the db:
+// Performs one of following operations on the watched addresses | storage slots in writeLoopParams and the db:
 // AddAddresses | RemoveAddresses | SetAddresses | ClearAddresses
 // AddStorageSlots | RemoveStorageSlots | SetStorageSlots | ClearStorageSlots
 func (sds *Service) WatchAddress(operation OperationType, args []WatchAddressArg) error {
@@ -747,93 +749,155 @@ func (sds *Service) WatchAddress(operation OperationType, args []WatchAddressArg
 
 	switch operation {
 	case AddAddresses:
-		addressesToRemove := []common.Address{}
-		for _, arg := range args {
-			// Check if address is already being watched
-			// Throw a warning and continue if found
-			address := common.HexToAddress(arg.Address)
-			if containsAddress(writeLoopParams.WatchedAddresses, address) != -1 {
+		// filter out args having an already watched address with a warning
+		filteredArgs, ok := funk.Filter(args, func(arg WatchAddressArg) bool {
+			if funk.Contains(writeLoopParams.WatchedAddresses, common.HexToAddress(arg.Address)) {
 				log.Warn("Address already being watched", "address", arg.Address)
-				addressesToRemove = append(addressesToRemove, address)
-				continue
+				return false
 			}
+			return true
+		}).([]WatchAddressArg)
+		if !ok {
+			return fmt.Errorf("AddAddresses: filtered args %s", typeAssertionFailed)
 		}
 
-		// remove already watched addresses
-		filteredArgs, filteredAddresses := filterAddressArgs(args, addressesToRemove)
+		// get addresses from the filtered args
+		filteredAddresses, ok := funk.Map(filteredArgs, func(arg WatchAddressArg) common.Address {
+			return common.HexToAddress(arg.Address)
+		}).([]common.Address)
+		if !ok {
+			return fmt.Errorf("AddAddresses: filtered addresses %s", typeAssertionFailed)
+		}
 
-		err := sds.indexer.InsertWatched(filteredArgs, currentBlockNumber, WatchedAddress)
+		// update the db
+		err := sds.indexer.InsertWatchedAddresses(filteredArgs, currentBlockNumber, WatchedAddress)
 		if err != nil {
 			return err
 		}
 
+		// update in-memory params
 		writeLoopParams.WatchedAddresses = append(writeLoopParams.WatchedAddresses, filteredAddresses...)
 	case RemoveAddresses:
-		addresses := getAddresses(args)
+		// get addresses from args
+		argAddresses, ok := funk.Map(args, func(arg WatchAddressArg) common.Address {
+			return common.HexToAddress(arg.Address)
+		}).([]common.Address)
+		if !ok {
+			return fmt.Errorf("RemoveAddresses: mapped addresses %s", typeAssertionFailed)
+		}
 
-		err := sds.indexer.RemoveWatched(args, WatchedAddress)
+		// remove the provided addresses from currently watched addresses
+		addresses, ok := funk.Subtract(writeLoopParams.WatchedAddresses, argAddresses).([]common.Address)
+		if !ok {
+			return fmt.Errorf("RemoveAddresses: filtered addresses %s", typeAssertionFailed)
+		}
+
+		// update the db
+		err := sds.indexer.RemoveWatchedAddresses(args, WatchedAddress)
 		if err != nil {
 			return err
 		}
 
-		writeLoopParams.WatchedAddresses = removeAddresses(writeLoopParams.WatchedAddresses, addresses)
-	case SetAddresses:
-		err := sds.indexer.SetWatched(args, currentBlockNumber, WatchedAddress)
-		if err != nil {
-			return err
-		}
-
-		addresses := getAddresses(args)
+		// update in-memory params
 		writeLoopParams.WatchedAddresses = addresses
-	case ClearAddresses:
-		err := sds.indexer.ClearWatched(WatchedAddress)
+	case SetAddresses:
+		// get addresses from args
+		argAddresses, ok := funk.Map(args, func(arg WatchAddressArg) common.Address {
+			return common.HexToAddress(arg.Address)
+		}).([]common.Address)
+		if !ok {
+			return fmt.Errorf("SetAddresses: mapped addresses %s", typeAssertionFailed)
+		}
+
+		// update the db
+		err := sds.indexer.SetWatchedAddresses(args, currentBlockNumber, WatchedAddress)
 		if err != nil {
 			return err
 		}
 
+		// update in-memory params
+		writeLoopParams.WatchedAddresses = argAddresses
+	case ClearAddresses:
+		// update the db
+		err := sds.indexer.ClearWatchedAddresses(WatchedAddress)
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
 		writeLoopParams.WatchedAddresses = nil
 
 	case AddStorageSlots:
-		storageSlotsToRemove := []common.Hash{}
-		for _, arg := range args {
-			// Check if address is already being watched
-			// Throw a warning and continue if found
-			storageSlot := common.HexToHash(arg.Address)
-			if containsStorageSlot(writeLoopParams.WatchedStorageSlots, storageSlot) != -1 {
-				log.Warn("StorageSlot already being watched", "storage slot", arg.Address)
-				storageSlotsToRemove = append(storageSlotsToRemove, storageSlot)
-				continue
+		// filter out args having an already watched storage slot with a warning
+		filteredArgs, ok := funk.Filter(args, func(arg WatchAddressArg) bool {
+			if funk.Contains(writeLoopParams.WatchedStorageSlots, common.HexToHash(arg.Address)) {
+				log.Warn("StorageSlot already being watched", "address", arg.Address)
+				return false
 			}
+			return true
+		}).([]WatchAddressArg)
+		if !ok {
+			return fmt.Errorf("AddStorageSlots: filtered args %s", typeAssertionFailed)
 		}
 
-		// remove already watched addresses
-		filteredArgs, filteredStorageSlots := filterStorageSlotArgs(args, storageSlotsToRemove)
+		// get storage slots from the filtered args
+		filteredStorageSlots, ok := funk.Map(filteredArgs, func(arg WatchAddressArg) common.Hash {
+			return common.HexToHash(arg.Address)
+		}).([]common.Hash)
+		if !ok {
+			return fmt.Errorf("AddStorageSlots: filtered storage slots %s", typeAssertionFailed)
+		}
 
-		err := sds.indexer.InsertWatched(filteredArgs, currentBlockNumber, WatchedStorageSlot)
+		// update the db
+		err := sds.indexer.InsertWatchedAddresses(filteredArgs, currentBlockNumber, WatchedStorageSlot)
 		if err != nil {
 			return err
 		}
 
+		// update in-memory params
 		writeLoopParams.WatchedStorageSlots = append(writeLoopParams.WatchedStorageSlots, filteredStorageSlots...)
 	case RemoveStorageSlots:
-		storageSlots := getStorageSlots(args)
+		// get storage slots from args
+		argStorageSlots, ok := funk.Map(args, func(arg WatchAddressArg) common.Hash {
+			return common.HexToHash(arg.Address)
+		}).([]common.Hash)
+		if !ok {
+			return fmt.Errorf("RemoveStorageSlots: mapped storage slots %s", typeAssertionFailed)
+		}
 
-		err := sds.indexer.RemoveWatched(args, WatchedStorageSlot)
+		// remove the provided storage slots from currently watched storage slots
+		storageSlots, ok := funk.Subtract(writeLoopParams.WatchedStorageSlots, argStorageSlots).([]common.Hash)
+		if !ok {
+			return fmt.Errorf("RemoveStorageSlots: filtered storage slots %s", typeAssertionFailed)
+		}
+
+		// update the db
+		err := sds.indexer.RemoveWatchedAddresses(args, WatchedStorageSlot)
 		if err != nil {
 			return err
 		}
 
-		writeLoopParams.WatchedStorageSlots = removeStorageSlots(writeLoopParams.WatchedStorageSlots, storageSlots)
-	case SetStorageSlots:
-		err := sds.indexer.SetWatched(args, currentBlockNumber, WatchedStorageSlot)
-		if err != nil {
-			return err
-		}
-
-		storageSlots := getStorageSlots(args)
+		// update in-memory params
 		writeLoopParams.WatchedStorageSlots = storageSlots
+	case SetStorageSlots:
+		// get storage slots from args
+		argStorageSlots, ok := funk.Map(args, func(arg WatchAddressArg) common.Hash {
+			return common.HexToHash(arg.Address)
+		}).([]common.Hash)
+		if !ok {
+			return fmt.Errorf("SetStorageSlots: mapped storage slots %s", typeAssertionFailed)
+		}
+
+		// update the db
+		err := sds.indexer.SetWatchedAddresses(args, currentBlockNumber, WatchedStorageSlot)
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		writeLoopParams.WatchedStorageSlots = argStorageSlots
 	case ClearStorageSlots:
-		err := sds.indexer.ClearWatched(WatchedStorageSlot)
+		err := sds.indexer.ClearWatchedAddresses(WatchedStorageSlot)
 		if err != nil {
 			return err
 		}

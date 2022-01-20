@@ -76,13 +76,14 @@ func findIntersection(a, b []string) []string {
 	}
 }
 
-// loadWatched is used to load watched addresses and storage slots to the in-memory write loop params from the db
-func loadWatched(db *postgres.DB) error {
+// loadWatchedAddresses is used to load watched addresses and storage slots to the in-memory write loop params from the db
+func loadWatchedAddresses(db *postgres.DB) error {
 	type Watched struct {
 		Address string `db:"address"`
 		Kind    int    `db:"kind"`
 	}
 	var watched []Watched
+
 	pgStr := "SELECT address, kind FROM eth.watched_addresses"
 	err := db.Select(&watched, pgStr)
 	if err != nil {
@@ -108,104 +109,4 @@ func loadWatched(db *postgres.DB) error {
 	writeLoopParams.WatchedStorageSlots = watchedStorageSlots
 
 	return nil
-}
-
-// removeAddresses is used to remove given addresses from a list of addresses
-func removeAddresses(addresses []common.Address, addressesToRemove []common.Address) []common.Address {
-	filteredAddresses := []common.Address{}
-
-	for _, address := range addresses {
-		if idx := containsAddress(addressesToRemove, address); idx == -1 {
-			filteredAddresses = append(filteredAddresses, address)
-		}
-	}
-
-	return filteredAddresses
-}
-
-// removeAddresses is used to remove given storage slots from a list of storage slots
-func removeStorageSlots(storageSlots []common.Hash, storageSlotsToRemove []common.Hash) []common.Hash {
-	filteredStorageSlots := []common.Hash{}
-
-	for _, address := range storageSlots {
-		if idx := containsStorageSlot(storageSlotsToRemove, address); idx == -1 {
-			filteredStorageSlots = append(filteredStorageSlots, address)
-		}
-	}
-
-	return filteredStorageSlots
-}
-
-// containsAddress is used to check if an address is present in the provided list of addresses
-// return the index if found else -1
-func containsAddress(addresses []common.Address, address common.Address) int {
-	for idx, addr := range addresses {
-		if addr == address {
-			return idx
-		}
-	}
-	return -1
-}
-
-// containsAddress is used to check if a storage slot is present in the provided list of storage slots
-// return the index if found else -1
-func containsStorageSlot(storageSlots []common.Hash, storageSlot common.Hash) int {
-	for idx, slot := range storageSlots {
-		if slot == storageSlot {
-			return idx
-		}
-	}
-	return -1
-}
-
-// getAddresses is used to get the list of addresses from a list of WatchAddressArgs
-func getAddresses(args []types.WatchAddressArg) []common.Address {
-	addresses := make([]common.Address, len(args))
-	for idx, arg := range args {
-		addresses[idx] = common.HexToAddress(arg.Address)
-	}
-
-	return addresses
-}
-
-// getStorageSlots is used to get the list of storage slots from a list of WatchAddressArgs
-func getStorageSlots(args []types.WatchAddressArg) []common.Hash {
-	storageSlots := make([]common.Hash, len(args))
-	for idx, arg := range args {
-		storageSlots[idx] = common.HexToHash(arg.Address)
-	}
-
-	return storageSlots
-}
-
-// filterAddressArgs filters out the args having an address from a given list of addresses
-func filterAddressArgs(args []types.WatchAddressArg, addressesToRemove []common.Address) ([]types.WatchAddressArg, []common.Address) {
-	filteredArgs := []types.WatchAddressArg{}
-	filteredAddresses := []common.Address{}
-
-	for _, arg := range args {
-		address := common.HexToAddress(arg.Address)
-		if idx := containsAddress(addressesToRemove, address); idx == -1 {
-			filteredArgs = append(filteredArgs, arg)
-			filteredAddresses = append(filteredAddresses, address)
-		}
-	}
-
-	return filteredArgs, filteredAddresses
-}
-
-// filterStorageSlotArgs filters out the args having a storage slot from a given list of storage slots
-func filterStorageSlotArgs(args []types.WatchAddressArg, storageSlotsToRemove []common.Hash) ([]types.WatchAddressArg, []common.Hash) {
-	filteredArgs := []types.WatchAddressArg{}
-	filteredStorageSlots := []common.Hash{}
-
-	for _, arg := range args {
-		storageSlot := common.HexToHash(arg.Address)
-		if idx := containsStorageSlot(storageSlotsToRemove, storageSlot); idx == -1 {
-			filteredArgs = append(filteredArgs, arg)
-			filteredStorageSlots = append(filteredStorageSlots, storageSlot)
-		}
-	}
-
-	return filteredArgs, filteredStorageSlots
 }

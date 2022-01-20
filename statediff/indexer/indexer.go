@@ -61,10 +61,10 @@ type Indexer interface {
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
 
 	// Methods used by WatchAddress API/functionality.
-	InsertWatched(addresses []sdtypes.WatchAddressArg, currentBlock *big.Int, kind sdtypes.WatchedAddressType) error
-	RemoveWatched(addresses []sdtypes.WatchAddressArg, kind sdtypes.WatchedAddressType) error
-	SetWatched(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error
-	ClearWatched(kind sdtypes.WatchedAddressType) error
+	InsertWatchedAddresses(addresses []sdtypes.WatchAddressArg, currentBlock *big.Int, kind sdtypes.WatchedAddressType) error
+	RemoveWatchedAddresses(addresses []sdtypes.WatchAddressArg, kind sdtypes.WatchedAddressType) error
+	SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error
+	ClearWatchedAddresses(kind sdtypes.WatchedAddressType) error
 }
 
 // StateDiffIndexer satisfies the Indexer interface for ethereum statediff objects
@@ -557,7 +557,7 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(tx *BlockTx, codeAndCodeHash sd
 }
 
 // InsertWatchedAddresses inserts the given addresses | storage slots in the database
-func (sdi *StateDiffIndexer) InsertWatched(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error {
+func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
 		return err
@@ -581,7 +581,7 @@ func (sdi *StateDiffIndexer) InsertWatched(args []sdtypes.WatchAddressArg, curre
 }
 
 // RemoveWatchedAddresses removes the given addresses | storage slots from the database
-func (sdi *StateDiffIndexer) RemoveWatched(args []sdtypes.WatchAddressArg, kind sdtypes.WatchedAddressType) error {
+func (sdi *StateDiffIndexer) RemoveWatchedAddresses(args []sdtypes.WatchAddressArg, kind sdtypes.WatchedAddressType) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
 		return err
@@ -603,8 +603,8 @@ func (sdi *StateDiffIndexer) RemoveWatched(args []sdtypes.WatchAddressArg, kind 
 	return nil
 }
 
-// SetWatched clears and inserts the given addresses | storage slots in the database
-func (sdi *StateDiffIndexer) SetWatched(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error {
+// SetWatchedAddresses clears and inserts the given addresses | storage slots in the database
+func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int, kind sdtypes.WatchedAddressType) error {
 	tx, err := sdi.dbWriter.db.Begin()
 	if err != nil {
 		return err
@@ -633,7 +633,7 @@ func (sdi *StateDiffIndexer) SetWatched(args []sdtypes.WatchAddressArg, currentB
 }
 
 // ClearWatchedAddresses clears all the addresses | storage slots from the database
-func (sdi *StateDiffIndexer) ClearWatched(kind sdtypes.WatchedAddressType) error {
+func (sdi *StateDiffIndexer) ClearWatchedAddresses(kind sdtypes.WatchedAddressType) error {
 	_, err := sdi.dbWriter.db.Exec(`DELETE FROM eth.watched_addresses WHERE kind = $1`, kind.Int())
 	if err != nil {
 		return fmt.Errorf("error clearing watched_addresses table: %v", err)
