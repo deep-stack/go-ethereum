@@ -57,7 +57,7 @@ var DefaultConfig = Config{
 // DefaultV2Config are default parameters for connecting to a v3 Postgres DB
 var DefaultV2Config = Config{
 	Hostname:     "localhost",
-	Port:         5432,
+	Port:         5433,
 	DatabaseName: "vulcanize_testing_v2",
 	Username:     "vdbm",
 	Password:     "password",
@@ -66,7 +66,7 @@ var DefaultV2Config = Config{
 // DefaultV3Config are default parameters for connecting to a v3 Postgres DB
 var DefaultV3Config = Config{
 	Hostname:     "localhost",
-	Port:         5433,
+	Port:         5432,
 	DatabaseName: "vulcanize_testing_v3",
 	Username:     "vdbm",
 	Password:     "password",

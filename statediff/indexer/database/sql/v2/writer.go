@@ -78,7 +78,7 @@ func (w *Writer) InsertHeaderCID(tx interfaces.Tx, header *models.HeaderModel) (
 		header.Reward, header.StateRoot, header.TxRoot, header.RctRoot, header.UncleRoot, header.Bloom,
 		header.Timestamp, header.MhKey, 1, header.BaseFee).Scan(&headerID)
 	if err != nil {
-		return 0, fmt.Errorf("error inserting header_cids entry: %v", err)
+		return 0, fmt.Errorf("v2 error inserting header_cids entry: %v", err)
 	}
 	writerV2Metrics.Blocks.Inc(1)
 	return headerID, nil
@@ -93,7 +93,7 @@ func (w *Writer) InsertUncleCID(tx interfaces.Tx, uncle *models.UncleModel) erro
 	_, err := tx.Exec(w.DB.Context(), w.DB.InsertUncleStm(),
 		uncle.BlockHash, uncle.HeaderID, uncle.ParentHash, uncle.CID, uncle.Reward, uncle.MhKey)
 	if err != nil {
-		return fmt.Errorf("error inserting uncle_cids entry: %v", err)
+		return fmt.Errorf("v2 error inserting uncle_cids entry: %v", err)
 	}
 	return nil
 }
@@ -107,9 +107,9 @@ func (w *Writer) InsertTransactionCID(tx interfaces.Tx, transaction *models.TxMo
 	var txID int64
 	err := tx.QueryRow(w.DB.Context(), w.DB.InsertTxStm(),
 		transaction.HeaderID, transaction.TxHash, transaction.CID, transaction.Dst, transaction.Src, transaction.Index,
-		transaction.MhKey, transaction.Data, transaction.Type).Scan(&txID)
+		transaction.MhKey, transaction.Data, []byte{transaction.Type}).Scan(&txID)
 	if err != nil {
-		return 0, fmt.Errorf("error inserting transaction_cids entry: %v", err)
+		return 0, fmt.Errorf("v2 error inserting transaction_cids entry: %v", err)
 	}
 	writerV2Metrics.Transactions.Inc(1)
 	return txID, nil
@@ -124,7 +124,7 @@ func (w *Writer) InsertAccessListElement(tx interfaces.Tx, accessListElement *mo
 	_, err := tx.Exec(w.DB.Context(), w.DB.InsertAccessListElementStm(),
 		accessListElement.TxID, accessListElement.Index, accessListElement.Address, accessListElement.StorageKeys)
 	if err != nil {
-		return fmt.Errorf("error inserting access_list_element entry: %v", err)
+		return fmt.Errorf("v2 error inserting access_list_element entry: %v", err)
 	}
 	writerV2Metrics.AccessListEntries.Inc(1)
 	return nil
@@ -140,7 +140,7 @@ func (w *Writer) InsertReceiptCID(tx interfaces.Tx, rct *models.ReceiptModel) (i
 	err := tx.QueryRow(w.DB.Context(), w.DB.InsertRctStm(),
 		rct.TxID, rct.LeafCID, rct.Contract, rct.ContractHash, rct.LeafMhKey, rct.PostState, rct.PostStatus, rct.LogRoot).Scan(&receiptID)
 	if err != nil {
-		return 0, fmt.Errorf("error inserting receipt_cids entry: %w", err)
+		return 0, fmt.Errorf("v2 error inserting receipt_cids entry: %w", err)
 	}
 	writerV2Metrics.Receipts.Inc(1)
 	return receiptID, nil
@@ -157,7 +157,7 @@ func (w *Writer) InsertLogCID(tx interfaces.Tx, logs []*models.LogsModel) error 
 			log.LeafCID, log.LeafMhKey, log.ReceiptID, log.Address, log.Index, log.Topic0, log.Topic1, log.Topic2,
 			log.Topic3, log.Data)
 		if err != nil {
-			return fmt.Errorf("error inserting logs entry: %w", err)
+			return fmt.Errorf("v2 error inserting logs entry: %w", err)
 		}
 		writerV2Metrics.Logs.Inc(1)
 	}
@@ -178,7 +178,7 @@ func (w *Writer) InsertStateCID(tx interfaces.Tx, stateNode *models.StateNodeMod
 	err := tx.QueryRow(w.DB.Context(), w.DB.InsertStateStm(),
 		stateNode.HeaderID, stateKey, stateNode.CID, stateNode.Path, stateNode.NodeType, true, stateNode.MhKey).Scan(&stateID)
 	if err != nil {
-		return 0, fmt.Errorf("error inserting state_cids entry: %v", err)
+		return 0, fmt.Errorf("v2 error inserting state_cids entry: %v", err)
 	}
 	return stateID, nil
 }
@@ -193,7 +193,7 @@ func (w *Writer) InsertStateAccount(tx interfaces.Tx, stateAccount *models.State
 		stateAccount.StateID, stateAccount.Balance, stateAccount.Nonce, stateAccount.CodeHash,
 		stateAccount.StorageRoot)
 	if err != nil {
-		return fmt.Errorf("error inserting state_accounts entry: %v", err)
+		return fmt.Errorf("v2 error inserting state_accounts entry: %v", err)
 	}
 	return nil
 }
@@ -212,7 +212,7 @@ func (w *Writer) InsertStorageCID(tx interfaces.Tx, storageCID *models.StorageNo
 		storageCID.StateID, storageKey, storageCID.CID, storageCID.Path, storageCID.NodeType,
 		true, storageCID.MhKey)
 	if err != nil {
-		return fmt.Errorf("error inserting storage_cids entry: %v", err)
+		return fmt.Errorf("v2 error inserting storage_cids entry: %v", err)
 	}
 	return nil
 }

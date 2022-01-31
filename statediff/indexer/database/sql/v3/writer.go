@@ -106,7 +106,7 @@ func (w *Writer) InsertTransactionCID(tx interfaces.Tx, transaction *models.TxMo
 		transaction.HeaderID, transaction.TxHash, transaction.CID, transaction.Dst, transaction.Src, transaction.Index,
 		transaction.MhKey, transaction.Data, transaction.Type, transaction.Value)
 	if err != nil {
-		return fmt.Errorf("error inserting transaction_cids entry: %v", err)
+		return fmt.Errorf("v3 error inserting transaction_cids entry: %v", err)
 	}
 	writerV3Metrics.Transactions.Inc(1)
 	return nil
@@ -121,7 +121,7 @@ func (w *Writer) InsertAccessListElement(tx interfaces.Tx, accessListElement *mo
 	_, err := tx.Exec(w.DB.Context(), w.DB.InsertAccessListElementStm(),
 		accessListElement.TxID, accessListElement.Index, accessListElement.Address, accessListElement.StorageKeys)
 	if err != nil {
-		return fmt.Errorf("error inserting access_list_element entry: %v", err)
+		return fmt.Errorf("v3 error inserting access_list_element entry: %v", err)
 	}
 	writerV3Metrics.AccessListEntries.Inc(1)
 	return nil
@@ -136,7 +136,7 @@ func (w *Writer) InsertReceiptCID(tx interfaces.Tx, rct *models.ReceiptModel) er
 	_, err := tx.Exec(w.DB.Context(), w.DB.InsertRctStm(),
 		rct.TxID, rct.LeafCID, rct.Contract, rct.ContractHash, rct.LeafMhKey, rct.PostState, rct.PostStatus, rct.LogRoot)
 	if err != nil {
-		return fmt.Errorf("error inserting receipt_cids entry: %w", err)
+		return fmt.Errorf("v3 error inserting receipt_cids entry: %w", err)
 	}
 	writerV3Metrics.Receipts.Inc(1)
 	return nil
@@ -153,7 +153,7 @@ func (w *Writer) InsertLogCID(tx interfaces.Tx, logs []*models.LogsModel) error 
 			log.LeafCID, log.LeafMhKey, log.ReceiptID, log.Address, log.Index, log.Topic0, log.Topic1, log.Topic2,
 			log.Topic3, log.Data)
 		if err != nil {
-			return fmt.Errorf("error inserting logs entry: %w", err)
+			return fmt.Errorf("v3 error inserting logs entry: %w", err)
 		}
 		writerV3Metrics.Logs.Inc(1)
 	}
@@ -173,7 +173,7 @@ func (w *Writer) InsertStateCID(tx interfaces.Tx, stateNode *models.StateNodeMod
 	_, err := tx.Exec(w.DB.Context(), w.DB.InsertStateStm(),
 		stateNode.HeaderID, stateKey, stateNode.CID, stateNode.Path, stateNode.NodeType, true, stateNode.MhKey)
 	if err != nil {
-		return fmt.Errorf("error inserting state_cids entry: %v", err)
+		return fmt.Errorf("v3 error inserting state_cids entry: %v", err)
 	}
 	return nil
 }
@@ -188,7 +188,7 @@ func (w *Writer) InsertStateAccount(tx interfaces.Tx, stateAccount *models.State
 		stateAccount.HeaderID, stateAccount.StatePath, stateAccount.Balance, stateAccount.Nonce, stateAccount.CodeHash,
 		stateAccount.StorageRoot)
 	if err != nil {
-		return fmt.Errorf("error inserting state_accounts entry: %v", err)
+		return fmt.Errorf("v3 error inserting state_accounts entry: %v", err)
 	}
 	return nil
 }
@@ -207,7 +207,7 @@ func (w *Writer) InsertStorageCID(tx interfaces.Tx, storageCID *models.StorageNo
 		storageCID.HeaderID, storageCID.StatePath, storageKey, storageCID.CID, storageCID.Path, storageCID.NodeType,
 		true, storageCID.MhKey)
 	if err != nil {
-		return fmt.Errorf("error inserting storage_cids entry: %v", err)
+		return fmt.Errorf("v3 error inserting storage_cids entry: %v", err)
 	}
 	return nil
 }
