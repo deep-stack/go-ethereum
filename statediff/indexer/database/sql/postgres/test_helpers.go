@@ -26,7 +26,7 @@ import (
 
 // SetupV3SQLXDB is used to setup a sqlx db for tests
 func SetupV3SQLXDB() (interfaces.Database, error) {
-	driver, err := NewSQLXDriver(context.Background(), DefaultConfig)
+	driver, err := NewSQLXDriver(context.Background(), DefaultV3Config)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func SetupV3SQLXDB() (interfaces.Database, error) {
 
 // SetupV3PGXDB is used to setup a pgx db for tests
 func SetupV3PGXDB() (interfaces.Database, error) {
-	driver, err := NewPGXDriver(context.Background(), DefaultConfig)
+	driver, err := NewPGXDriver(context.Background(), DefaultV3Config)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func SetupV3PGXDB() (interfaces.Database, error) {
 
 // SetupV2SQLXDB is used to setup a sqlx db for tests
 func SetupV2SQLXDB() (interfaces.Database, error) {
-	driver, err := NewSQLXDriver(context.Background(), DefaultConfig)
+	driver, err := NewSQLXDriver(context.Background(), DefaultV2Config)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func SetupV2SQLXDB() (interfaces.Database, error) {
 
 // SetupV2PGXDB is used to setup a pgx db for tests
 func SetupV2PGXDB() (interfaces.Database, error) {
-	driver, err := NewPGXDriver(context.Background(), DefaultConfig)
+	driver, err := NewPGXDriver(context.Background(), DefaultV2Config)
 	if err != nil {
 		return nil, err
 	}

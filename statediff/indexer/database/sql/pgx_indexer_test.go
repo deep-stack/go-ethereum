@@ -41,26 +41,26 @@ import (
 
 func setupPGX(t *testing.T) {
 	db, err = postgres.SetupV3PGXDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, nodeInfo.Info{}, db, nil)
+	require.NoError(t, err)
+
+	v2DB, err := postgres.SetupV2PGXDB()
+	require.NoError(t, err)
+
+	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, nodeInfo.Info{}, v2DB, db)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	tx, headerID, err = ind.PushBlock(
 		mockBlock,
 		mocks.MockReceipts,
 		mocks.MockBlock.Difficulty())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		if err := tx.Submit(err); err != nil {
 			t.Fatal(err)
 		}
 	}()
 	for _, node := range mocks.StateDiffs {
-		err = ind.PushStateNode(tx, node, mockBlock.Hash().String(), 0)
+		err = ind.PushStateNode(tx, node, mockBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 
@@ -89,24 +89,18 @@ func TestPGXIndexer(t *testing.T) {
 			&header.Reward,
 			&header.BlockHash,
 			&header.Coinbase)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
 		test_helpers.ExpectEqual(t, header.Coinbase, mocks.MockHeader.Coinbase.String())
 		dc, err := cid.Decode(header.CID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 		var data []byte
 		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, data, mocks.MockHeaderRlp)
 	})
 
@@ -118,9 +112,7 @@ func TestPGXIndexer(t *testing.T) {
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1`
 		err = db.Select(context.Background(), &trxs, pgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, len(trxs), 5)
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx1CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx2CID.String()))
@@ -251,9 +243,7 @@ func TestPGXIndexer(t *testing.T) {
 					INNER JOIN public.blocks ON (log_cids.leaf_mh_key = blocks.key)
 					WHERE receipt_cids.leaf_cid = $1 ORDER BY eth.log_cids.index ASC`
 		err = db.Select(context.Background(), &rcts, rctsPgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		if len(rcts) != len(mocks.MockReceipts) {
 			t.Fatalf("expected %d receipts, got %d", len(mocks.MockReceipts), len(rcts))
 		}
@@ -304,9 +294,7 @@ func TestPGXIndexer(t *testing.T) {
 				AND transaction_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1 order by transaction_cids.index`
 		err = db.Select(context.Background(), &rcts, pgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, len(rcts), 5)
 		expectTrue(t, test_helpers.ListContainsString(rcts, rct1CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(rcts, rct2CID.String()))
@@ -403,9 +391,7 @@ func TestPGXIndexer(t *testing.T) {
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type != 3`
 		err = db.Select(context.Background(), &stateNodes, pgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, len(stateNodes), 2)
 		for _, stateNode := range stateNodes {
 			var data []byte
@@ -461,23 +447,17 @@ func TestPGXIndexer(t *testing.T) {
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type = 3`
 		err = db.Select(context.Background(), &stateNodes, pgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, len(stateNodes), 1)
 		stateNode := stateNodes[0]
 		var data []byte
 		dc, err := cid.Decode(stateNode.CID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
 		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, stateNode.CID, shared.RemovedNodeStateCID)
 		test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x02'})
 		test_helpers.ExpectEqual(t, data, []byte{})
@@ -495,9 +475,7 @@ func TestPGXIndexer(t *testing.T) {
 				AND header_cids.block_number = $1
 				AND storage_cids.node_type != 3`
 		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, len(storageNodes), 1)
 		test_helpers.ExpectEqual(t, storageNodes[0], v3Models.StorageNodeWithStateKeyModel{
 			CID:        storageCID.String(),
@@ -508,15 +486,11 @@ func TestPGXIndexer(t *testing.T) {
 		})
 		var data []byte
 		dc, err := cid.Decode(storageNodes[0].CID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, data, mocks.StorageLeafNode)
 
 		// check that Removed storage nodes were properly indexed
@@ -528,9 +502,7 @@ func TestPGXIndexer(t *testing.T) {
 				AND header_cids.block_number = $1
 				AND storage_cids.node_type = 3`
 		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, len(storageNodes), 1)
 		test_helpers.ExpectEqual(t, storageNodes[0], v3Models.StorageNodeWithStateKeyModel{
 			CID:        shared.RemovedNodeStorageCID,
@@ -540,16 +512,12 @@ func TestPGXIndexer(t *testing.T) {
 			Path:       []byte{'\x03'},
 		})
 		dc, err = cid.Decode(storageNodes[0].CID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		mhKey = dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
 		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
 		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		test_helpers.ExpectEqual(t, data, []byte{})
 	})
 }

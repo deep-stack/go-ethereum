@@ -24,6 +24,9 @@ import (
 	"os"
 	"testing"
 
+	sharedModels "github.com/ethereum/go-ethereum/statediff/indexer/models/shared"
+	v3Models "github.com/ethereum/go-ethereum/statediff/indexer/models/v3"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
@@ -170,7 +173,8 @@ func setup(t *testing.T) {
 	ind, err = file.NewStateDiffIndexer(context.Background(), mocks.TestConfig, file.TestConfig)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	var headerID int64
+	tx, headerID, err = ind.PushBlock(
 		mockBlock,
 		mocks.MockReceipts,
 		mocks.MockBlock.Difficulty())
@@ -186,7 +190,7 @@ func setup(t *testing.T) {
 		}
 	}()
 	for _, node := range mocks.StateDiffs {
-		err = ind.PushStateNode(tx, node, mockBlock.Hash().String())
+		err = ind.PushStateNode(tx, node, mockBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 
@@ -330,7 +334,7 @@ func TestFileIndexer(t *testing.T) {
 				if txRes.Value != transactions[3].Value().String() {
 					t.Fatalf("expected tx value %s got %s", transactions[3].Value().String(), txRes.Value)
 				}
-				accessListElementModels := make([]v2.AccessListElementModel, 0)
+				accessListElementModels := make([]v3Models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
 				err = sqlxdb.Select(&accessListElementModels, pgStr, c)
 				if err != nil {
@@ -339,11 +343,11 @@ func TestFileIndexer(t *testing.T) {
 				if len(accessListElementModels) != 2 {
 					t.Fatalf("expected two access list entries, got %d", len(accessListElementModels))
 				}
-				model1 := v2.AccessListElementModel{
+				model1 := v3Models.AccessListElementModel{
 					Index:   accessListElementModels[0].Index,
 					Address: accessListElementModels[0].Address,
 				}
-				model2 := v2.AccessListElementModel{
+				model2 := v3Models.AccessListElementModel{
 					Index:       accessListElementModels[1].Index,
 					Address:     accessListElementModels[1].Address,
 					StorageKeys: accessListElementModels[1].StorageKeys,
@@ -446,7 +450,7 @@ func TestFileIndexer(t *testing.T) {
 		expectTrue(t, test_helpers.ListContainsString(rcts, rct5CID.String()))
 
 		for idx, c := range rcts {
-			result := make([]v3.IPLDModel, 0)
+			result := make([]sharedModels.IPLDModel, 0)
 			pgStr = `SELECT data
 					FROM eth.receipt_cids
 					INNER JOIN public.blocks ON (receipt_cids.leaf_mh_key = public.blocks.key)
@@ -530,7 +534,7 @@ func TestFileIndexer(t *testing.T) {
 		defer tearDown(t)
 
 		// check that state nodes were properly indexed and published
-		stateNodes := make([]v2.StateNodeModel, 0)
+		stateNodes := make([]v3Models.StateNodeModel, 0)
 		pgStr := `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type != 3`
@@ -552,7 +556,7 @@ func TestFileIndexer(t *testing.T) {
 				t.Fatal(err)
 			}
 			pgStr = `SELECT * from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
-			var account v2.StateAccountModel
+			var account v3Models.StateAccountModel
 			err = sqlxdb.Get(&account, pgStr, stateNode.HeaderID, stateNode.Path)
 			if err != nil {
 				t.Fatal(err)
@@ -562,7 +566,7 @@ func TestFileIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, stateNode.StateKey, common.BytesToHash(mocks.ContractLeafKey).Hex())
 				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x06'})
 				test_helpers.ExpectEqual(t, data, mocks.ContractLeafNode)
-				test_helpers.ExpectEqual(t, account, v2.StateAccountModel{
+				test_helpers.ExpectEqual(t, account, v3Models.StateAccountModel{
 					HeaderID:    account.HeaderID,
 					StatePath:   stateNode.Path,
 					Balance:     "0",
@@ -576,7 +580,7 @@ func TestFileIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, stateNode.StateKey, common.BytesToHash(mocks.AccountLeafKey).Hex())
 				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x0c'})
 				test_helpers.ExpectEqual(t, data, mocks.AccountLeafNode)
-				test_helpers.ExpectEqual(t, account, v2.StateAccountModel{
+				test_helpers.ExpectEqual(t, account, v3Models.StateAccountModel{
 					HeaderID:    account.HeaderID,
 					StatePath:   stateNode.Path,
 					Balance:     "1000",
@@ -588,7 +592,7 @@ func TestFileIndexer(t *testing.T) {
 		}
 
 		// check that Removed state nodes were properly indexed and published
-		stateNodes = make([]v2.StateNodeModel, 0)
+		stateNodes = make([]v3Models.StateNodeModel, 0)
 		pgStr = `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type = 3`
@@ -621,7 +625,7 @@ func TestFileIndexer(t *testing.T) {
 		defer tearDown(t)
 
 		// check that storage nodes were properly indexed
-		storageNodes := make([]v2.StorageNodeWithStateKeyModel, 0)
+		storageNodes := make([]v3Models.StorageNodeWithStateKeyModel, 0)
 		pgStr := `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
 				FROM eth.storage_cids, eth.state_cids, eth.header_cids
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
@@ -633,7 +637,7 @@ func TestFileIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, len(storageNodes), 1)
-		test_helpers.ExpectEqual(t, storageNodes[0], v2.StorageNodeWithStateKeyModel{
+		test_helpers.ExpectEqual(t, storageNodes[0], v3Models.StorageNodeWithStateKeyModel{
 			CID:        storageCID.String(),
 			NodeType:   2,
 			StorageKey: common.BytesToHash(mocks.StorageLeafKey).Hex(),
@@ -654,7 +658,7 @@ func TestFileIndexer(t *testing.T) {
 		test_helpers.ExpectEqual(t, data, mocks.StorageLeafNode)
 
 		// check that Removed storage nodes were properly indexed
-		storageNodes = make([]v2.StorageNodeWithStateKeyModel, 0)
+		storageNodes = make([]v3Models.StorageNodeWithStateKeyModel, 0)
 		pgStr = `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
 				FROM eth.storage_cids, eth.state_cids, eth.header_cids
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
@@ -666,7 +670,7 @@ func TestFileIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, len(storageNodes), 1)
-		test_helpers.ExpectEqual(t, storageNodes[0], v2.StorageNodeWithStateKeyModel{
+		test_helpers.ExpectEqual(t, storageNodes[0], v3Models.StorageNodeWithStateKeyModel{
 			CID:        shared.RemovedNodeStorageCID,
 			NodeType:   3,
 			StorageKey: common.BytesToHash(mocks.RemovedLeafKey).Hex(),

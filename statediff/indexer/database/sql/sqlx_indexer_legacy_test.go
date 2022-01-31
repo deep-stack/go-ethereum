@@ -40,6 +40,7 @@ var (
 	legacyData      = mocks.NewLegacyData()
 	mockLegacyBlock *types.Block
 	legacyHeaderCID cid.Cid
+	headerID        int64
 )
 
 func setupLegacySQLX(t *testing.T) {
@@ -49,10 +50,13 @@ func setupLegacySQLX(t *testing.T) {
 	db, err = postgres.SetupV3SQLXDB()
 	require.NoError(t, err)
 
-	ind, err = sql.NewStateDiffIndexer(context.Background(), legacyData.Config, nodeinfo.Info{}, db, nil)
+	v2DB, err := postgres.SetupV2PGXDB()
+	require.NoError(t, err)
+
+	ind, err = sql.NewStateDiffIndexer(context.Background(), legacyData.Config, nodeinfo.Info{}, v2DB, db)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	tx, headerID, err = ind.PushBlock(
 		mockLegacyBlock,
 		legacyData.MockReceipts,
 		legacyData.MockBlock.Difficulty())
@@ -64,7 +68,7 @@ func setupLegacySQLX(t *testing.T) {
 		}
 	}()
 	for _, node := range legacyData.StateDiffs {
-		err = ind.PushStateNode(tx, node, mockLegacyBlock.Hash().String(), 0)
+		err = ind.PushStateNode(tx, node, mockLegacyBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 

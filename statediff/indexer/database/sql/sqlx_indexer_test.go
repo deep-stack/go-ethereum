@@ -42,26 +42,26 @@ import (
 
 func setupSQLX(t *testing.T) {
 	db, err = postgres.SetupV3SQLXDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, nodeinfo.Info{}, db, nil)
+	require.NoError(t, err)
+
+	v2DB, err := postgres.SetupV2PGXDB()
+	require.NoError(t, err)
+
+	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, nodeinfo.Info{}, v2DB, db)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	tx, headerID, err = ind.PushBlock(
 		mockBlock,
 		mocks.MockReceipts,
 		mocks.MockBlock.Difficulty())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		if err := tx.Submit(err); err != nil {
 			t.Fatal(err)
 		}
 	}()
 	for _, node := range mocks.StateDiffs {
-		err = ind.PushStateNode(tx, node, mockBlock.Hash().String(), 0)
+		err = ind.PushStateNode(tx, node, mockBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 
@@ -92,24 +92,21 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 		header := new(res)
 		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
 		test_helpers.ExpectEqual(t, header.Coinbase, mocks.MockHeader.Coinbase.String())
 		dc, err := cid.Decode(header.CID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 		var data []byte
 		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		test_helpers.ExpectEqual(t, data, mocks.MockHeaderRlp)
 	})
 
@@ -121,9 +118,8 @@ func TestSQLXIndexer(t *testing.T) {
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1`
 		err = db.Select(context.Background(), &trxs, pgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		test_helpers.ExpectEqual(t, len(trxs), 5)
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx1CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx2CID.String()))
@@ -138,25 +134,22 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 		for _, c := range trxs {
 			dc, err := cid.Decode(c)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 			var data []byte
 			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			txTypeAndValueStr := `SELECT tx_type, value FROM eth.transaction_cids WHERE cid = $1`
 			switch c {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
+
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
@@ -167,9 +160,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, tx2)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
@@ -180,9 +171,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, tx3)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
@@ -193,9 +182,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, tx4)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if txRes.TxType != types.AccessListTxType {
 					t.Fatalf("expected AccessListTxType (1), got %d", txRes.TxType)
 				}
@@ -205,9 +192,7 @@ func TestSQLXIndexer(t *testing.T) {
 				accessListElementModels := make([]v3Models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
 				err = db.Select(context.Background(), &accessListElementModels, pgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if len(accessListElementModels) != 2 {
 					t.Fatalf("expected two access list entries, got %d", len(accessListElementModels))
 				}
@@ -226,9 +211,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, tx5)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if txRes.TxType != types.DynamicFeeTxType {
 					t.Fatalf("expected DynamicFeeTxType (2), got %d", txRes.TxType)
 				}
@@ -354,41 +337,31 @@ func TestSQLXIndexer(t *testing.T) {
 				var postStatus uint64
 				pgStr = `SELECT post_status FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = db.Get(context.Background(), &postStatus, pgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postStatus, mocks.ExpectedPostStatus)
 			case rct2CID.String():
 				test_helpers.ExpectEqual(t, data, rctLeaf2)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState1)
 			case rct3CID.String():
 				test_helpers.ExpectEqual(t, data, rctLeaf3)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState2)
 			case rct4CID.String():
 				test_helpers.ExpectEqual(t, data, rctLeaf4)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState3)
 			case rct5CID.String():
 				test_helpers.ExpectEqual(t, data, rctLeaf5)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState3)
 			}
 		}

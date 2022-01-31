@@ -629,6 +629,9 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		MhKey:    stateMhKey,
 		NodeType: stateNode.NodeType.Int(),
 	})
+	if err != nil {
+		return err
+	}
 	if err := sdi.newDBWriter.InsertStateCID(tx.newDBTx, &v3Models.StateNodeModel{
 		HeaderID: headerHash,
 		Path:     stateNode.Path,
