@@ -796,6 +796,7 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+
 	StateDiffFlag = cli.BoolFlag{
 		Name:  "statediff",
 		Usage: "Enables the processing of state diffs between each block",
@@ -805,63 +806,118 @@ var (
 		Usage: "Statediff database type (current options: postgres, file, dump)",
 		Value: "postgres",
 	}
-	StateDiffDBDriverTypeFlag = cli.StringFlag{
-		Name:  "statediff.db.driver",
-		Usage: "Statediff database driver type",
-		Value: "pgx",
-	}
 	StateDiffDBDumpDst = cli.StringFlag{
 		Name:  "statediff.dump.dst",
 		Usage: "Statediff database dump destination (default is stdout)",
 		Value: "stdout",
 	}
-	StateDiffDBHostFlag = cli.StringFlag{
-		Name:  "statediff.db.host",
-		Usage: "Statediff database hostname/ip",
+
+	StateDiffV2DBDriverTypeFlag = cli.StringFlag{
+		Name:  "statediff.db.v2.driver",
+		Usage: "Statediff v2 database driver type",
+		Value: "pgx",
+	}
+	StateDiffV2DBHostFlag = cli.StringFlag{
+		Name:  "statediff.db.v2.host",
+		Usage: "Statediff v2 database hostname/ip",
 		Value: "localhost",
 	}
-	StateDiffDBPortFlag = cli.IntFlag{
-		Name:  "statediff.db.port",
-		Usage: "Statediff database port",
+	StateDiffV2DBPortFlag = cli.IntFlag{
+		Name:  "statediff.db.v2.port",
+		Usage: "Statediff v2 database port",
 		Value: 5432,
 	}
-	StateDiffDBNameFlag = cli.StringFlag{
-		Name:  "statediff.db.name",
-		Usage: "Statediff database name",
+	StateDiffV2DBNameFlag = cli.StringFlag{
+		Name:  "statediff.db.v2.name",
+		Usage: "Statediff v2 database name",
 	}
-	StateDiffDBPasswordFlag = cli.StringFlag{
-		Name:  "statediff.db.password",
-		Usage: "Statediff database password",
+	StateDiffV2DBPasswordFlag = cli.StringFlag{
+		Name:  "statediff.db.v2.password",
+		Usage: "Statediff v2 database password",
 	}
-	StateDiffDBUserFlag = cli.StringFlag{
-		Name:  "statediff.db.user",
-		Usage: "Statediff database username",
+	StateDiffV2DBUserFlag = cli.StringFlag{
+		Name:  "statediff.db.v2.user",
+		Usage: "Statediff v2 database username",
 		Value: "postgres",
 	}
-	StateDiffDBMaxConnLifetime = cli.DurationFlag{
-		Name:  "statediff.db.maxconnlifetime",
-		Usage: "Statediff database maximum connection lifetime (in seconds)",
+	StateDiffV2DBMaxConnLifetime = cli.DurationFlag{
+		Name:  "statediff.db.v2.maxconnlifetime",
+		Usage: "Statediff v2 database maximum connection lifetime (in seconds)",
 	}
-	StateDiffDBMaxConnIdleTime = cli.DurationFlag{
-		Name:  "statediff.db.maxconnidletime",
-		Usage: "Statediff database maximum connection idle time (in seconds)",
+	StateDiffV2DBMaxConnIdleTime = cli.DurationFlag{
+		Name:  "statediff.db.v2.maxconnidletime",
+		Usage: "Statediff v2 database maximum connection idle time (in seconds)",
 	}
-	StateDiffDBMaxConns = cli.IntFlag{
-		Name:  "statediff.db.maxconns",
-		Usage: "Statediff database maximum connections",
+	StateDiffV2DBMaxConns = cli.IntFlag{
+		Name:  "statediff.db.v2.maxconns",
+		Usage: "Statediff v2 database maximum connections",
 	}
-	StateDiffDBMinConns = cli.IntFlag{
-		Name:  "statediff.db.minconns",
-		Usage: "Statediff database minimum connections",
+	StateDiffV2DBMinConns = cli.IntFlag{
+		Name:  "statediff.db.v2.minconns",
+		Usage: "Statediff v2 database minimum connections",
 	}
-	StateDiffDBMaxIdleConns = cli.IntFlag{
-		Name:  "statediff.db.maxidleconns",
-		Usage: "Statediff database maximum idle connections",
+	StateDiffV2DBMaxIdleConns = cli.IntFlag{
+		Name:  "statediff.db.v2.maxidleconns",
+		Usage: "Statediff v2 database maximum idle connections",
 	}
-	StateDiffDBConnTimeout = cli.DurationFlag{
-		Name:  "statediff.db.conntimeout",
-		Usage: "Statediff database connection timeout (in seconds)",
+	StateDiffV2DBConnTimeout = cli.DurationFlag{
+		Name:  "statediff.db.v2.conntimeout",
+		Usage: "Statediff v2 database connection timeout (in seconds)",
 	}
+
+	StateDiffV3DBDriverTypeFlag = cli.StringFlag{
+		Name:  "statediff.db.v3.driver",
+		Usage: "Statediff v3 database driver type",
+		Value: "pgx",
+	}
+	StateDiffV3DBHostFlag = cli.StringFlag{
+		Name:  "statediff.db.v3.host",
+		Usage: "Statediff v3 database hostname/ip",
+		Value: "localhost",
+	}
+	StateDiffV3DBPortFlag = cli.IntFlag{
+		Name:  "statediff.db.v3.port",
+		Usage: "Statediff v3 database port",
+		Value: 5432,
+	}
+	StateDiffV3DBNameFlag = cli.StringFlag{
+		Name:  "statediff.db.v3.name",
+		Usage: "Statediff v3 database name",
+	}
+	StateDiffV3DBPasswordFlag = cli.StringFlag{
+		Name:  "statediff.db.v3.password",
+		Usage: "Statediff v3 database password",
+	}
+	StateDiffV3DBUserFlag = cli.StringFlag{
+		Name:  "statediff.db.v3.user",
+		Usage: "Statediff v3 database username",
+		Value: "postgres",
+	}
+	StateDiffV3DBMaxConnLifetime = cli.DurationFlag{
+		Name:  "statediff.db.v3.maxconnlifetime",
+		Usage: "Statediff v3 database maximum connection lifetime (in seconds)",
+	}
+	StateDiffV3DBMaxConnIdleTime = cli.DurationFlag{
+		Name:  "statediff.db.v3.maxconnidletime",
+		Usage: "Statediff v3 database maximum connection idle time (in seconds)",
+	}
+	StateDiffV3DBMaxConns = cli.IntFlag{
+		Name:  "statediff.db.v3.maxconns",
+		Usage: "Statediff v3 database maximum connections",
+	}
+	StateDiffV3DBMinConns = cli.IntFlag{
+		Name:  "statediff.db.v3.minconns",
+		Usage: "Statediff v3 database minimum connections",
+	}
+	StateDiffV3DBMaxIdleConns = cli.IntFlag{
+		Name:  "statediff.db.v3.maxidleconns",
+		Usage: "Statediff v3 database maximum idle connections",
+	}
+	StateDiffV3DBConnTimeout = cli.DurationFlag{
+		Name:  "statediff.db.v3.conntimeout",
+		Usage: "Statediff v3 database connection timeout (in seconds)",
+	}
+
 	StateDiffDBNodeIDFlag = cli.StringFlag{
 		Name:  "statediff.db.nodeid",
 		Usage: "Node ID to use when writing state diffs to database",

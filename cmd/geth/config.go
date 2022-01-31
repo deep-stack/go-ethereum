@@ -201,40 +201,78 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 					FilePath: ctx.GlobalString(utils.StateDiffFilePath.Name),
 				}
 			case shared.POSTGRES:
-				driverTypeStr := ctx.GlobalString(utils.StateDiffDBDriverTypeFlag.Name)
-				driverType, err := postgres.ResolveDriverType(driverTypeStr)
+				v2DriverTypeStr := ctx.GlobalString(utils.StateDiffV2DBDriverTypeFlag.Name)
+				v2DriverType, err := postgres.ResolveDriverType(v2DriverTypeStr)
 				if err != nil {
 					utils.Fatalf("%v", err)
 				}
-				pgConfig := postgres.Config{
-					Hostname:     ctx.GlobalString(utils.StateDiffDBHostFlag.Name),
-					Port:         ctx.GlobalInt(utils.StateDiffDBPortFlag.Name),
-					DatabaseName: ctx.GlobalString(utils.StateDiffDBNameFlag.Name),
-					Username:     ctx.GlobalString(utils.StateDiffDBUserFlag.Name),
-					Password:     ctx.GlobalString(utils.StateDiffDBPasswordFlag.Name),
+				v2PgConfig := postgres.Config{
+					Hostname:     ctx.GlobalString(utils.StateDiffV2DBHostFlag.Name),
+					Port:         ctx.GlobalInt(utils.StateDiffV2DBPortFlag.Name),
+					DatabaseName: ctx.GlobalString(utils.StateDiffV2DBNameFlag.Name),
+					Username:     ctx.GlobalString(utils.StateDiffV2DBUserFlag.Name),
+					Password:     ctx.GlobalString(utils.StateDiffV2DBPasswordFlag.Name),
 					ID:           nodeID,
 					ClientName:   clientName,
-					Driver:       driverType,
+					Driver:       v2DriverType,
 				}
-				if ctx.GlobalIsSet(utils.StateDiffDBMinConns.Name) {
-					pgConfig.MinConns = ctx.GlobalInt(utils.StateDiffDBMinConns.Name)
+				if ctx.GlobalIsSet(utils.StateDiffV2DBMinConns.Name) {
+					v2PgConfig.MinConns = ctx.GlobalInt(utils.StateDiffV2DBMinConns.Name)
 				}
-				if ctx.GlobalIsSet(utils.StateDiffDBMaxConns.Name) {
-					pgConfig.MaxConns = ctx.GlobalInt(utils.StateDiffDBMaxConns.Name)
+				if ctx.GlobalIsSet(utils.StateDiffV2DBMaxConns.Name) {
+					v2PgConfig.MaxConns = ctx.GlobalInt(utils.StateDiffV2DBMaxConns.Name)
 				}
-				if ctx.GlobalIsSet(utils.StateDiffDBMaxIdleConns.Name) {
-					pgConfig.MaxIdle = ctx.GlobalInt(utils.StateDiffDBMaxIdleConns.Name)
+				if ctx.GlobalIsSet(utils.StateDiffV2DBMaxIdleConns.Name) {
+					v2PgConfig.MaxIdle = ctx.GlobalInt(utils.StateDiffV2DBMaxIdleConns.Name)
 				}
-				if ctx.GlobalIsSet(utils.StateDiffDBMaxConnLifetime.Name) {
-					pgConfig.MaxConnLifetime = ctx.GlobalDuration(utils.StateDiffDBMaxConnLifetime.Name) * time.Second
+				if ctx.GlobalIsSet(utils.StateDiffV2DBMaxConnLifetime.Name) {
+					v2PgConfig.MaxConnLifetime = ctx.GlobalDuration(utils.StateDiffV2DBMaxConnLifetime.Name) * time.Second
 				}
-				if ctx.GlobalIsSet(utils.StateDiffDBMaxConnIdleTime.Name) {
-					pgConfig.MaxConnIdleTime = ctx.GlobalDuration(utils.StateDiffDBMaxConnIdleTime.Name) * time.Second
+				if ctx.GlobalIsSet(utils.StateDiffV2DBMaxConnIdleTime.Name) {
+					v2PgConfig.MaxConnIdleTime = ctx.GlobalDuration(utils.StateDiffV2DBMaxConnIdleTime.Name) * time.Second
 				}
-				if ctx.GlobalIsSet(utils.StateDiffDBConnTimeout.Name) {
-					pgConfig.ConnTimeout = ctx.GlobalDuration(utils.StateDiffDBConnTimeout.Name) * time.Second
+				if ctx.GlobalIsSet(utils.StateDiffV2DBConnTimeout.Name) {
+					v2PgConfig.ConnTimeout = ctx.GlobalDuration(utils.StateDiffV2DBConnTimeout.Name) * time.Second
 				}
-				indexerConfig = pgConfig
+
+				v3DriverTypeStr := ctx.GlobalString(utils.StateDiffV2DBDriverTypeFlag.Name)
+				v3DriverType, err := postgres.ResolveDriverType(v3DriverTypeStr)
+				if err != nil {
+					utils.Fatalf("%v", err)
+				}
+				v3PgConfig := postgres.Config{
+					Hostname:     ctx.GlobalString(utils.StateDiffV3DBHostFlag.Name),
+					Port:         ctx.GlobalInt(utils.StateDiffV3DBPortFlag.Name),
+					DatabaseName: ctx.GlobalString(utils.StateDiffV3DBNameFlag.Name),
+					Username:     ctx.GlobalString(utils.StateDiffV3DBUserFlag.Name),
+					Password:     ctx.GlobalString(utils.StateDiffV3DBPasswordFlag.Name),
+					ID:           nodeID,
+					ClientName:   clientName,
+					Driver:       v3DriverType,
+				}
+				if ctx.GlobalIsSet(utils.StateDiffV3DBMinConns.Name) {
+					v3PgConfig.MinConns = ctx.GlobalInt(utils.StateDiffV3DBMinConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffV3DBMaxConns.Name) {
+					v3PgConfig.MaxConns = ctx.GlobalInt(utils.StateDiffV3DBMaxConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffV3DBMaxIdleConns.Name) {
+					v3PgConfig.MaxIdle = ctx.GlobalInt(utils.StateDiffV3DBMaxIdleConns.Name)
+				}
+				if ctx.GlobalIsSet(utils.StateDiffV3DBMaxConnLifetime.Name) {
+					v3PgConfig.MaxConnLifetime = ctx.GlobalDuration(utils.StateDiffV3DBMaxConnLifetime.Name) * time.Second
+				}
+				if ctx.GlobalIsSet(utils.StateDiffV3DBMaxConnIdleTime.Name) {
+					v3PgConfig.MaxConnIdleTime = ctx.GlobalDuration(utils.StateDiffV3DBMaxConnIdleTime.Name) * time.Second
+				}
+				if ctx.GlobalIsSet(utils.StateDiffV3DBConnTimeout.Name) {
+					v3PgConfig.ConnTimeout = ctx.GlobalDuration(utils.StateDiffV3DBConnTimeout.Name) * time.Second
+				}
+
+				indexerConfig = postgres.MultiConfig{
+					V2: v2PgConfig,
+					V3: v3PgConfig,
+				}
 			case shared.DUMP:
 				dumpTypeStr := ctx.GlobalString(utils.StateDiffDBDumpDst.Name)
 				dumpType, err := dumpdb.ResolveDumpType(dumpTypeStr)
