@@ -18,12 +18,6 @@ package models
 
 import "github.com/lib/pq"
 
-// IPLDBatch holds the arguments for a batch insert of IPLD data
-type IPLDBatch struct {
-	Keys   []string
-	Values [][]byte
-}
-
 // UncleBatch is the db model for eth.uncle_cids
 type UncleBatch struct {
 	IDs          []int64

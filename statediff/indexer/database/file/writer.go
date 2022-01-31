@@ -20,13 +20,15 @@ import (
 	"fmt"
 	"io"
 
+	sharedModels "github.com/ethereum/go-ethereum/statediff/indexer/models/shared"
+
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
 	node "github.com/ipfs/go-ipld-format"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	v3Models "github.com/ethereum/go-ethereum/statediff/indexer/models/v3"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
 )
 
@@ -161,19 +163,19 @@ func (sqw *SQLWriter) upsertNode(node nodeinfo.Info) {
 	sqw.stmts <- []byte(fmt.Sprintf(nodeInsert, node.GenesisBlock, node.NetworkID, node.ID, node.ClientName, node.ChainID))
 }
 
-func (sqw *SQLWriter) upsertIPLD(ipld models.IPLDModel) {
+func (sqw *SQLWriter) upsertIPLD(ipld sharedModels.IPLDModel) {
 	sqw.stmts <- []byte(fmt.Sprintf(ipldInsert, ipld.Key, ipld.Data))
 }
 
 func (sqw *SQLWriter) upsertIPLDDirect(key string, value []byte) {
-	sqw.upsertIPLD(models.IPLDModel{
+	sqw.upsertIPLD(sharedModels.IPLDModel{
 		Key:  key,
 		Data: value,
 	})
 }
 
 func (sqw *SQLWriter) upsertIPLDNode(i node.Node) {
-	sqw.upsertIPLD(models.IPLDModel{
+	sqw.upsertIPLD(sharedModels.IPLDModel{
 		Key:  blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(i.Cid().Hash()).String(),
 		Data: i.RawData(),
 	})
@@ -185,14 +187,14 @@ func (sqw *SQLWriter) upsertIPLDRaw(codec, mh uint64, raw []byte) (string, strin
 		return "", "", err
 	}
 	prefixedKey := blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(c.Hash()).String()
-	sqw.upsertIPLD(models.IPLDModel{
+	sqw.upsertIPLD(sharedModels.IPLDModel{
 		Key:  prefixedKey,
 		Data: raw,
 	})
 	return c.String(), prefixedKey, err
 }
 
-func (sqw *SQLWriter) upsertHeaderCID(header models.HeaderModel) {
+func (sqw *SQLWriter) upsertHeaderCID(header v3Models.HeaderModel) {
 	stmt := fmt.Sprintf(headerInsert, header.BlockNumber, header.BlockHash, header.ParentHash, header.CID,
 		header.TotalDifficulty, header.NodeID, header.Reward, header.StateRoot, header.TxRoot,
 		header.RctRoot, header.UncleRoot, header.Bloom, header.Timestamp, header.MhKey, 1, header.Coinbase)
@@ -200,30 +202,30 @@ func (sqw *SQLWriter) upsertHeaderCID(header models.HeaderModel) {
 	indexerMetrics.blocks.Inc(1)
 }
 
-func (sqw *SQLWriter) upsertUncleCID(uncle models.UncleModel) {
+func (sqw *SQLWriter) upsertUncleCID(uncle v3Models.UncleModel) {
 	sqw.stmts <- []byte(fmt.Sprintf(uncleInsert, uncle.BlockHash, uncle.HeaderID, uncle.ParentHash, uncle.CID,
 		uncle.Reward, uncle.MhKey))
 }
 
-func (sqw *SQLWriter) upsertTransactionCID(transaction models.TxModel) {
+func (sqw *SQLWriter) upsertTransactionCID(transaction v3Models.TxModel) {
 	sqw.stmts <- []byte(fmt.Sprintf(txInsert, transaction.HeaderID, transaction.TxHash, transaction.CID, transaction.Dst,
 		transaction.Src, transaction.Index, transaction.MhKey, transaction.Data, transaction.Type, transaction.Value))
 	indexerMetrics.transactions.Inc(1)
 }
 
-func (sqw *SQLWriter) upsertAccessListElement(accessListElement models.AccessListElementModel) {
+func (sqw *SQLWriter) upsertAccessListElement(accessListElement v3Models.AccessListElementModel) {
 	sqw.stmts <- []byte(fmt.Sprintf(alInsert, accessListElement.TxID, accessListElement.Index, accessListElement.Address,
 		formatPostgresStringArray(accessListElement.StorageKeys)))
 	indexerMetrics.accessListEntries.Inc(1)
 }
 
-func (sqw *SQLWriter) upsertReceiptCID(rct *models.ReceiptModel) {
+func (sqw *SQLWriter) upsertReceiptCID(rct *v3Models.ReceiptModel) {
 	sqw.stmts <- []byte(fmt.Sprintf(rctInsert, rct.TxID, rct.LeafCID, rct.Contract, rct.ContractHash, rct.LeafMhKey,
 		rct.PostState, rct.PostStatus, rct.LogRoot))
 	indexerMetrics.receipts.Inc(1)
 }
 
-func (sqw *SQLWriter) upsertLogCID(logs []*models.LogsModel) {
+func (sqw *SQLWriter) upsertLogCID(logs []*v3Models.LogsModel) {
 	for _, l := range logs {
 		sqw.stmts <- []byte(fmt.Sprintf(logInsert, l.LeafCID, l.LeafMhKey, l.ReceiptID, l.Address, l.Index, l.Topic0,
 			l.Topic1, l.Topic2, l.Topic3, l.Data))
@@ -231,7 +233,7 @@ func (sqw *SQLWriter) upsertLogCID(logs []*models.LogsModel) {
 	}
 }
 
-func (sqw *SQLWriter) upsertStateCID(stateNode models.StateNodeModel) {
+func (sqw *SQLWriter) upsertStateCID(stateNode v3Models.StateNodeModel) {
 	var stateKey string
 	if stateNode.StateKey != nullHash.String() {
 		stateKey = stateNode.StateKey
@@ -240,12 +242,12 @@ func (sqw *SQLWriter) upsertStateCID(stateNode models.StateNodeModel) {
 		stateNode.NodeType, true, stateNode.MhKey))
 }
 
-func (sqw *SQLWriter) upsertStateAccount(stateAccount models.StateAccountModel) {
+func (sqw *SQLWriter) upsertStateAccount(stateAccount v3Models.StateAccountModel) {
 	sqw.stmts <- []byte(fmt.Sprintf(accountInsert, stateAccount.HeaderID, stateAccount.StatePath, stateAccount.Balance,
 		stateAccount.Nonce, stateAccount.CodeHash, stateAccount.StorageRoot))
 }
 
-func (sqw *SQLWriter) upsertStorageCID(storageCID models.StorageNodeModel) {
+func (sqw *SQLWriter) upsertStorageCID(storageCID v3Models.StorageNodeModel) {
 	var storageKey string
 	if storageCID.StorageKey != nullHash.String() {
 		storageKey = storageCID.StorageKey

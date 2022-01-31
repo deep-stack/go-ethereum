@@ -12,14 +12,13 @@ import (
 	"github.com/multiformats/go-multihash"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
 )
 
 var (
-	db        sql.Database
+	db        interfaces.Database
 	err       error
 	ind       interfaces.StateDiffIndexer
 	ipfsPgGet = `SELECT data FROM public.blocks

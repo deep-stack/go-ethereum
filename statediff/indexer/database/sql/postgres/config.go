@@ -54,6 +54,17 @@ var DefaultConfig = Config{
 	Password:     "password",
 }
 
+// MultiConfig holds multiple configs
+type MultiConfig struct {
+	V2 Config
+	V3 Config
+}
+
+// Type satisfies interfaces.Config
+func (mc MultiConfig) Type() shared.DBType {
+	return shared.POSTGRES
+}
+
 // Config holds params for a Postgres db
 type Config struct {
 	// conn string params

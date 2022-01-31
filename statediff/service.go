@@ -164,7 +164,8 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		if err != nil {
 			return err
 		}
-		indexer.ReportDBMetrics(10*time.Second, quitCh)
+		indexer.ReportOldDBMetrics(10*time.Second, quitCh)
+		indexer.ReportNewDBMetrics(10*time.Second, quitCh)
 	}
 	workers := params.NumWorkers
 	if workers == 0 {
@@ -661,6 +662,7 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 	// log.Info("Writing state diff", "block height", block.Number().Uint64())
 	var totalDifficulty *big.Int
 	var receipts types.Receipts
+	var headerID int64
 	var err error
 	var tx interfaces.Batch
 	if params.IncludeTD {
@@ -669,7 +671,7 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 	if params.IncludeReceipts {
 		receipts = sds.BlockChain.GetReceiptsByHash(block.Hash())
 	}
-	tx, err = sds.indexer.PushBlock(block, receipts, totalDifficulty)
+	tx, headerID, err = sds.indexer.PushBlock(block, receipts, totalDifficulty)
 	if err != nil {
 		return err
 	}
@@ -680,7 +682,7 @@ func (sds *Service) writeStateDiff(block *types.Block, parentRoot common.Hash, p
 		}
 	}()
 	output := func(node types2.StateNode) error {
-		return sds.indexer.PushStateNode(tx, node, block.Hash().String())
+		return sds.indexer.PushStateNode(tx, node, block.Hash().String(), headerID)
 	}
 	codeOutput := func(c types2.CodeAndCodeHash) error {
 		return sds.indexer.PushCodeAndCodeHash(tx, c)

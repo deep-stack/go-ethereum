@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	ipld2 "github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	v3Models "github.com/ethereum/go-ethereum/statediff/indexer/models/v3"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
@@ -86,12 +86,15 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 	}, nil
 }
 
-// ReportDBMetrics has nothing to report for dump
-func (sdi *StateDiffIndexer) ReportDBMetrics(time.Duration, <-chan bool) {}
+// ReportOldDBMetrics has nothing to report for dump
+func (sdi *StateDiffIndexer) ReportOldDBMetrics(time.Duration, <-chan bool) {}
+
+// ReportNewDBMetrics has nothing to report for dump
+func (sdi *StateDiffIndexer) ReportNewDBMetrics(time.Duration, <-chan bool) {}
 
 // PushBlock pushes and indexes block data in sql, except state & storage nodes (includes header, uncles, transactions & receipts)
 // Returns an initiated DB transaction which must be Closed via defer to commit or rollback
-func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receipts, totalDifficulty *big.Int) (interfaces.Batch, error) {
+func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receipts, totalDifficulty *big.Int) (interfaces.Batch, int64, error) {
 	start, t := time.Now(), time.Now()
 	blockHash := block.Hash()
 	blockHashStr := blockHash.String()
@@ -100,20 +103,20 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	transactions := block.Transactions()
 	// Derive any missing fields
 	if err := receipts.DeriveFields(sdi.chainConfig, blockHash, height, transactions); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// Generate the block iplds
 	headerNode, uncleNodes, txNodes, txTrieNodes, rctNodes, rctTrieNodes, logTrieNodes, logLeafNodeCIDs, rctLeafNodeCIDs, err := ipld2.FromBlockAndReceipts(block, receipts)
 	if err != nil {
-		return nil, fmt.Errorf("error creating IPLD nodes from block and receipts: %v", err)
+		return nil, 0, fmt.Errorf("error creating IPLD nodes from block and receipts: %v", err)
 	}
 
 	if len(txNodes) != len(rctNodes) || len(rctNodes) != len(rctLeafNodeCIDs) {
-		return nil, fmt.Errorf("expected number of transactions (%d), receipts (%d), and receipt trie leaf nodes (%d) to be equal", len(txNodes), len(rctNodes), len(rctLeafNodeCIDs))
+		return nil, 0, fmt.Errorf("expected number of transactions (%d), receipts (%d), and receipt trie leaf nodes (%d) to be equal", len(txNodes), len(rctNodes), len(rctLeafNodeCIDs))
 	}
 	if len(txTrieNodes) != len(rctTrieNodes) {
-		return nil, fmt.Errorf("expected number of tx trie (%d) and rct trie (%d) nodes to be equal", len(txTrieNodes), len(rctTrieNodes))
+		return nil, 0, fmt.Errorf("expected number of tx trie (%d) and rct trie (%d) nodes to be equal", len(txTrieNodes), len(rctTrieNodes))
 	}
 
 	// Calculate reward
@@ -176,14 +179,14 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		rctLeafNodeCIDs: rctLeafNodeCIDs,
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	tDiff = time.Since(t)
 	indexerMetrics.tTxAndRecProcessing.Update(tDiff)
 	traceMsg += fmt.Sprintf("tx and receipt processing time: %s\r\n", tDiff.String())
 	t = time.Now()
 
-	return blockTx, err
+	return blockTx, 0, err
 }
 
 // processHeader write a header IPLD insert SQL stmt to a file
@@ -197,7 +200,7 @@ func (sdi *StateDiffIndexer) processHeader(header *types.Header, headerNode node
 		*baseFee = header.BaseFee.String()
 	}
 	headerID := header.Hash().String()
-	sdi.fileWriter.upsertHeaderCID(models.HeaderModel{
+	sdi.fileWriter.upsertHeaderCID(v3Models.HeaderModel{
 		NodeID:          sdi.nodeID,
 		CID:             headerNode.Cid().String(),
 		MhKey:           shared.MultihashKeyFromCID(headerNode.Cid()),
@@ -229,7 +232,7 @@ func (sdi *StateDiffIndexer) processUncles(headerID string, blockNumber uint64, 
 		} else {
 			uncleReward = shared.CalcUncleMinerReward(blockNumber, uncleNode.Number.Uint64())
 		}
-		sdi.fileWriter.upsertUncleCID(models.UncleModel{
+		sdi.fileWriter.upsertUncleCID(v3Models.UncleModel{
 			HeaderID:   headerID,
 			CID:        uncleNode.Cid().String(),
 			MhKey:      shared.MultihashKeyFromCID(uncleNode.Cid()),
@@ -280,7 +283,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 		if err != nil {
 			return fmt.Errorf("error deriving tx sender: %v", err)
 		}
-		txModel := models.TxModel{
+		txModel := v3Models.TxModel{
 			HeaderID: args.headerID,
 			Dst:      shared.HandleZeroAddrPointer(trx.To()),
 			Src:      shared.HandleZeroAddr(from),
@@ -300,7 +303,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 			for k, storageKey := range accessListElement.StorageKeys {
 				storageKeys[k] = storageKey.Hex()
 			}
-			accessListElementModel := models.AccessListElementModel{
+			accessListElementModel := v3Models.AccessListElementModel{
 				TxID:        txID,
 				Index:       int64(j),
 				Address:     accessListElement.Address.Hex(),
@@ -321,7 +324,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 			return fmt.Errorf("invalid receipt leaf node cid")
 		}
 
-		rctModel := &models.ReceiptModel{
+		rctModel := &v3Models.ReceiptModel{
 			TxID:         txID,
 			Contract:     contract,
 			ContractHash: contractHash,
@@ -337,7 +340,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 		sdi.fileWriter.upsertReceiptCID(rctModel)
 
 		// index logs
-		logDataSet := make([]*models.LogsModel, len(receipt.Logs))
+		logDataSet := make([]*v3Models.LogsModel, len(receipt.Logs))
 		for idx, l := range receipt.Logs {
 			topicSet := make([]string, 4)
 			for ti, topic := range l.Topics {
@@ -348,7 +351,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 				return fmt.Errorf("invalid log cid")
 			}
 
-			logDataSet[idx] = &models.LogsModel{
+			logDataSet[idx] = &v3Models.LogsModel{
 				ReceiptID: txID,
 				Address:   l.Address.String(),
 				Index:     int64(l.Index),
@@ -374,13 +377,13 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 }
 
 // PushStateNode writes a state diff node object (including any child storage nodes) IPLD insert SQL stmt to a file
-func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode, headerID string) error {
+func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode, headerHash string, headerID int64) error {
 	// publish the state node
 	if stateNode.NodeType == sdtypes.Removed {
 		// short circuit if it is a Removed node
 		// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
-		stateModel := models.StateNodeModel{
-			HeaderID: headerID,
+		stateModel := v3Models.StateNodeModel{
+			HeaderID: headerHash,
 			Path:     stateNode.Path,
 			StateKey: common.BytesToHash(stateNode.LeafKey).String(),
 			CID:      shared.RemovedNodeStateCID,
@@ -394,8 +397,8 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 	if err != nil {
 		return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
 	}
-	stateModel := models.StateNodeModel{
-		HeaderID: headerID,
+	stateModel := v3Models.StateNodeModel{
+		HeaderID: headerHash,
 		Path:     stateNode.Path,
 		StateKey: common.BytesToHash(stateNode.LeafKey).String(),
 		CID:      stateCIDStr,
@@ -417,8 +420,8 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		if err := rlp.DecodeBytes(i[1].([]byte), &account); err != nil {
 			return fmt.Errorf("error decoding state account rlp: %s", err.Error())
 		}
-		accountModel := models.StateAccountModel{
-			HeaderID:    headerID,
+		accountModel := v3Models.StateAccountModel{
+			HeaderID:    headerHash,
 			StatePath:   stateNode.Path,
 			Balance:     account.Balance.String(),
 			Nonce:       account.Nonce,
@@ -432,8 +435,8 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		if storageNode.NodeType == sdtypes.Removed {
 			// short circuit if it is a Removed node
 			// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
-			storageModel := models.StorageNodeModel{
-				HeaderID:   headerID,
+			storageModel := v3Models.StorageNodeModel{
+				HeaderID:   headerHash,
 				StatePath:  stateNode.Path,
 				Path:       storageNode.Path,
 				StorageKey: common.BytesToHash(storageNode.LeafKey).String(),
@@ -448,8 +451,8 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		if err != nil {
 			return fmt.Errorf("error generating and cacheing storage node IPLD: %v", err)
 		}
-		storageModel := models.StorageNodeModel{
-			HeaderID:   headerID,
+		storageModel := v3Models.StorageNodeModel{
+			HeaderID:   headerHash,
 			StatePath:  stateNode.Path,
 			Path:       storageNode.Path,
 			StorageKey: common.BytesToHash(storageNode.LeafKey).String(),

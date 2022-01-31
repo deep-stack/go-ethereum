@@ -25,21 +25,18 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
-	"github.com/ethereum/go-ethereum/statediff/indexer/node"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 )
 
 // PGXDriver driver, implements sql.Driver
 type PGXDriver struct {
-	ctx      context.Context
-	pool     *pgxpool.Pool
-	nodeInfo node.Info
-	nodeID   string
+	ctx  context.Context
+	pool *pgxpool.Pool
 }
 
 // NewPGXDriver returns a new pgx driver
 // it initializes the connection pool and creates the node info table
-func NewPGXDriver(ctx context.Context, config Config, node node.Info) (*PGXDriver, error) {
+func NewPGXDriver(ctx context.Context, config Config) (*PGXDriver, error) {
 	pgConf, err := MakeConfig(config)
 	if err != nil {
 		return nil, err
@@ -48,11 +45,7 @@ func NewPGXDriver(ctx context.Context, config Config, node node.Info) (*PGXDrive
 	if err != nil {
 		return nil, ErrDBConnectionFailed(err)
 	}
-	pg := &PGXDriver{ctx: ctx, pool: dbPool, nodeInfo: node}
-	nodeErr := pg.createNode()
-	if nodeErr != nil {
-		return &PGXDriver{}, ErrUnableToSetNode(nodeErr)
-	}
+	pg := &PGXDriver{ctx: ctx, pool: dbPool}
 	return pg, nil
 }
 
@@ -88,27 +81,13 @@ func MakeConfig(config Config) (*pgxpool.Config, error) {
 	return conf, nil
 }
 
-func (pgx *PGXDriver) createNode() error {
-	_, err := pgx.pool.Exec(
-		pgx.ctx,
-		createNodeStm,
-		pgx.nodeInfo.GenesisBlock, pgx.nodeInfo.NetworkID,
-		pgx.nodeInfo.ID, pgx.nodeInfo.ClientName,
-		pgx.nodeInfo.ChainID)
-	if err != nil {
-		return ErrUnableToSetNode(err)
-	}
-	pgx.nodeID = pgx.nodeInfo.ID
-	return nil
-}
-
 // QueryRow satisfies sql.Database
-func (pgx *PGXDriver) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
+func (pgx *PGXDriver) QueryRow(ctx context.Context, sql string, args ...interface{}) interfaces.ScannableRow {
 	return pgx.pool.QueryRow(ctx, sql, args...)
 }
 
 // Exec satisfies sql.Database
-func (pgx *PGXDriver) Exec(ctx context.Context, sql string, args ...interface{}) (sql.Result, error) {
+func (pgx *PGXDriver) Exec(ctx context.Context, sql string, args ...interface{}) (interfaces.Result, error) {
 	res, err := pgx.pool.Exec(ctx, sql, args...)
 	return resultWrapper{ct: res}, err
 }
@@ -124,7 +103,7 @@ func (pgx *PGXDriver) Get(ctx context.Context, dest interface{}, query string, a
 }
 
 // Begin satisfies sql.Database
-func (pgx *PGXDriver) Begin(ctx context.Context) (sql.Tx, error) {
+func (pgx *PGXDriver) Begin(ctx context.Context) (interfaces.Tx, error) {
 	tx, err := pgx.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -132,14 +111,9 @@ func (pgx *PGXDriver) Begin(ctx context.Context) (sql.Tx, error) {
 	return pgxTxWrapper{tx: tx}, nil
 }
 
-func (pgx *PGXDriver) Stats() sql.Stats {
+func (pgx *PGXDriver) Stats() interfaces.Stats {
 	stats := pgx.pool.Stat()
 	return pgxStatsWrapper{stats: stats}
-}
-
-// NodeID satisfies sql.Database
-func (pgx *PGXDriver) NodeID() string {
-	return pgx.nodeID
 }
 
 // Close satisfies sql.Database/io.Closer
@@ -212,12 +186,12 @@ type pgxTxWrapper struct {
 }
 
 // QueryRow satisfies sql.Tx
-func (t pgxTxWrapper) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
+func (t pgxTxWrapper) QueryRow(ctx context.Context, sql string, args ...interface{}) interfaces.ScannableRow {
 	return t.tx.QueryRow(ctx, sql, args...)
 }
 
 // Exec satisfies sql.Tx
-func (t pgxTxWrapper) Exec(ctx context.Context, sql string, args ...interface{}) (sql.Result, error) {
+func (t pgxTxWrapper) Exec(ctx context.Context, sql string, args ...interface{}) (interfaces.Result, error) {
 	res, err := t.tx.Exec(ctx, sql, args...)
 	return resultWrapper{ct: res}, err
 }

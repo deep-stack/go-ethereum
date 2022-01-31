@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
+
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
@@ -34,10 +36,10 @@ func setupLegacyPGX(t *testing.T) {
 	mockLegacyBlock = legacyData.MockBlock
 	legacyHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, legacyData.MockHeaderRlp, multihash.KECCAK_256)
 
-	db, err = postgres.SetupPGXDB()
+	db, err = postgres.SetupV3PGXDB()
 	require.NoError(t, err)
 
-	ind, err = sql.NewStateDiffIndexer(context.Background(), legacyData.Config, db)
+	ind, err = sql.NewStateDiffIndexer(context.Background(), legacyData.Config, nodeinfo.Info{}, db, nil)
 	require.NoError(t, err)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
@@ -52,7 +54,7 @@ func setupLegacyPGX(t *testing.T) {
 		}
 	}()
 	for _, node := range legacyData.StateDiffs {
-		err = ind.PushStateNode(tx, node, legacyData.MockBlock.Hash().String())
+		err = ind.PushStateNode(tx, node, legacyData.MockBlock.Hash().String(), 0)
 		require.NoError(t, err)
 	}
 

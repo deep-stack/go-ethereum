@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
 	node "github.com/ipfs/go-ipld-format"
@@ -33,8 +32,8 @@ type BatchTx struct {
 	BlockNumber uint64
 	dump        io.Writer
 	quit        chan struct{}
-	iplds       chan models.IPLDModel
-	ipldCache   models.IPLDBatch
+	iplds       chan v3.IPLDModel
+	ipldCache   v3.IPLDBatch
 
 	submit func(blockTx *BatchTx, err error) error
 }
@@ -48,7 +47,7 @@ func (tx *BatchTx) flush() error {
 	if _, err := fmt.Fprintf(tx.dump, "%+v\r\n", tx.ipldCache); err != nil {
 		return err
 	}
-	tx.ipldCache = models.IPLDBatch{}
+	tx.ipldCache = v3.IPLDBatch{}
 	return nil
 }
 
@@ -60,21 +59,21 @@ func (tx *BatchTx) cache() {
 			tx.ipldCache.Keys = append(tx.ipldCache.Keys, i.Key)
 			tx.ipldCache.Values = append(tx.ipldCache.Values, i.Data)
 		case <-tx.quit:
-			tx.ipldCache = models.IPLDBatch{}
+			tx.ipldCache = v3.IPLDBatch{}
 			return
 		}
 	}
 }
 
 func (tx *BatchTx) cacheDirect(key string, value []byte) {
-	tx.iplds <- models.IPLDModel{
+	tx.iplds <- v3.IPLDModel{
 		Key:  key,
 		Data: value,
 	}
 }
 
 func (tx *BatchTx) cacheIPLD(i node.Node) {
-	tx.iplds <- models.IPLDModel{
+	tx.iplds <- v3.IPLDModel{
 		Key:  blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(i.Cid().Hash()).String(),
 		Data: i.RawData(),
 	}
@@ -86,7 +85,7 @@ func (tx *BatchTx) cacheRaw(codec, mh uint64, raw []byte) (string, string, error
 		return "", "", err
 	}
 	prefixedKey := blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(c.Hash()).String()
-	tx.iplds <- models.IPLDModel{
+	tx.iplds <- v3.IPLDModel{
 		Key:  prefixedKey,
 		Data: raw,
 	}
