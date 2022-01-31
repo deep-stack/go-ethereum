@@ -216,6 +216,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 					ClientName:   clientName,
 					Driver:       v2DriverType,
 				}
+				fmt.Printf("v2 config: %+v\r\n", v2PgConfig)
 				if ctx.GlobalIsSet(utils.StateDiffV2DBMinConns.Name) {
 					v2PgConfig.MinConns = ctx.GlobalInt(utils.StateDiffV2DBMinConns.Name)
 				}
@@ -235,7 +236,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 					v2PgConfig.ConnTimeout = ctx.GlobalDuration(utils.StateDiffV2DBConnTimeout.Name) * time.Second
 				}
 
-				v3DriverTypeStr := ctx.GlobalString(utils.StateDiffV2DBDriverTypeFlag.Name)
+				v3DriverTypeStr := ctx.GlobalString(utils.StateDiffV3DBDriverTypeFlag.Name)
 				v3DriverType, err := postgres.ResolveDriverType(v3DriverTypeStr)
 				if err != nil {
 					utils.Fatalf("%v", err)
@@ -250,6 +251,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 					ClientName:   clientName,
 					Driver:       v3DriverType,
 				}
+				fmt.Printf("v3 config: %+v\r\n", v3PgConfig)
 				if ctx.GlobalIsSet(utils.StateDiffV3DBMinConns.Name) {
 					v3PgConfig.MinConns = ctx.GlobalInt(utils.StateDiffV3DBMinConns.Name)
 				}

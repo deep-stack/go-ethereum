@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package sql
+package metrics
 
 import (
 	"strings"
@@ -41,7 +41,7 @@ func metricName(subsystem, name string) string {
 	return strings.Join(parts, "/")
 }
 
-type IndexerMetricsHandles struct {
+type WriterMetricsHandles struct {
 	// The total number of processed blocks
 	Blocks metrics.Counter
 	// The total number of processed transactions
@@ -52,6 +52,9 @@ type IndexerMetricsHandles struct {
 	Logs metrics.Counter
 	// The total number of access list entries processed
 	AccessListEntries metrics.Counter
+}
+
+type IndexerMetricsHandles struct {
 	// Time spent waiting for free postgres tx
 	TimeFreePostgres metrics.Timer
 	// Postgres transaction commit duration
@@ -66,13 +69,25 @@ type IndexerMetricsHandles struct {
 	TimeStateStoreCodeProcessing metrics.Timer
 }
 
+func RegisterWriterMetrics(reg metrics.Registry, version string) WriterMetricsHandles {
+	ctx := WriterMetricsHandles{
+		Blocks:            metrics.NewCounter(),
+		Transactions:      metrics.NewCounter(),
+		Receipts:          metrics.NewCounter(),
+		Logs:              metrics.NewCounter(),
+		AccessListEntries: metrics.NewCounter(),
+	}
+	subsys := "writer"
+	reg.Register(metricName(subsys, version+"/"+"blocks"), ctx.Blocks)
+	reg.Register(metricName(subsys, version+"/"+"transactions"), ctx.Transactions)
+	reg.Register(metricName(subsys, version+"/"+"receipts"), ctx.Receipts)
+	reg.Register(metricName(subsys, version+"/"+"logs"), ctx.Logs)
+	reg.Register(metricName(subsys, version+"/"+"access_list_entries"), ctx.AccessListEntries)
+	return ctx
+}
+
 func RegisterIndexerMetrics(reg metrics.Registry) IndexerMetricsHandles {
 	ctx := IndexerMetricsHandles{
-		Blocks:                       metrics.NewCounter(),
-		Transactions:                 metrics.NewCounter(),
-		Receipts:                     metrics.NewCounter(),
-		Logs:                         metrics.NewCounter(),
-		AccessListEntries:            metrics.NewCounter(),
 		TimeFreePostgres:             metrics.NewTimer(),
 		TimePostgresCommit:           metrics.NewTimer(),
 		TimeHeaderProcessing:         metrics.NewTimer(),
@@ -81,11 +96,6 @@ func RegisterIndexerMetrics(reg metrics.Registry) IndexerMetricsHandles {
 		TimeStateStoreCodeProcessing: metrics.NewTimer(),
 	}
 	subsys := "indexer"
-	reg.Register(metricName(subsys, "blocks"), ctx.Blocks)
-	reg.Register(metricName(subsys, "transactions"), ctx.Transactions)
-	reg.Register(metricName(subsys, "receipts"), ctx.Receipts)
-	reg.Register(metricName(subsys, "logs"), ctx.Logs)
-	reg.Register(metricName(subsys, "access_list_entries"), ctx.AccessListEntries)
 	reg.Register(metricName(subsys, "t_free_postgres"), ctx.TimeFreePostgres)
 	reg.Register(metricName(subsys, "t_postgres_commit"), ctx.TimePostgresCommit)
 	reg.Register(metricName(subsys, "t_header_processing"), ctx.TimeHeaderProcessing)

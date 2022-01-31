@@ -20,21 +20,22 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/metrics"
+	metrics2 "github.com/ethereum/go-ethereum/statediff/indexer/database/sql/metrics"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models/v2"
 	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 )
 
 var (
-	nullHash = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+	nullHash        = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+	writerV2Metrics = metrics2.RegisterWriterMetrics(metrics.DefaultRegistry, "v3")
 )
 
 // Writer handles processing and writing of indexed IPLD objects to Postgres
 type Writer struct {
-	DB      interfaces.Database
-	metrics sql.IndexerMetricsHandles
-	nodeID  int64
+	DB     interfaces.Database
+	nodeID int64
 }
 
 // NewWriter creates a new pointer to a Writer
@@ -52,7 +53,7 @@ func (w *Writer) Close() error {
 /*
 InsertNodeInfo inserts a node info model
 INSERT INTO nodes (genesis_block, network_id, node_id, client_name, chain_id) VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (genesis_block, network_id, node_id, chain_id) DO NOTHING
+ON CONFLICT (genesis_block, network_id, node_id, chain_id) DO NOTHING RETURNING ID
 */
 func (w *Writer) InsertNodeInfo(info node.Info) error {
 	var nodeID int64
@@ -79,7 +80,7 @@ func (w *Writer) InsertHeaderCID(tx interfaces.Tx, header *models.HeaderModel) (
 	if err != nil {
 		return 0, fmt.Errorf("error inserting header_cids entry: %v", err)
 	}
-	w.metrics.Blocks.Inc(1)
+	writerV2Metrics.Blocks.Inc(1)
 	return headerID, nil
 }
 
@@ -110,7 +111,7 @@ func (w *Writer) InsertTransactionCID(tx interfaces.Tx, transaction *models.TxMo
 	if err != nil {
 		return 0, fmt.Errorf("error inserting transaction_cids entry: %v", err)
 	}
-	w.metrics.Transactions.Inc(1)
+	writerV2Metrics.Transactions.Inc(1)
 	return txID, nil
 }
 
@@ -125,7 +126,7 @@ func (w *Writer) InsertAccessListElement(tx interfaces.Tx, accessListElement *mo
 	if err != nil {
 		return fmt.Errorf("error inserting access_list_element entry: %v", err)
 	}
-	w.metrics.AccessListEntries.Inc(1)
+	writerV2Metrics.AccessListEntries.Inc(1)
 	return nil
 }
 
@@ -141,7 +142,7 @@ func (w *Writer) InsertReceiptCID(tx interfaces.Tx, rct *models.ReceiptModel) (i
 	if err != nil {
 		return 0, fmt.Errorf("error inserting receipt_cids entry: %w", err)
 	}
-	w.metrics.Receipts.Inc(1)
+	writerV2Metrics.Receipts.Inc(1)
 	return receiptID, nil
 }
 
@@ -158,7 +159,7 @@ func (w *Writer) InsertLogCID(tx interfaces.Tx, logs []*models.LogsModel) error 
 		if err != nil {
 			return fmt.Errorf("error inserting logs entry: %w", err)
 		}
-		w.metrics.Logs.Inc(1)
+		writerV2Metrics.Logs.Inc(1)
 	}
 	return nil
 }

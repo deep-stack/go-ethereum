@@ -20,21 +20,22 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/metrics"
+	metrics2 "github.com/ethereum/go-ethereum/statediff/indexer/database/sql/metrics"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models/v3"
 	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 )
 
 var (
-	nullHash = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+	nullHash        = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+	writerV3Metrics = metrics2.RegisterWriterMetrics(metrics.DefaultRegistry, "v3")
 )
 
 // Writer handles processing and writing of indexed IPLD objects to Postgres
 type Writer struct {
-	DB      interfaces.Database
-	metrics sql.IndexerMetricsHandles
-	nodeID  string
+	DB     interfaces.Database
+	nodeID string
 }
 
 // NewWriter creates a new pointer to a Writer
@@ -69,7 +70,7 @@ INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, nod
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 ON CONFLICT (block_hash) DO UPDATE SET (block_number, parent_hash, cid, td, node_id, reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, coinbase) = ($1, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, eth.header_cids.times_validated + 1, $16)
 */
-func (w *Writer) InsertHeaderCID(tx interfaces.Tx, header models.HeaderModel) error {
+func (w *Writer) InsertHeaderCID(tx interfaces.Tx, header *models.HeaderModel) error {
 	_, err := tx.Exec(w.DB.Context(), w.DB.InsertHeaderStm(),
 		header.BlockNumber, header.BlockHash, header.ParentHash, header.CID, header.TotalDifficulty, w.nodeID,
 		header.Reward, header.StateRoot, header.TxRoot, header.RctRoot, header.UncleRoot, header.Bloom,
@@ -77,7 +78,7 @@ func (w *Writer) InsertHeaderCID(tx interfaces.Tx, header models.HeaderModel) er
 	if err != nil {
 		return fmt.Errorf("error inserting header_cids entry: %v", err)
 	}
-	w.metrics.Blocks.Inc(1)
+	writerV3Metrics.Blocks.Inc(1)
 	return nil
 }
 
@@ -107,7 +108,7 @@ func (w *Writer) InsertTransactionCID(tx interfaces.Tx, transaction *models.TxMo
 	if err != nil {
 		return fmt.Errorf("error inserting transaction_cids entry: %v", err)
 	}
-	w.metrics.Transactions.Inc(1)
+	writerV3Metrics.Transactions.Inc(1)
 	return nil
 }
 
@@ -122,7 +123,7 @@ func (w *Writer) InsertAccessListElement(tx interfaces.Tx, accessListElement *mo
 	if err != nil {
 		return fmt.Errorf("error inserting access_list_element entry: %v", err)
 	}
-	w.metrics.AccessListEntries.Inc(1)
+	writerV3Metrics.AccessListEntries.Inc(1)
 	return nil
 }
 
@@ -137,7 +138,7 @@ func (w *Writer) InsertReceiptCID(tx interfaces.Tx, rct *models.ReceiptModel) er
 	if err != nil {
 		return fmt.Errorf("error inserting receipt_cids entry: %w", err)
 	}
-	w.metrics.Receipts.Inc(1)
+	writerV3Metrics.Receipts.Inc(1)
 	return nil
 }
 
@@ -154,7 +155,7 @@ func (w *Writer) InsertLogCID(tx interfaces.Tx, logs []*models.LogsModel) error 
 		if err != nil {
 			return fmt.Errorf("error inserting logs entry: %w", err)
 		}
-		w.metrics.Logs.Inc(1)
+		writerV3Metrics.Logs.Inc(1)
 	}
 	return nil
 }

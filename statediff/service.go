@@ -18,6 +18,7 @@ package statediff
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -162,7 +163,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		var err error
 		indexer, err = ind.NewStateDiffIndexer(params.Context, blockChain.Config(), info, params.IndexerConfig)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to initialize a new statediff indexer: %v", err)
 		}
 		indexer.ReportOldDBMetrics(10*time.Second, quitCh)
 		indexer.ReportNewDBMetrics(10*time.Second, quitCh)
@@ -235,7 +236,7 @@ func (sds *Service) WriteLoop(chainEventCh chan core.ChainEvent) {
 	chainEventSub := sds.BlockChain.SubscribeChainEvent(chainEventCh)
 	defer chainEventSub.Unsubscribe()
 	errCh := chainEventSub.Err()
-	var wg sync.WaitGroup
+	wg := new(sync.WaitGroup)
 	// Process metrics for chain events, then forward to workers
 	chainEventFwd := make(chan core.ChainEvent, chainEventChanSize)
 	wg.Add(1)
@@ -266,7 +267,7 @@ func (sds *Service) WriteLoop(chainEventCh chan core.ChainEvent) {
 	}()
 	wg.Add(int(sds.numWorkers))
 	for worker := uint(0); worker < sds.numWorkers; worker++ {
-		params := workerParams{chainEventCh: chainEventFwd, wg: &wg, id: worker}
+		params := workerParams{chainEventCh: chainEventFwd, wg: wg, id: worker}
 		go sds.writeLoopWorker(params)
 	}
 	wg.Wait()

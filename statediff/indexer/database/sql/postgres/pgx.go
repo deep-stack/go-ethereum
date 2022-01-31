@@ -25,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 )
 
@@ -37,6 +38,7 @@ type PGXDriver struct {
 // NewPGXDriver returns a new pgx driver
 // it initializes the connection pool and creates the node info table
 func NewPGXDriver(ctx context.Context, config Config) (*PGXDriver, error) {
+	log.Info("connecting to database", "connection string", config.DbConnectionString())
 	pgConf, err := MakeConfig(config)
 	if err != nil {
 		return nil, err

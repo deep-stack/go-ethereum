@@ -18,6 +18,7 @@ package sql
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 
@@ -53,11 +54,11 @@ func (tx *BatchTx) Submit(err error) error {
 func (tx *BatchTx) flush() error {
 	_, err := tx.oldDBTx.Exec(tx.ctx, tx.oldStmt, pq.Array(tx.ipldCache.Keys), pq.Array(tx.ipldCache.Values))
 	if err != nil {
-		return err
+		return fmt.Errorf("error flushing IPLD cache to old DB: %v", err)
 	}
 	_, err = tx.newDBTx.Exec(tx.ctx, tx.newStmt, pq.Array(tx.ipldCache.Keys), pq.Array(tx.ipldCache.Values))
 	if err != nil {
-		return err
+		return fmt.Errorf("error flushing IPLD cache to new DB: %v", err)
 	}
 	tx.ipldCache = modelsShared.IPLDBatch{}
 	return nil

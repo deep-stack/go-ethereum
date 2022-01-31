@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	metrics2 "github.com/ethereum/go-ethereum/statediff/indexer/database/sql/metrics"
+
 	"github.com/ipfs/go-cid"
 	node "github.com/ipfs/go-ipld-format"
 	"github.com/multiformats/go-multihash"
@@ -53,8 +55,8 @@ import (
 var _ interfaces.StateDiffIndexer = &StateDiffIndexer{}
 
 var (
-	indexerMetrics = RegisterIndexerMetrics(metrics.DefaultRegistry)
-	dbMetrics      = RegisterDBMetrics(metrics.DefaultRegistry)
+	indexerMetrics = metrics2.RegisterIndexerMetrics(metrics.DefaultRegistry)
+	dbMetrics      = metrics2.RegisterDBMetrics(metrics.DefaultRegistry)
 )
 
 // StateDiffIndexer satisfies the indexer.StateDiffIndexer interface for ethereum statediff objects on top of an SQL sql
@@ -69,19 +71,19 @@ type StateDiffIndexer struct {
 func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, info nodeInfo.Info, old, new interfaces.Database) (*StateDiffIndexer, error) {
 	// Write the removed node to the db on init
 	if _, err := old.Exec(ctx, old.InsertIPLDStm(), shared.RemovedNodeMhKey, []byte{}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to write removed node IPLD to old DB: %v", err)
 	}
 	if _, err := new.Exec(ctx, new.InsertIPLDStm(), shared.RemovedNodeMhKey, []byte{}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to write removed node IPLD to new DB: %v", err)
 	}
 	// Write node info to the db on init
 	oldWriter := v2Writer.NewWriter(old)
 	newWriter := v3Writer.NewWriter(new)
 	if err := oldWriter.InsertNodeInfo(info); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to write node info to old DB: %v", err)
 	}
 	if err := newWriter.InsertNodeInfo(info); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to write node info to new DB: %v", err)
 	}
 	return &StateDiffIndexer{
 		ctx:         ctx,
@@ -171,31 +173,26 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	if err != nil {
 		return nil, 0, err
 	}
-	defer func() {
-		if p := recover(); p != nil {
-			rollback(sdi.ctx, oldTx)
-			panic(p)
-		} else if err != nil {
-			rollback(sdi.ctx, oldTx)
-		}
-	}()
 	newTx, err := sdi.newDBWriter.DB.Begin(sdi.ctx)
 	if err != nil {
+		rollback(sdi.ctx, oldTx)
 		return nil, 0, err
 	}
 	defer func() {
 		if p := recover(); p != nil {
 			rollback(sdi.ctx, newTx)
+			rollback(sdi.ctx, oldTx)
 			panic(p)
 		} else if err != nil {
 			rollback(sdi.ctx, newTx)
+			rollback(sdi.ctx, oldTx)
 		}
 	}()
 	blockTx := &BatchTx{
 		ctx:         sdi.ctx,
 		BlockNumber: height,
 		oldStmt:     sdi.oldDBWriter.DB.InsertIPLDsStm(),
-		newStmt:     sdi.newDBWriter.DB.InsertStateStm(),
+		newStmt:     sdi.newDBWriter.DB.InsertIPLDsStm(),
 		iplds:       make(chan sharedModels.IPLDModel),
 		quit:        make(chan struct{}),
 		ipldCache:   sharedModels.IPLDBatch{},
@@ -310,10 +307,11 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 		baseFee = new(string)
 		*baseFee = header.BaseFee.String()
 	}
+	mhKey := shared.MultihashKeyFromCID(headerNode.Cid())
 	// index header
 	headerID, err := sdi.oldDBWriter.InsertHeaderCID(tx.oldDBTx, &v2Models.HeaderModel{
 		CID:             headerNode.Cid().String(),
-		MhKey:           shared.MultihashKeyFromCID(headerNode.Cid()),
+		MhKey:           mhKey,
 		ParentHash:      header.ParentHash.String(),
 		BlockNumber:     header.Number.String(),
 		BlockHash:       header.Hash().String(),
@@ -330,9 +328,9 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 	if err != nil {
 		return 0, err
 	}
-	if err := sdi.newDBWriter.InsertHeaderCID(tx.newDBTx, v3Models.HeaderModel{
+	if err := sdi.newDBWriter.InsertHeaderCID(tx.newDBTx, &v3Models.HeaderModel{
 		CID:             headerNode.Cid().String(),
-		MhKey:           shared.MultihashKeyFromCID(headerNode.Cid()),
+		MhKey:           mhKey,
 		ParentHash:      header.ParentHash.String(),
 		BlockNumber:     header.Number.String(),
 		BlockHash:       header.Hash().String(),
@@ -363,10 +361,11 @@ func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerHash string, heade
 		} else {
 			uncleReward = shared.CalcUncleMinerReward(blockNumber, uncleNode.Number.Uint64())
 		}
+		mhKey := shared.MultihashKeyFromCID(uncleNode.Cid())
 		if err := sdi.oldDBWriter.InsertUncleCID(tx.oldDBTx, &v2Models.UncleModel{
 			HeaderID:   headerID,
 			CID:        uncleNode.Cid().String(),
-			MhKey:      shared.MultihashKeyFromCID(uncleNode.Cid()),
+			MhKey:      mhKey,
 			ParentHash: uncleNode.ParentHash.String(),
 			BlockHash:  uncleNode.Hash().String(),
 			Reward:     uncleReward.String(),
@@ -376,7 +375,7 @@ func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerHash string, heade
 		if err := sdi.newDBWriter.InsertUncleCID(tx.newDBTx, &v3Models.UncleModel{
 			HeaderID:   headerHash,
 			CID:        uncleNode.Cid().String(),
-			MhKey:      shared.MultihashKeyFromCID(uncleNode.Cid()),
+			MhKey:      mhKey,
 			ParentHash: uncleNode.ParentHash.String(),
 			BlockHash:  uncleNode.Hash().String(),
 			Reward:     uncleReward.String(),
@@ -428,15 +427,18 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 		if err != nil {
 			return fmt.Errorf("error deriving tx sender: %v", err)
 		}
+		mhKey := shared.MultihashKeyFromCID(txNode.Cid())
+		dst := shared.HandleZeroAddrPointer(trx.To())
+		src := shared.HandleZeroAddr(from)
 		txID, err := sdi.oldDBWriter.InsertTransactionCID(tx.oldDBTx, &v2Models.TxModel{
 			HeaderID: args.headerID,
-			Dst:      shared.HandleZeroAddrPointer(trx.To()),
-			Src:      shared.HandleZeroAddr(from),
+			Dst:      dst,
+			Src:      src,
 			TxHash:   txHash,
 			Index:    int64(i),
 			Data:     trx.Data(),
 			CID:      txNode.Cid().String(),
-			MhKey:    shared.MultihashKeyFromCID(txNode.Cid()),
+			MhKey:    mhKey,
 			Type:     trx.Type(),
 		})
 		if err != nil {
@@ -444,13 +446,13 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 		}
 		if err := sdi.newDBWriter.InsertTransactionCID(tx.newDBTx, &v3Models.TxModel{
 			HeaderID: args.headerHash,
-			Dst:      shared.HandleZeroAddrPointer(trx.To()),
-			Src:      shared.HandleZeroAddr(from),
+			Dst:      dst,
+			Src:      src,
 			TxHash:   txHash,
 			Index:    int64(i),
 			Data:     trx.Data(),
 			CID:      txNode.Cid().String(),
-			MhKey:    shared.MultihashKeyFromCID(txNode.Cid()),
+			MhKey:    mhKey,
 			Type:     trx.Type(),
 			Value:    val,
 		}); err != nil {
@@ -500,12 +502,13 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			postState = common.Bytes2Hex(receipt.PostState)
 		}
 
+		rctMhKey := shared.MultihashKeyFromCID(args.rctLeafNodeCIDs[i])
 		rctID, err := sdi.oldDBWriter.InsertReceiptCID(tx.oldDBTx, &v2Models.ReceiptModel{
 			TxID:         txID,
 			Contract:     contract,
 			ContractHash: contractHash,
 			LeafCID:      args.rctLeafNodeCIDs[i].String(),
-			LeafMhKey:    shared.MultihashKeyFromCID(args.rctLeafNodeCIDs[i]),
+			LeafMhKey:    rctMhKey,
 			LogRoot:      args.rctNodes[i].LogRoot.String(),
 			PostState:    postState,
 			PostStatus:   postStatus,
@@ -518,7 +521,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			Contract:     contract,
 			ContractHash: contractHash,
 			LeafCID:      args.rctLeafNodeCIDs[i].String(),
-			LeafMhKey:    shared.MultihashKeyFromCID(args.rctLeafNodeCIDs[i]),
+			LeafMhKey:    rctMhKey,
 			LogRoot:      args.rctNodes[i].LogRoot.String(),
 			PostState:    postState,
 			PostStatus:   postStatus,
@@ -540,13 +543,14 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 				return fmt.Errorf("invalid log cid")
 			}
 
+			logMhKey := shared.MultihashKeyFromCID(args.logLeafNodeCIDs[i][idx])
 			oldLogDataSet[idx] = &v2Models.LogsModel{
 				ReceiptID: rctID,
 				Address:   l.Address.String(),
 				Index:     int64(l.Index),
 				Data:      l.Data,
 				LeafCID:   args.logLeafNodeCIDs[i][idx].String(),
-				LeafMhKey: shared.MultihashKeyFromCID(args.logLeafNodeCIDs[i][idx]),
+				LeafMhKey: logMhKey,
 				Topic0:    topicSet[0],
 				Topic1:    topicSet[1],
 				Topic2:    topicSet[2],
@@ -558,7 +562,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 				Index:     int64(l.Index),
 				Data:      l.Data,
 				LeafCID:   args.logLeafNodeCIDs[i][idx].String(),
-				LeafMhKey: shared.MultihashKeyFromCID(args.logLeafNodeCIDs[i][idx]),
+				LeafMhKey: logMhKey,
 				Topic0:    topicSet[0],
 				Topic1:    topicSet[1],
 				Topic2:    topicSet[2],

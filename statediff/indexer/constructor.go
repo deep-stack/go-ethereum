@@ -66,7 +66,7 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, n
 		default:
 			return nil, fmt.Errorf("unrecongized Postgres driver type: %s", pgc.V2.Driver)
 		}
-		switch pgc.V2.Driver {
+		switch pgc.V3.Driver {
 		case postgres.PGX:
 			newDriver, err = postgres.NewPGXDriver(ctx, pgc.V3)
 			if err != nil {

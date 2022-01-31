@@ -24,8 +24,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/models/v2"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"

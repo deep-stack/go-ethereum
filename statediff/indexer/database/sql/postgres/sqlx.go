@@ -18,12 +18,14 @@ package postgres
 
 import (
 	"context"
-	coresql "database/sql"
 	"time"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
+	coresql "database/sql"
 
 	"github.com/jmoiron/sqlx"
+
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 )
 
 // SQLXDriver driver, implements sql.Driver
@@ -35,7 +37,9 @@ type SQLXDriver struct {
 // NewSQLXDriver returns a new sqlx driver for Postgres
 // it initializes the connection pool and creates the node info table
 func NewSQLXDriver(ctx context.Context, config Config) (*SQLXDriver, error) {
-	db, err := sqlx.ConnectContext(ctx, "postgres", config.DbConnectionString())
+	connStr := config.DbConnectionString()
+	log.Info("connecting to database", "connection string", connStr)
+	db, err := sqlx.ConnectContext(ctx, "postgres", connStr)
 	if err != nil {
 		return &SQLXDriver{}, ErrDBConnectionFailed(err)
 	}

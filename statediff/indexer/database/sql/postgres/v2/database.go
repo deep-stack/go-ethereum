@@ -37,7 +37,9 @@ type DB struct {
 // InsertNodeInfoStm satisfies interfaces.Statements
 func (db *DB) InsertNodeInfoStm() string {
 	return `INSERT INTO nodes (genesis_block, network_id, node_id, client_name, chain_id) VALUES ($1, $2, $3, $4, $5)
-				ON CONFLICT (genesis_block, network_id, node_id, chain_id) DO NOTHING`
+				ON CONFLICT (genesis_block, network_id, node_id, chain_id)
+				DO UPDATE SET client_name = $4
+				RETURNING ID`
 }
 
 // InsertHeaderStm satisfies the interfaces.Statements

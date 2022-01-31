@@ -19,10 +19,12 @@ package sql
 import (
 	"context"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 )
 
 // TearDownDB is used to tear down the watcher dbs after tests
-func TearDownDB(t *testing.T, db Database) {
+func TearDownDB(t *testing.T, db interfaces.Database) {
 	ctx := context.Background()
 	tx, err := db.Begin(ctx)
 	if err != nil {
