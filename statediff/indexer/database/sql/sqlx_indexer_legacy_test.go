@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
+
 	"github.com/ipfs/go-cid"
 	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
@@ -38,19 +40,23 @@ var (
 	legacyData      = mocks.NewLegacyData()
 	mockLegacyBlock *types.Block
 	legacyHeaderCID cid.Cid
+	headerID        int64
 )
 
 func setupLegacySQLX(t *testing.T) {
 	mockLegacyBlock = legacyData.MockBlock
 	legacyHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, legacyData.MockHeaderRlp, multihash.KECCAK_256)
 
-	db, err = postgres.SetupSQLXDB()
+	db, err = postgres.SetupV3SQLXDB()
 	require.NoError(t, err)
 
-	ind, err = sql.NewStateDiffIndexer(context.Background(), legacyData.Config, db)
+	v2DB, err := postgres.SetupV2PGXDB()
+	require.NoError(t, err)
+
+	ind, err = sql.NewStateDiffIndexer(context.Background(), legacyData.Config, nodeinfo.Info{}, v2DB, db)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	tx, headerID, err = ind.PushBlock(
 		mockLegacyBlock,
 		legacyData.MockReceipts,
 		legacyData.MockBlock.Difficulty())
@@ -62,7 +68,7 @@ func setupLegacySQLX(t *testing.T) {
 		}
 	}()
 	for _, node := range legacyData.StateDiffs {
-		err = ind.PushStateNode(tx, node, mockLegacyBlock.Hash().String())
+		err = ind.PushStateNode(tx, node, mockLegacyBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 

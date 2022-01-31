@@ -18,27 +18,28 @@ package postgres
 
 import (
 	"context"
-	coresql "database/sql"
 	"time"
+
+	coresql "database/sql"
 
 	"github.com/jmoiron/sqlx"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
-	"github.com/ethereum/go-ethereum/statediff/indexer/node"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 )
 
 // SQLXDriver driver, implements sql.Driver
 type SQLXDriver struct {
-	ctx      context.Context
-	db       *sqlx.DB
-	nodeInfo node.Info
-	nodeID   string
+	ctx context.Context
+	db  *sqlx.DB
 }
 
 // NewSQLXDriver returns a new sqlx driver for Postgres
 // it initializes the connection pool and creates the node info table
-func NewSQLXDriver(ctx context.Context, config Config, node node.Info) (*SQLXDriver, error) {
-	db, err := sqlx.ConnectContext(ctx, "postgres", config.DbConnectionString())
+func NewSQLXDriver(ctx context.Context, config Config) (*SQLXDriver, error) {
+	connStr := config.DbConnectionString()
+	log.Info("connecting to database", "connection string", connStr)
+	db, err := sqlx.ConnectContext(ctx, "postgres", connStr)
 	if err != nil {
 		return &SQLXDriver{}, ErrDBConnectionFailed(err)
 	}
@@ -52,33 +53,17 @@ func NewSQLXDriver(ctx context.Context, config Config, node node.Info) (*SQLXDri
 		lifetime := config.MaxConnLifetime
 		db.SetConnMaxLifetime(lifetime)
 	}
-	driver := &SQLXDriver{ctx: ctx, db: db, nodeInfo: node}
-	if err := driver.createNode(); err != nil {
-		return &SQLXDriver{}, ErrUnableToSetNode(err)
-	}
+	driver := &SQLXDriver{ctx: ctx, db: db}
 	return driver, nil
 }
 
-func (driver *SQLXDriver) createNode() error {
-	_, err := driver.db.Exec(
-		createNodeStm,
-		driver.nodeInfo.GenesisBlock, driver.nodeInfo.NetworkID,
-		driver.nodeInfo.ID, driver.nodeInfo.ClientName,
-		driver.nodeInfo.ChainID)
-	if err != nil {
-		return ErrUnableToSetNode(err)
-	}
-	driver.nodeID = driver.nodeInfo.ID
-	return nil
-}
-
 // QueryRow satisfies sql.Database
-func (driver *SQLXDriver) QueryRow(_ context.Context, sql string, args ...interface{}) sql.ScannableRow {
+func (driver *SQLXDriver) QueryRow(_ context.Context, sql string, args ...interface{}) interfaces.ScannableRow {
 	return driver.db.QueryRowx(sql, args...)
 }
 
 // Exec satisfies sql.Database
-func (driver *SQLXDriver) Exec(_ context.Context, sql string, args ...interface{}) (sql.Result, error) {
+func (driver *SQLXDriver) Exec(_ context.Context, sql string, args ...interface{}) (interfaces.Result, error) {
 	return driver.db.Exec(sql, args...)
 }
 
@@ -93,7 +78,7 @@ func (driver *SQLXDriver) Get(_ context.Context, dest interface{}, query string,
 }
 
 // Begin satisfies sql.Database
-func (driver *SQLXDriver) Begin(_ context.Context) (sql.Tx, error) {
+func (driver *SQLXDriver) Begin(_ context.Context) (interfaces.Tx, error) {
 	tx, err := driver.db.Beginx()
 	if err != nil {
 		return nil, err
@@ -101,14 +86,9 @@ func (driver *SQLXDriver) Begin(_ context.Context) (sql.Tx, error) {
 	return sqlxTxWrapper{tx: tx}, nil
 }
 
-func (driver *SQLXDriver) Stats() sql.Stats {
+func (driver *SQLXDriver) Stats() interfaces.Stats {
 	stats := driver.db.Stats()
 	return sqlxStatsWrapper{stats: stats}
-}
-
-// NodeID satisfies sql.Database
-func (driver *SQLXDriver) NodeID() string {
-	return driver.nodeID
 }
 
 // Close satisfies sql.Database/io.Closer
@@ -170,12 +150,12 @@ type sqlxTxWrapper struct {
 }
 
 // QueryRow satisfies sql.Tx
-func (t sqlxTxWrapper) QueryRow(ctx context.Context, sql string, args ...interface{}) sql.ScannableRow {
+func (t sqlxTxWrapper) QueryRow(ctx context.Context, sql string, args ...interface{}) interfaces.ScannableRow {
 	return t.tx.QueryRowx(sql, args...)
 }
 
 // Exec satisfies sql.Tx
-func (t sqlxTxWrapper) Exec(ctx context.Context, sql string, args ...interface{}) (sql.Result, error) {
+func (t sqlxTxWrapper) Exec(ctx context.Context, sql string, args ...interface{}) (interfaces.Result, error) {
 	return t.tx.Exec(sql, args...)
 }
 

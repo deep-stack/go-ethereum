@@ -18,6 +18,9 @@ package sql
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
@@ -26,18 +29,19 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	modelsShared "github.com/ethereum/go-ethereum/statediff/indexer/models/shared"
 )
 
 // BatchTx wraps a sql tx with the state necessary for building the tx concurrently during trie difference iteration
 type BatchTx struct {
-	BlockNumber uint64
-	ctx         context.Context
-	dbtx        Tx
-	stm         string
-	quit        chan struct{}
-	iplds       chan models.IPLDModel
-	ipldCache   models.IPLDBatch
+	BlockNumber      uint64
+	ctx              context.Context
+	oldDBTx          interfaces.Tx
+	newDBTx          interfaces.Tx
+	oldStmt, newStmt string
+	quit             chan struct{}
+	iplds            chan modelsShared.IPLDModel
+	ipldCache        modelsShared.IPLDBatch
 
 	submit func(blockTx *BatchTx, err error) error
 }
@@ -48,11 +52,15 @@ func (tx *BatchTx) Submit(err error) error {
 }
 
 func (tx *BatchTx) flush() error {
-	_, err := tx.dbtx.Exec(tx.ctx, tx.stm, pq.Array(tx.ipldCache.Keys), pq.Array(tx.ipldCache.Values))
+	_, err := tx.oldDBTx.Exec(tx.ctx, tx.oldStmt, pq.Array(tx.ipldCache.Keys), pq.Array(tx.ipldCache.Values))
 	if err != nil {
-		return err
+		return fmt.Errorf("error flushing IPLD cache to old DB: %v", err)
 	}
-	tx.ipldCache = models.IPLDBatch{}
+	_, err = tx.newDBTx.Exec(tx.ctx, tx.newStmt, pq.Array(tx.ipldCache.Keys), pq.Array(tx.ipldCache.Values))
+	if err != nil {
+		return fmt.Errorf("error flushing IPLD cache to new DB: %v", err)
+	}
+	tx.ipldCache = modelsShared.IPLDBatch{}
 	return nil
 }
 
@@ -64,21 +72,21 @@ func (tx *BatchTx) cache() {
 			tx.ipldCache.Keys = append(tx.ipldCache.Keys, i.Key)
 			tx.ipldCache.Values = append(tx.ipldCache.Values, i.Data)
 		case <-tx.quit:
-			tx.ipldCache = models.IPLDBatch{}
+			tx.ipldCache = modelsShared.IPLDBatch{}
 			return
 		}
 	}
 }
 
 func (tx *BatchTx) cacheDirect(key string, value []byte) {
-	tx.iplds <- models.IPLDModel{
+	tx.iplds <- modelsShared.IPLDModel{
 		Key:  key,
 		Data: value,
 	}
 }
 
 func (tx *BatchTx) cacheIPLD(i node.Node) {
-	tx.iplds <- models.IPLDModel{
+	tx.iplds <- modelsShared.IPLDModel{
 		Key:  blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(i.Cid().Hash()).String(),
 		Data: i.RawData(),
 	}
@@ -90,7 +98,7 @@ func (tx *BatchTx) cacheRaw(codec, mh uint64, raw []byte) (string, string, error
 		return "", "", err
 	}
 	prefixedKey := blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(c.Hash()).String()
-	tx.iplds <- models.IPLDModel{
+	tx.iplds <- modelsShared.IPLDModel{
 		Key:  prefixedKey,
 		Data: raw,
 	}
@@ -98,7 +106,7 @@ func (tx *BatchTx) cacheRaw(codec, mh uint64, raw []byte) (string, string, error
 }
 
 // rollback sql transaction and log any error
-func rollback(ctx context.Context, tx Tx) {
+func rollback(ctx context.Context, tx interfaces.Tx) {
 	if err := tx.Rollback(ctx); err != nil {
 		log.Error(err.Error())
 	}

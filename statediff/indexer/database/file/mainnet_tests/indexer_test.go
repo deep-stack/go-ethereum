@@ -88,7 +88,8 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 	ind, err := file.NewStateDiffIndexer(context.Background(), chainConf, file.TestConfig)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	var headerID int64
+	tx, headerID, err = ind.PushBlock(
 		testBlock,
 		testReceipts,
 		testBlock.Difficulty())
@@ -103,7 +104,7 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 		}
 	}()
 	for _, node := range mocks.StateDiffs {
-		err = ind.PushStateNode(tx, node, testBlock.Hash().String())
+		err = ind.PushStateNode(tx, node, testBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 

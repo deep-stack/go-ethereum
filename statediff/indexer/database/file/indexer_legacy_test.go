@@ -52,7 +52,8 @@ func setupLegacy(t *testing.T) {
 	ind, err := file.NewStateDiffIndexer(context.Background(), legacyData.Config, file.TestConfig)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	var headerID int64
+	tx, headerID, err = ind.PushBlock(
 		mockLegacyBlock,
 		legacyData.MockReceipts,
 		legacyData.MockBlock.Difficulty())
@@ -67,7 +68,7 @@ func setupLegacy(t *testing.T) {
 		}
 	}()
 	for _, node := range legacyData.StateDiffs {
-		err = ind.PushStateNode(tx, node, legacyData.MockBlock.Hash().String())
+		err = ind.PushStateNode(tx, node, legacyData.MockBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 

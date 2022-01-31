@@ -22,13 +22,14 @@ import (
 	"crypto/rand"
 	"math/big"
 
+	v3Models "github.com/ethereum/go-ethereum/statediff/indexer/models/v3"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	"github.com/ethereum/go-ethereum/statediff/test_helpers"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 	"github.com/ethereum/go-ethereum/trie"
@@ -105,11 +106,11 @@ var (
 		Address:     AnotherAddress,
 		StorageKeys: []common.Hash{common.BytesToHash(StorageLeafKey), common.BytesToHash(MockStorageLeafKey)},
 	}
-	AccessListEntry1Model = models.AccessListElementModel{
+	AccessListEntry1Model = v3Models.AccessListElementModel{
 		Index:   0,
 		Address: Address.Hex(),
 	}
-	AccessListEntry2Model = models.AccessListElementModel{
+	AccessListEntry2Model = v3Models.AccessListElementModel{
 		Index:       1,
 		Address:     AnotherAddress.Hex(),
 		StorageKeys: []string{common.BytesToHash(StorageLeafKey).Hex(), common.BytesToHash(MockStorageLeafKey).Hex()},

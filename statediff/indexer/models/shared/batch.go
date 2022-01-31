@@ -1,5 +1,5 @@
 // VulcanizeDB
-// Copyright © 2019 Vulcanize
+// Copyright © 2021 Vulcanize
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
@@ -14,20 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package postgres
+package models
 
-import (
-	"fmt"
-)
-
-const (
-	DbConnectionFailedMsg = "db connection failed"
-)
-
-func ErrDBConnectionFailed(connectErr error) error {
-	return formatError(DbConnectionFailedMsg, connectErr.Error())
-}
-
-func formatError(msg, err string) error {
-	return fmt.Errorf("%s: %s", msg, err)
+// IPLDBatch holds the arguments for a batch insert of IPLD data
+type IPLDBatch struct {
+	Keys   []string
+	Values [][]byte
 }

@@ -58,8 +58,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Start database
-        run:  docker-compose -f docker-compose.yml up -d ipld-eth-db
+      - name: Start database v2
+        run:  docker-compose -f docker-compose.yml up -d ipld-eth-db-v2
+
+      - name: Start database v3
+        run:  docker-compose -f docker-compose.yml up -d ipld-eth-db-v3
 
       - name: Run unit tests
         run:

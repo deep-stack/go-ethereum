@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -36,7 +38,7 @@ import (
 
 var (
 	err       error
-	db        sql.Database
+	db        interfaces.Database
 	ind       interfaces.StateDiffIndexer
 	chainConf = params.MainnetChainConfig
 )
@@ -76,14 +78,19 @@ func testPushBlockAndState(t *testing.T, block *types.Block, receipts types.Rece
 }
 
 func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
-	db, err = postgres.SetupSQLXDB()
+	db, err = postgres.SetupV3SQLXDB()
 	if err != nil {
 		t.Fatal(err)
 	}
-	ind, err = sql.NewStateDiffIndexer(context.Background(), chainConf, db)
+	dbV2, err := postgres.SetupV2SQLXDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ind, err = sql.NewStateDiffIndexer(context.Background(), chainConf, nodeinfo.Info{}, dbV2, db)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	var headerID int64
+	tx, headerID, err = ind.PushBlock(
 		testBlock,
 		testReceipts,
 		testBlock.Difficulty())
@@ -95,7 +102,7 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 		}
 	}()
 	for _, node := range mocks.StateDiffs {
-		err = ind.PushStateNode(tx, node, testBlock.Hash().String())
+		err = ind.PushStateNode(tx, node, testBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 

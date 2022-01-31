@@ -18,7 +18,6 @@ package postgres_test
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -26,7 +25,6 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
-	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
@@ -98,24 +96,11 @@ func TestPostgresPGX(t *testing.T) {
 	})
 
 	t.Run("throws error when can't connect to the database", func(t *testing.T) {
-		goodInfo := node.Info{GenesisBlock: "GENESIS", NetworkID: "1", ID: "x123", ClientName: "geth"}
-		_, err := postgres.NewPGXDriver(ctx, postgres.Config{}, goodInfo)
+		_, err := postgres.NewPGXDriver(ctx, postgres.Config{})
 		if err == nil {
 			t.Fatal("Expected an error")
 		}
 
 		expectContainsSubstring(t, err.Error(), postgres.DbConnectionFailedMsg)
-	})
-
-	t.Run("throws error when can't create node", func(t *testing.T) {
-		badHash := fmt.Sprintf("x %s", strings.Repeat("1", 100))
-		badInfo := node.Info{GenesisBlock: badHash, NetworkID: "1", ID: "x123", ClientName: "geth"}
-
-		_, err := postgres.NewPGXDriver(ctx, postgres.DefaultConfig, badInfo)
-		if err == nil {
-			t.Fatal("Expected an error")
-		}
-
-		expectContainsSubstring(t, err.Error(), postgres.SettingNodeFailedMsg)
 	})
 }

@@ -33,33 +33,35 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	sharedModels "github.com/ethereum/go-ethereum/statediff/indexer/models/shared"
+	v3Models "github.com/ethereum/go-ethereum/statediff/indexer/models/v3"
+	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
 func setupSQLX(t *testing.T) {
-	db, err = postgres.SetupSQLXDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, db)
+	db, err = postgres.SetupV3SQLXDB()
+	require.NoError(t, err)
+
+	v2DB, err := postgres.SetupV2PGXDB()
+	require.NoError(t, err)
+
+	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, nodeinfo.Info{}, v2DB, db)
 	require.NoError(t, err)
 	var tx interfaces.Batch
-	tx, err = ind.PushBlock(
+	tx, headerID, err = ind.PushBlock(
 		mockBlock,
 		mocks.MockReceipts,
 		mocks.MockBlock.Difficulty())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		if err := tx.Submit(err); err != nil {
 			t.Fatal(err)
 		}
 	}()
 	for _, node := range mocks.StateDiffs {
-		err = ind.PushStateNode(tx, node, mockBlock.Hash().String())
+		err = ind.PushStateNode(tx, node, mockBlock.Hash().String(), headerID)
 		require.NoError(t, err)
 	}
 
@@ -90,24 +92,21 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 		header := new(res)
 		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
 		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
 		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
 		test_helpers.ExpectEqual(t, header.Coinbase, mocks.MockHeader.Coinbase.String())
 		dc, err := cid.Decode(header.CID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 		var data []byte
 		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		test_helpers.ExpectEqual(t, data, mocks.MockHeaderRlp)
 	})
 
@@ -119,9 +118,8 @@ func TestSQLXIndexer(t *testing.T) {
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1`
 		err = db.Select(context.Background(), &trxs, pgStr, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+
 		test_helpers.ExpectEqual(t, len(trxs), 5)
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx1CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx2CID.String()))
@@ -136,25 +134,22 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 		for _, c := range trxs {
 			dc, err := cid.Decode(c)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 			var data []byte
 			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			txTypeAndValueStr := `SELECT tx_type, value FROM eth.transaction_cids WHERE cid = $1`
 			switch c {
 			case trx1CID.String():
 				test_helpers.ExpectEqual(t, data, tx1)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
+
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
@@ -165,9 +160,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, tx2)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
@@ -178,9 +171,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, tx3)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if txRes.TxType != 0 {
 					t.Fatalf("expected LegacyTxType (0), got %d", txRes.TxType)
 				}
@@ -191,29 +182,25 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, tx4)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if txRes.TxType != types.AccessListTxType {
 					t.Fatalf("expected AccessListTxType (1), got %d", txRes.TxType)
 				}
 				if txRes.Value != transactions[3].Value().String() {
 					t.Fatalf("expected tx value %s got %s", transactions[3].Value().String(), txRes.Value)
 				}
-				accessListElementModels := make([]models.AccessListElementModel, 0)
+				accessListElementModels := make([]v3Models.AccessListElementModel, 0)
 				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
 				err = db.Select(context.Background(), &accessListElementModels, pgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if len(accessListElementModels) != 2 {
 					t.Fatalf("expected two access list entries, got %d", len(accessListElementModels))
 				}
-				model1 := models.AccessListElementModel{
+				model1 := v3Models.AccessListElementModel{
 					Index:   accessListElementModels[0].Index,
 					Address: accessListElementModels[0].Address,
 				}
-				model2 := models.AccessListElementModel{
+				model2 := v3Models.AccessListElementModel{
 					Index:       accessListElementModels[1].Index,
 					Address:     accessListElementModels[1].Address,
 					StorageKeys: accessListElementModels[1].StorageKeys,
@@ -224,9 +211,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, data, tx5)
 				txRes := new(txResult)
 				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				if txRes.TxType != types.DynamicFeeTxType {
 					t.Fatalf("expected DynamicFeeTxType (2), got %d", txRes.TxType)
 				}
@@ -314,7 +299,7 @@ func TestSQLXIndexer(t *testing.T) {
 		expectTrue(t, test_helpers.ListContainsString(rcts, rct5CID.String()))
 
 		for idx, c := range rcts {
-			result := make([]models.IPLDModel, 0)
+			result := make([]sharedModels.IPLDModel, 0)
 			pgStr = `SELECT data
 					FROM eth.receipt_cids
 					INNER JOIN public.blocks ON (receipt_cids.leaf_mh_key = public.blocks.key)
@@ -352,41 +337,31 @@ func TestSQLXIndexer(t *testing.T) {
 				var postStatus uint64
 				pgStr = `SELECT post_status FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = db.Get(context.Background(), &postStatus, pgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postStatus, mocks.ExpectedPostStatus)
 			case rct2CID.String():
 				test_helpers.ExpectEqual(t, data, rctLeaf2)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState1)
 			case rct3CID.String():
 				test_helpers.ExpectEqual(t, data, rctLeaf3)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState2)
 			case rct4CID.String():
 				test_helpers.ExpectEqual(t, data, rctLeaf4)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState3)
 			case rct5CID.String():
 				test_helpers.ExpectEqual(t, data, rctLeaf5)
 				var postState string
 				err = db.Get(context.Background(), &postState, postStatePgStr, c)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState3)
 			}
 		}
@@ -396,7 +371,7 @@ func TestSQLXIndexer(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
 		// check that state nodes were properly indexed and published
-		stateNodes := make([]models.StateNodeModel, 0)
+		stateNodes := make([]v3Models.StateNodeModel, 0)
 		pgStr := `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type != 3`
@@ -418,7 +393,7 @@ func TestSQLXIndexer(t *testing.T) {
 				t.Fatal(err)
 			}
 			pgStr = `SELECT * from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
-			var account models.StateAccountModel
+			var account v3Models.StateAccountModel
 			err = db.Get(context.Background(), &account, pgStr, stateNode.HeaderID, stateNode.Path)
 			if err != nil {
 				t.Fatal(err)
@@ -428,7 +403,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, stateNode.StateKey, common.BytesToHash(mocks.ContractLeafKey).Hex())
 				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x06'})
 				test_helpers.ExpectEqual(t, data, mocks.ContractLeafNode)
-				test_helpers.ExpectEqual(t, account, models.StateAccountModel{
+				test_helpers.ExpectEqual(t, account, v3Models.StateAccountModel{
 					HeaderID:    account.HeaderID,
 					StatePath:   stateNode.Path,
 					Balance:     "0",
@@ -442,7 +417,7 @@ func TestSQLXIndexer(t *testing.T) {
 				test_helpers.ExpectEqual(t, stateNode.StateKey, common.BytesToHash(mocks.AccountLeafKey).Hex())
 				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x0c'})
 				test_helpers.ExpectEqual(t, data, mocks.AccountLeafNode)
-				test_helpers.ExpectEqual(t, account, models.StateAccountModel{
+				test_helpers.ExpectEqual(t, account, v3Models.StateAccountModel{
 					HeaderID:    account.HeaderID,
 					StatePath:   stateNode.Path,
 					Balance:     "1000",
@@ -454,7 +429,7 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 
 		// check that Removed state nodes were properly indexed and published
-		stateNodes = make([]models.StateNodeModel, 0)
+		stateNodes = make([]v3Models.StateNodeModel, 0)
 		pgStr = `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type = 3`
@@ -485,7 +460,7 @@ func TestSQLXIndexer(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
 		// check that storage nodes were properly indexed
-		storageNodes := make([]models.StorageNodeWithStateKeyModel, 0)
+		storageNodes := make([]v3Models.StorageNodeWithStateKeyModel, 0)
 		pgStr := `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
 				FROM eth.storage_cids, eth.state_cids, eth.header_cids
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
@@ -497,7 +472,7 @@ func TestSQLXIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, len(storageNodes), 1)
-		test_helpers.ExpectEqual(t, storageNodes[0], models.StorageNodeWithStateKeyModel{
+		test_helpers.ExpectEqual(t, storageNodes[0], v3Models.StorageNodeWithStateKeyModel{
 			CID:        storageCID.String(),
 			NodeType:   2,
 			StorageKey: common.BytesToHash(mocks.StorageLeafKey).Hex(),
@@ -518,7 +493,7 @@ func TestSQLXIndexer(t *testing.T) {
 		test_helpers.ExpectEqual(t, data, mocks.StorageLeafNode)
 
 		// check that Removed storage nodes were properly indexed
-		storageNodes = make([]models.StorageNodeWithStateKeyModel, 0)
+		storageNodes = make([]v3Models.StorageNodeWithStateKeyModel, 0)
 		pgStr = `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
 				FROM eth.storage_cids, eth.state_cids, eth.header_cids
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
@@ -530,7 +505,7 @@ func TestSQLXIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, len(storageNodes), 1)
-		test_helpers.ExpectEqual(t, storageNodes[0], models.StorageNodeWithStateKeyModel{
+		test_helpers.ExpectEqual(t, storageNodes[0], v3Models.StorageNodeWithStateKeyModel{
 			CID:        shared.RemovedNodeStorageCID,
 			NodeType:   3,
 			StorageKey: common.BytesToHash(mocks.RemovedLeafKey).Hex(),

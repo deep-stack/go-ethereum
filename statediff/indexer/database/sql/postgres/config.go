@@ -45,13 +45,42 @@ func ResolveDriverType(str string) (DriverType, error) {
 	}
 }
 
-// DefaultConfig are default parameters for connecting to a Postgres sql
+// DefaultConfig are default parameters for connecting to a Postgres DB
 var DefaultConfig = Config{
 	Hostname:     "localhost",
 	Port:         5432,
 	DatabaseName: "vulcanize_testing_v3",
 	Username:     "vdbm",
 	Password:     "password",
+}
+
+// DefaultV2Config are default parameters for connecting to a v3 Postgres DB
+var DefaultV2Config = Config{
+	Hostname:     "localhost",
+	Port:         5433,
+	DatabaseName: "vulcanize_testing_v2",
+	Username:     "vdbm",
+	Password:     "password",
+}
+
+// DefaultV3Config are default parameters for connecting to a v3 Postgres DB
+var DefaultV3Config = Config{
+	Hostname:     "localhost",
+	Port:         5432,
+	DatabaseName: "vulcanize_testing_v3",
+	Username:     "vdbm",
+	Password:     "password",
+}
+
+// MultiConfig holds multiple configs
+type MultiConfig struct {
+	V2 Config
+	V3 Config
+}
+
+// Type satisfies interfaces.Config
+func (mc MultiConfig) Type() shared.DBType {
+	return shared.POSTGRES
 }
 
 // Config holds params for a Postgres db

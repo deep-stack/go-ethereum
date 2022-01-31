@@ -26,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
+	v2 "github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres/v2"
+	v3 "github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres/v3"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
@@ -44,27 +46,41 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, n
 		return file.NewStateDiffIndexer(ctx, chainConfig, fc)
 	case shared.POSTGRES:
 		log.Info("Starting statediff service in Postgres writing mode")
-		pgc, ok := config.(postgres.Config)
+		pgc, ok := config.(postgres.MultiConfig)
 		if !ok {
 			return nil, fmt.Errorf("postgres config is not the correct type: got %T, expected %T", config, postgres.Config{})
 		}
 		var err error
-		var driver sql.Driver
-		switch pgc.Driver {
+		var oldDriver, newDriver interfaces.Driver
+		switch pgc.V2.Driver {
 		case postgres.PGX:
-			driver, err = postgres.NewPGXDriver(ctx, pgc, nodeInfo)
+			oldDriver, err = postgres.NewPGXDriver(ctx, pgc.V2)
 			if err != nil {
 				return nil, err
 			}
 		case postgres.SQLX:
-			driver, err = postgres.NewSQLXDriver(ctx, pgc, nodeInfo)
+			oldDriver, err = postgres.NewSQLXDriver(ctx, pgc.V2)
 			if err != nil {
 				return nil, err
 			}
 		default:
-			return nil, fmt.Errorf("unrecongized Postgres driver type: %s", pgc.Driver)
+			return nil, fmt.Errorf("unrecongized Postgres driver type: %s", pgc.V2.Driver)
 		}
-		return sql.NewStateDiffIndexer(ctx, chainConfig, postgres.NewPostgresDB(driver))
+		switch pgc.V3.Driver {
+		case postgres.PGX:
+			newDriver, err = postgres.NewPGXDriver(ctx, pgc.V3)
+			if err != nil {
+				return nil, err
+			}
+		case postgres.SQLX:
+			newDriver, err = postgres.NewSQLXDriver(ctx, pgc.V3)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf("unrecongized Postgres driver type: %s", pgc.V3.Driver)
+		}
+		return sql.NewStateDiffIndexer(ctx, chainConfig, nodeInfo, v2.NewPostgresDB(oldDriver), v3.NewPostgresDB(newDriver))
 	case shared.DUMP:
 		log.Info("Starting statediff service in data dump mode")
 		dumpc, ok := config.(dump.Config)

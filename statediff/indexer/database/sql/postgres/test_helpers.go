@@ -19,24 +19,43 @@ package postgres
 import (
 	"context"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
-	"github.com/ethereum/go-ethereum/statediff/indexer/node"
+	v2 "github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres/v2"
+	v3 "github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres/v3"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 )
 
-// SetupSQLXDB is used to setup a sqlx db for tests
-func SetupSQLXDB() (sql.Database, error) {
-	driver, err := NewSQLXDriver(context.Background(), DefaultConfig, node.Info{})
+// SetupV3SQLXDB is used to setup a sqlx db for tests
+func SetupV3SQLXDB() (interfaces.Database, error) {
+	driver, err := NewSQLXDriver(context.Background(), DefaultV3Config)
 	if err != nil {
 		return nil, err
 	}
-	return NewPostgresDB(driver), nil
+	return v3.NewPostgresDB(driver), nil
 }
 
-// SetupPGXDB is used to setup a pgx db for tests
-func SetupPGXDB() (sql.Database, error) {
-	driver, err := NewPGXDriver(context.Background(), DefaultConfig, node.Info{})
+// SetupV3PGXDB is used to setup a pgx db for tests
+func SetupV3PGXDB() (interfaces.Database, error) {
+	driver, err := NewPGXDriver(context.Background(), DefaultV3Config)
 	if err != nil {
 		return nil, err
 	}
-	return NewPostgresDB(driver), nil
+	return v3.NewPostgresDB(driver), nil
+}
+
+// SetupV2SQLXDB is used to setup a sqlx db for tests
+func SetupV2SQLXDB() (interfaces.Database, error) {
+	driver, err := NewSQLXDriver(context.Background(), DefaultV2Config)
+	if err != nil {
+		return nil, err
+	}
+	return v2.NewPostgresDB(driver), nil
+}
+
+// SetupV2PGXDB is used to setup a pgx db for tests
+func SetupV2PGXDB() (interfaces.Database, error) {
+	driver, err := NewPGXDriver(context.Background(), DefaultV2Config)
+	if err != nil {
+		return nil, err
+	}
+	return v2.NewPostgresDB(driver), nil
 }
