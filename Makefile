@@ -73,8 +73,10 @@ devtools:
 
 .PHONY: statedifftest
 statedifftest: | $(GOOSE)
-	MODE=statediff go test -p 1 ./statediff/... -v
+	GO111MODULE=on go get github.com/stretchr/testify/assert@v1.7.0
+	GO111MODULE=on MODE=statediff go test -p 1 ./statediff/... -v
 
 .PHONY: statediff_filewriting_test
 statediff_filetest: | $(GOOSE)
-	MODE=statediff STATEDIFF_DB=file go test -p 1 ./statediff/... -v
+	GO111MODULE=on go get github.com/stretchr/testify/assert@v1.7.0
+	GO111MODULE=on MODE=statediff STATEDIFF_DB=file go test -p 1 ./statediff/... -v
