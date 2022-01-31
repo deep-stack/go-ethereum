@@ -406,15 +406,20 @@ func TestFileIndexer(t *testing.T) {
 
 			var nodeElements []interface{}
 			for idx, r := range results {
-				// Decode the log leaf node.
+				// Attempt to decode the log leaf node.
 				err = rlp.DecodeBytes(r.Data, &nodeElements)
 				require.NoError(t, err)
-
-				logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
-				require.NoError(t, err)
-
-				// 2nd element of the leaf node contains the encoded log data.
-				test_helpers.ExpectEqual(t, logRaw, nodeElements[1].([]byte))
+				if len(nodeElements) == 2 {
+					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
+					require.NoError(t, err)
+					// 2nd element of the leaf node contains the encoded log data.
+					test_helpers.ExpectEqual(t, logRaw, nodeElements[1].([]byte))
+				} else {
+					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
+					require.NoError(t, err)
+					// raw log was IPLDized
+					test_helpers.ExpectEqual(t, logRaw, r.Data)
+				}
 			}
 		}
 	})

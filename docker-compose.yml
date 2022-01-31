@@ -6,7 +6,7 @@ services:
     image: vulcanize/ipld-eth-db:v0.3.1
     environment:
       POSTGRES_USER: "vdbm"
-      POSTGRES_DB: "vulcanize_public"
+      POSTGRES_DB: "vulcanize_testing_v3"
       POSTGRES_PASSWORD: "password"
     volumes:
       - geth_node:/var/lib/postgresql/data

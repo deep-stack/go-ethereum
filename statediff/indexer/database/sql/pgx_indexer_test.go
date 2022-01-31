@@ -277,15 +277,11 @@ func TestPGXIndexer(t *testing.T) {
 				err = rlp.DecodeBytes(r.Data, &nodeElements)
 				require.NoError(t, err)
 				if len(nodeElements) == 2 {
-					log := new(types.Log)
-					rlp.DecodeBytes(nodeElements[1].([]byte), log)
 					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
 					require.NoError(t, err)
 					// 2nd element of the leaf node contains the encoded log data.
 					test_helpers.ExpectEqual(t, logRaw, nodeElements[1].([]byte))
 				} else {
-					log := new(types.Log)
-					rlp.DecodeBytes(r.Data, log)
 					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
 					require.NoError(t, err)
 					// raw log was IPLDized

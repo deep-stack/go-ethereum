@@ -150,8 +150,10 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		dbtx:        tx,
 		// handle transaction commit or rollback for any return case
 		submit: func(self *BatchTx, err error) error {
-			close(self.quit)
-			close(self.iplds)
+			defer func() {
+				close(self.quit)
+				close(self.iplds)
+			}()
 			if p := recover(); p != nil {
 				rollback(sdi.ctx, tx)
 				panic(p)
