@@ -66,17 +66,11 @@ func setupSQLX(t *testing.T) {
 	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, mocks.BlockNumber.Uint64())
 }
 
-func tearDown(t *testing.T) {
-	sql.TearDownDB(t, db)
-	if err := ind.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestSQLXIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
+		defer checkTxClosure(t, 0, 0, 0)
 		pgStr := `SELECT cid, td, reward, block_hash, coinbase
 				FROM eth.header_cids
 				WHERE block_number = $1`
@@ -114,6 +108,7 @@ func TestSQLXIndexer(t *testing.T) {
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
+		defer checkTxClosure(t, 0, 0, 0)
 		// check that txs were properly indexed and published
 		trxs := make([]string, 0)
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
@@ -240,6 +235,7 @@ func TestSQLXIndexer(t *testing.T) {
 	t.Run("Publish and index log IPLDs for multiple receipt of a specific block", func(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
+		defer checkTxClosure(t, 0, 0, 0)
 
 		rcts := make([]string, 0)
 		rctsPgStr := `SELECT receipt_cids.leaf_cid FROM eth.receipt_cids, eth.transaction_cids, eth.header_cids
@@ -295,6 +291,7 @@ func TestSQLXIndexer(t *testing.T) {
 	t.Run("Publish and index receipt IPLDs in a single tx", func(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
+		defer checkTxClosure(t, 0, 0, 0)
 
 		// check receipts were properly indexed and published
 		rcts := make([]string, 0)
@@ -395,6 +392,7 @@ func TestSQLXIndexer(t *testing.T) {
 	t.Run("Publish and index state IPLDs in a single tx", func(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
+		defer checkTxClosure(t, 0, 0, 0)
 		// check that state nodes were properly indexed and published
 		stateNodes := make([]models.StateNodeModel, 0)
 		pgStr := `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
@@ -484,6 +482,7 @@ func TestSQLXIndexer(t *testing.T) {
 	t.Run("Publish and index storage IPLDs in a single tx", func(t *testing.T) {
 		setupSQLX(t)
 		defer tearDown(t)
+		defer checkTxClosure(t, 0, 0, 0)
 		// check that storage nodes were properly indexed
 		storageNodes := make([]models.StorageNodeWithStateKeyModel, 0)
 		pgStr := `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path

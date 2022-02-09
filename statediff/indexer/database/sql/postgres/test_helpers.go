@@ -25,7 +25,9 @@ import (
 
 // SetupSQLXDB is used to setup a sqlx db for tests
 func SetupSQLXDB() (sql.Database, error) {
-	driver, err := NewSQLXDriver(context.Background(), DefaultConfig, node.Info{})
+	conf := DefaultConfig
+	conf.MaxIdle = 0
+	driver, err := NewSQLXDriver(context.Background(), conf, node.Info{})
 	if err != nil {
 		return nil, err
 	}

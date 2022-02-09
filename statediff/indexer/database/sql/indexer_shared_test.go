@@ -6,12 +6,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rlp"
-
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
@@ -140,4 +140,16 @@ func expectTrue(t *testing.T, value bool) {
 	if !value {
 		t.Fatalf("Assertion failed")
 	}
+}
+
+func checkTxClosure(t *testing.T, idle, inUse, open int64) {
+	require.Equal(t, idle, db.Stats().Idle())
+	require.Equal(t, inUse, db.Stats().InUse())
+	require.Equal(t, open, db.Stats().Open())
+}
+
+func tearDown(t *testing.T) {
+	sql.TearDownDB(t, db)
+	err := ind.Close()
+	require.NoError(t, err)
 }
