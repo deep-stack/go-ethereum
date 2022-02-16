@@ -59,10 +59,11 @@ func setupLegacyPGX(t *testing.T) {
 	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, legacyData.BlockNumber.Uint64())
 }
 
-func TestPGXIndexerLegacy(t *testing.T) {
+func TestLegacyPGXIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs", func(t *testing.T) {
 		setupLegacyPGX(t)
 		defer tearDown(t)
+		defer checkTxClosure(t, 1, 0, 1)
 		pgStr := `SELECT cid, cast(td AS TEXT), cast(reward AS TEXT), block_hash, coinbase
 				FROM eth.header_cids
 				WHERE block_number = $1`

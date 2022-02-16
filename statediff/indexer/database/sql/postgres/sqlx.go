@@ -45,13 +45,10 @@ func NewSQLXDriver(ctx context.Context, config Config, node node.Info) (*SQLXDri
 	if config.MaxConns > 0 {
 		db.SetMaxOpenConns(config.MaxConns)
 	}
-	if config.MaxIdle > 0 {
-		db.SetMaxIdleConns(config.MaxIdle)
-	}
 	if config.MaxConnLifetime > 0 {
-		lifetime := config.MaxConnLifetime
-		db.SetConnMaxLifetime(lifetime)
+		db.SetConnMaxLifetime(config.MaxConnLifetime)
 	}
+	db.SetMaxIdleConns(config.MaxIdle)
 	driver := &SQLXDriver{ctx: ctx, db: db, nodeInfo: node}
 	if err := driver.createNode(); err != nil {
 		return &SQLXDriver{}, ErrUnableToSetNode(err)

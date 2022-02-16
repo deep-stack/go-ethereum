@@ -103,6 +103,9 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 }
 
 func tearDown(t *testing.T) {
+	require.Equal(t, int64(0), db.Stats().Idle())
+	require.Equal(t, int64(0), db.Stats().InUse())
+	require.Equal(t, int64(0), db.Stats().Open())
 	sql.TearDownDB(t, db)
 	err = ind.Close()
 	require.NoError(t, err)

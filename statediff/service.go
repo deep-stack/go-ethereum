@@ -39,12 +39,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
-
 	ind "github.com/ethereum/go-ethereum/statediff/indexer"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
 	types2 "github.com/ethereum/go-ethereum/statediff/types"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -705,6 +704,9 @@ func (sds *Service) writeStateDiffWithRetry(block *types.Block, parentRoot commo
 		err = sds.writeStateDiff(block, parentRoot, params)
 		if err != nil && strings.Contains(err.Error(), deadlockDetected) {
 			// Retry only when the deadlock is detected.
+			if i != sds.maxRetry {
+				log.Info("dead lock detected while writing statediff", "err", err, "retry number", i)
+			}
 			continue
 		}
 		break

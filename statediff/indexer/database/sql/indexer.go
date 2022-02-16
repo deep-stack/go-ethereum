@@ -25,8 +25,6 @@ import (
 	"math/big"
 	"time"
 
-	ipld2 "github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-
 	"github.com/ipfs/go-cid"
 	node "github.com/ipfs/go-ipld-format"
 	"github.com/multiformats/go-multihash"
@@ -39,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
+	ipld2 "github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
@@ -155,9 +154,11 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 				close(self.iplds)
 			}()
 			if p := recover(); p != nil {
+				log.Info("panic detected before tx submission, rolling back the tx", "panic", p)
 				rollback(sdi.ctx, tx)
 				panic(p)
 			} else if err != nil {
+				log.Info("error detected before tx submission, rolling back the tx", "error", err)
 				rollback(sdi.ctx, tx)
 			} else {
 				tDiff := time.Since(t)
