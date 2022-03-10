@@ -39,7 +39,7 @@ import (
 // Builder is a mock state diff builder
 type Backend struct {
 	StartingBlock       uint64
-	CurrBlock        	uint64
+	CurrBlock           uint64
 	HighestBlock        uint64
 	SyncedAccounts      uint64
 	SyncedAccountBytes  uint64
@@ -251,4 +251,3 @@ func (backend *Backend) ChainConfig() *params.ChainConfig {
 func (backend *Backend) Engine() consensus.Engine {
 	panic("not implemented") // TODO: Implement
 }
-

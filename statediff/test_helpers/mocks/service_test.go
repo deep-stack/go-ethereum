@@ -70,7 +70,7 @@ var (
 		bankAccount,
 	})
 	mockTotalDifficulty = big.NewInt(1337)
-	parameters              = statediff.Params{
+	parameters          = statediff.Params{
 		IntermediateStateNodes: false,
 		IncludeTD:              true,
 		IncludeBlock:           true,
