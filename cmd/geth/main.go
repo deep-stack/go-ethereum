@@ -176,6 +176,7 @@ var (
 		utils.StateDiffWritingFlag,
 		utils.StateDiffWorkersFlag,
 		utils.StateDiffFilePath,
+		utils.StateDiffWaitForSync,
 		configFileFlag,
 	}
 

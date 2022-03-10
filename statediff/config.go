@@ -35,6 +35,8 @@ type Config struct {
 	EnableWriteLoop bool
 	// Size of the worker pool
 	NumWorkers uint
+	// Should the statediff service wait until geth has synced to the head of the blockchain?
+	WaitForSync bool
 	// Context
 	Context context.Context
 }

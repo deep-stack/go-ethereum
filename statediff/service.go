@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -118,11 +119,15 @@ type Service struct {
 	SubscriptionTypes map[common.Hash]Params
 	// Cache the last block so that we can avoid having to lookup the next block's parent
 	BlockCache BlockCache
+	// The publicBackendAPI which provides useful information about the current state
+	BackendAPI ethapi.Backend
+	// Should the statediff service wait for geth to sync to head?
+	WaitforSync bool
 	// Whether or not we have any subscribers; only if we do, do we processes state diffs
 	subscribers int32
 	// Interface for publishing statediffs as PG-IPLD objects
 	indexer interfaces.StateDiffIndexer
-	// Whether to enable writing state diffs directly to track blochain head
+	// Whether to enable writing state diffs directly to track blockchain head.
 	enableWriteLoop bool
 	// Size of the worker pool
 	numWorkers uint
@@ -146,7 +151,7 @@ func NewBlockCache(max uint) BlockCache {
 
 // New creates a new statediff.Service
 // func New(stack *node.Node, ethServ *eth.Ethereum, dbParams *DBParams, enableWriteLoop bool) error {
-func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params Config) error {
+func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params Config, backend ethapi.Backend) error {
 	blockChain := ethServ.BlockChain()
 	var indexer interfaces.StateDiffIndexer
 	quitCh := make(chan bool)
@@ -177,6 +182,8 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		Subscriptions:     make(map[common.Hash]map[rpc.ID]Subscription),
 		SubscriptionTypes: make(map[common.Hash]Params),
 		BlockCache:        NewBlockCache(workers),
+		BackendAPI:        backend,
+		WaitforSync:       params.WaitForSync,
 		indexer:           indexer,
 		enableWriteLoop:   params.EnableWriteLoop,
 		numWorkers:        workers,
@@ -528,10 +535,48 @@ func (sds *Service) Unsubscribe(id rpc.ID) error {
 	return nil
 }
 
+// This function will check the status of geth syncing.
+// It will return false if geth has finished syncing.
+// It will return a non false value if geth is not done syncing.
+func (sds *Service) GetSyncStatus(pubEthAPI *ethapi.PublicEthereumAPI) (interface{}, error) {
+	syncStatus, err := pubEthAPI.Syncing()
+	if err != nil {
+		return nil, err
+	}
+	return syncStatus, err
+}
+
+// This function calls GetSyncStatus to check if we have caught up to head.
+// It will keep looking and checking if we have caught up to head.
+// It will only complete if we catch up to head, otherwise it will keep looping forever.
+func (sds *Service) WaitForSync() error {
+	log.Info("We are going to wait for geth to sync to head!")
+
+	// Has the geth node synced to head?
+	Synced := false
+	pubEthAPI := ethapi.NewPublicEthereumAPI(sds.BackendAPI)
+	for !Synced {
+		syncStatus, err := sds.GetSyncStatus(pubEthAPI)
+		if err != nil {
+			return err
+		}
+		if syncStatus == false {
+			log.Info("Geth has caught up to the head of the chain")
+			Synced = true
+		}
+	}
+	return nil
+}
+
 // Start is used to begin the service
 func (sds *Service) Start() error {
 	log.Info("Starting statediff service")
 
+	if sds.WaitforSync {
+		log.Info("Statediff service will wait until geth has caught up to the head of the chain.")
+		sds.WaitForSync()
+		log.Info("Continuing with startdiff start process")
+	}
 	chainEventCh := make(chan core.ChainEvent, chainEventChanSize)
 	go sds.Loop(chainEventCh)
 

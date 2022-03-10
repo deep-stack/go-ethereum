@@ -881,6 +881,10 @@ var (
 		Usage: "Number of concurrent workers to use during statediff processing (default 1)",
 		Value: 1,
 	}
+	StateDiffWaitForSync = cli.BoolFlag{
+		Name:  "statediff.waitforsync",
+		Usage: "Should the statediff service wait for geth to catch up to the head of the chain?",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1865,8 +1869,8 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, cfg node.C
 }
 
 // RegisterStateDiffService configures and registers a service to stream state diff data over RPC
-func RegisterStateDiffService(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params statediff.Config) {
-	if err := statediff.New(stack, ethServ, cfg, params); err != nil {
+func RegisterStateDiffService(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params statediff.Config, backend ethapi.Backend) {
+	if err := statediff.New(stack, ethServ, cfg, params, backend); err != nil {
 		Fatalf("Failed to register the Statediff service: %v", err)
 	}
 }

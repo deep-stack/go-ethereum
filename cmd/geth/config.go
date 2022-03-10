@@ -258,8 +258,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			Context:         context.Background(),
 			EnableWriteLoop: ctx.GlobalBool(utils.StateDiffWritingFlag.Name),
 			NumWorkers:      ctx.GlobalUint(utils.StateDiffWorkersFlag.Name),
+			WaitForSync:     ctx.GlobalBool(utils.StateDiffWaitForSync.Name),
 		}
-		utils.RegisterStateDiffService(stack, eth, &cfg.Eth, p)
+		utils.RegisterStateDiffService(stack, eth, &cfg.Eth, p, backend)
 	}
 
 	// Configure GraphQL if requested
