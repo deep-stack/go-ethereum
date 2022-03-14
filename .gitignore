@@ -48,3 +48,4 @@ profile.cov
 
 **/yarn-error.log
 foundry/deployments/local-private-network/geth-linux-amd64
+foundry/projects/local-private-network/geth-linux-amd64
