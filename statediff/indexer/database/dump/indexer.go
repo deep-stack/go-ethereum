@@ -382,10 +382,11 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		return fmt.Errorf("sql batch is expected to be of type %T, got %T", &BatchTx{}, batch)
 	}
 	// publish the state node
+	var stateModel models.StateNodeModel
 	if stateNode.NodeType == sdtypes.Removed {
 		// short circuit if it is a Removed node
 		// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
-		stateModel := models.StateNodeModel{
+		stateModel = models.StateNodeModel{
 			HeaderID: headerID,
 			Path:     stateNode.Path,
 			StateKey: common.BytesToHash(stateNode.LeafKey).String(),
@@ -393,25 +394,26 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			MhKey:    shared.RemovedNodeMhKey,
 			NodeType: stateNode.NodeType.Int(),
 		}
-		_, err := fmt.Fprintf(sdi.dump, "%+v\r\n", stateModel)
-		return err
+	} else {
+		stateCIDStr, stateMhKey, err := tx.cacheRaw(ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
+		if err != nil {
+			return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
+		}
+		stateModel = models.StateNodeModel{
+			HeaderID: headerID,
+			Path:     stateNode.Path,
+			StateKey: common.BytesToHash(stateNode.LeafKey).String(),
+			CID:      stateCIDStr,
+			MhKey:    stateMhKey,
+			NodeType: stateNode.NodeType.Int(),
+		}
 	}
-	stateCIDStr, stateMhKey, err := tx.cacheRaw(ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
-	if err != nil {
-		return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
-	}
-	stateModel := models.StateNodeModel{
-		HeaderID: headerID,
-		Path:     stateNode.Path,
-		StateKey: common.BytesToHash(stateNode.LeafKey).String(),
-		CID:      stateCIDStr,
-		MhKey:    stateMhKey,
-		NodeType: stateNode.NodeType.Int(),
-	}
+
 	// index the state node, collect the stateID to reference by FK
 	if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", stateModel); err != nil {
 		return err
 	}
+
 	// if we have a leaf, decode and index the account data
 	if stateNode.NodeType == sdtypes.Leaf {
 		var i []interface{}
@@ -437,6 +439,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			return err
 		}
 	}
+
 	// if there are any storage nodes associated with this node, publish and index them
 	for _, storageNode := range stateNode.StorageNodes {
 		if storageNode.NodeType == sdtypes.Removed {
