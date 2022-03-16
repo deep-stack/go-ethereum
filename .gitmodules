@@ -6,3 +6,6 @@
 	path = tests/evm-benchmarks
 	url = https://github.com/ipsilon/evm-benchmarks
 	shallow = true
+[submodule "foundry/projects/local-private-network/Stateful/lib/ds-test"]
+	path = foundry/projects/local-private-network/Stateful/lib/ds-test
+	url = https://github.com/dapphub/ds-test
