@@ -19,8 +19,10 @@ package statediff
 import (
 	"context"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 )
 
@@ -53,7 +55,21 @@ type Params struct {
 	IncludeTD                bool
 	IncludeCode              bool
 	WatchedAddresses         []common.Address
-	WatchedStorageSlots      []common.Hash
+	watchedAddressesLeafKeys map[common.Hash]struct{}
+}
+
+// ComputeWatchedAddressesLeafKeys populates a map with keys (Keccak256Hash) of each of the WatchedAddresses
+func (p *Params) ComputeWatchedAddressesLeafKeys() {
+	p.watchedAddressesLeafKeys = make(map[common.Hash]struct{}, len(p.WatchedAddresses))
+	for _, address := range p.WatchedAddresses {
+		p.watchedAddressesLeafKeys[crypto.Keccak256Hash(address.Bytes())] = struct{}{}
+	}
+}
+
+// ParamsWithMutex allows to lock the parameters while they are being updated | read from
+type ParamsWithMutex struct {
+	Params
+	sync.RWMutex
 }
 
 // Args bundles the arguments for the state diff builder
