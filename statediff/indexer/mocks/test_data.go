@@ -57,6 +57,7 @@ var (
 	Address                                           = common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476592")
 	AnotherAddress                                    = common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476593")
 	ContractAddress                                   = crypto.CreateAddress(SenderAddr, MockTransactions[2].Nonce())
+	ContractAddress2                                  = crypto.CreateAddress(SenderAddr, MockTransactions[3].Nonce())
 	MockContractByteCode                              = []byte{0, 1, 2, 3, 4, 5}
 	mockTopic11                                       = common.HexToHash("0x04")
 	mockTopic12                                       = common.HexToHash("0x06")
@@ -143,6 +144,12 @@ var (
 		ContractAccount,
 	})
 
+	Contract2LeafKey = test_helpers.AddressToLeafKey(ContractAddress2)
+	storage2Location = common.HexToHash("2")
+	Storage2LeafKey  = crypto.Keccak256Hash(storage2Location[:]).Bytes()
+	storage3Location = common.HexToHash("3")
+	Storage3LeafKey  = crypto.Keccak256Hash(storage3Location[:]).Bytes()
+
 	nonce0          = uint64(0)
 	AccountRoot     = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 	AccountCodeHash = common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
@@ -193,6 +200,26 @@ var (
 			NodeType:  sdtypes.Removed,
 			LeafKey:   RemovedLeafKey,
 			NodeValue: []byte{},
+		},
+		{
+			Path:      []byte{'\x07'},
+			NodeType:  sdtypes.Removed,
+			LeafKey:   Contract2LeafKey,
+			NodeValue: []byte{},
+			StorageNodes: []sdtypes.StorageNode{
+				{
+					Path:      []byte{'\x0e'},
+					NodeType:  sdtypes.Removed,
+					LeafKey:   Storage2LeafKey,
+					NodeValue: []byte{},
+				},
+				{
+					Path:      []byte{'\x0f'},
+					NodeType:  sdtypes.Removed,
+					LeafKey:   Storage3LeafKey,
+					NodeValue: []byte{},
+				},
+			},
 		},
 	}
 )

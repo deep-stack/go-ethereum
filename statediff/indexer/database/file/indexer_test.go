@@ -625,23 +625,34 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, len(stateNodes), 1)
-		stateNode := stateNodes[0]
-		var data []byte
-		dc, err := cid.Decode(stateNode.CID)
-		if err != nil {
-			t.Fatal(err)
+		test_helpers.ExpectEqual(t, len(stateNodes), 2)
+		for idx, stateNode := range stateNodes {
+			var data []byte
+			dc, err := cid.Decode(stateNode.CID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mhKey := dshelp.MultihashToDsKey(dc.Hash())
+			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
+			test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if idx == 0 {
+				test_helpers.ExpectEqual(t, stateNode.CID, shared.RemovedNodeStateCID)
+				test_helpers.ExpectEqual(t, stateNode.StateKey, common.BytesToHash(mocks.RemovedLeafKey).Hex())
+				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x02'})
+				test_helpers.ExpectEqual(t, data, []byte{})
+			}
+			if idx == 1 {
+				test_helpers.ExpectEqual(t, stateNode.CID, shared.RemovedNodeStateCID)
+				test_helpers.ExpectEqual(t, stateNode.StateKey, common.BytesToHash(mocks.Contract2LeafKey).Hex())
+				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x07'})
+				test_helpers.ExpectEqual(t, data, []byte{})
+			}
 		}
-		mhKey := dshelp.MultihashToDsKey(dc.Hash())
-		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
-		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
-		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-		test_helpers.ExpectEqual(t, stateNode.CID, shared.RemovedNodeStateCID)
-		test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x02'})
-		test_helpers.ExpectEqual(t, data, []byte{})
 	})
 
 	t.Run("Publish and index storage IPLDs in a single tx", func(t *testing.T) {
@@ -694,26 +705,45 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, len(storageNodes), 1)
-		test_helpers.ExpectEqual(t, storageNodes[0], models.StorageNodeWithStateKeyModel{
-			CID:        shared.RemovedNodeStorageCID,
-			NodeType:   3,
-			StorageKey: common.BytesToHash(mocks.RemovedLeafKey).Hex(),
-			StateKey:   common.BytesToHash(mocks.ContractLeafKey).Hex(),
-			Path:       []byte{'\x03'},
-		})
-		dc, err = cid.Decode(storageNodes[0].CID)
-		if err != nil {
-			t.Fatal(err)
+		test_helpers.ExpectEqual(t, len(storageNodes), 3)
+		expectedStorageNodes := []models.StorageNodeWithStateKeyModel{
+			{
+				CID:        shared.RemovedNodeStorageCID,
+				NodeType:   3,
+				StorageKey: common.BytesToHash(mocks.RemovedLeafKey).Hex(),
+				StateKey:   common.BytesToHash(mocks.ContractLeafKey).Hex(),
+				Path:       []byte{'\x03'},
+			},
+			{
+				CID:        shared.RemovedNodeStorageCID,
+				NodeType:   3,
+				StorageKey: common.BytesToHash(mocks.Storage2LeafKey).Hex(),
+				StateKey:   common.BytesToHash(mocks.Contract2LeafKey).Hex(),
+				Path:       []byte{'\x0e'},
+			},
+			{
+				CID:        shared.RemovedNodeStorageCID,
+				NodeType:   3,
+				StorageKey: common.BytesToHash(mocks.Storage3LeafKey).Hex(),
+				StateKey:   common.BytesToHash(mocks.Contract2LeafKey).Hex(),
+				Path:       []byte{'\x0f'},
+			},
 		}
-		mhKey = dshelp.MultihashToDsKey(dc.Hash())
-		prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
-		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
-		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
-		if err != nil {
-			t.Fatal(err)
+		for idx, storageNode := range storageNodes {
+			test_helpers.ExpectEqual(t, storageNode, expectedStorageNodes[idx])
+			dc, err = cid.Decode(storageNode.CID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mhKey = dshelp.MultihashToDsKey(dc.Hash())
+			prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
+			test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			test_helpers.ExpectEqual(t, data, []byte{})
 		}
-		test_helpers.ExpectEqual(t, data, []byte{})
 	})
 }
 
