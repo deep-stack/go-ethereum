@@ -889,7 +889,7 @@ func (sds *Service) WatchAddress(operation types2.OperationType, args []types2.W
 		}
 
 		// get addresses from the filtered args
-		filteredAddresses, err := mapWatchAddressArgsToAddresses(filteredArgs)
+		filteredAddresses, err := MapWatchAddressArgsToAddresses(filteredArgs)
 		if err != nil {
 			return fmt.Errorf("add: filtered addresses %s", err.Error())
 		}
@@ -907,7 +907,7 @@ func (sds *Service) WatchAddress(operation types2.OperationType, args []types2.W
 		})
 	case types2.Remove:
 		// get addresses from args
-		argAddresses, err := mapWatchAddressArgsToAddresses(args)
+		argAddresses, err := MapWatchAddressArgsToAddresses(args)
 		if err != nil {
 			return fmt.Errorf("remove: mapped addresses %s", err.Error())
 		}
@@ -931,7 +931,7 @@ func (sds *Service) WatchAddress(operation types2.OperationType, args []types2.W
 		})
 	case types2.Set:
 		// get addresses from args
-		argAddresses, err := mapWatchAddressArgsToAddresses(args)
+		argAddresses, err := MapWatchAddressArgsToAddresses(args)
 		if err != nil {
 			return fmt.Errorf("set: mapped addresses %s", err.Error())
 		}
@@ -979,8 +979,8 @@ func loadWatchedAddresses(indexer interfaces.StateDiffIndexer) error {
 	return nil
 }
 
-// mapWatchAddressArgsToAddresses maps []WatchAddressArg to corresponding []common.Address
-func mapWatchAddressArgsToAddresses(args []types2.WatchAddressArg) ([]common.Address, error) {
+// MapWatchAddressArgsToAddresses maps []WatchAddressArg to corresponding []common.Address
+func MapWatchAddressArgsToAddresses(args []types2.WatchAddressArg) ([]common.Address, error) {
 	addresses, ok := funk.Map(args, func(arg types2.WatchAddressArg) common.Address {
 		return common.HexToAddress(arg.Address)
 	}).([]common.Address)
