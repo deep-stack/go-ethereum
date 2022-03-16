@@ -988,6 +988,7 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 	params := statediff.Params{
 		WatchedAddresses: []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
 	}
+	params.ComputeWatchedAddressesLeafKeys()
 	builder = statediff.NewBuilder(chain.StateCache())
 
 	var tests = []struct {
@@ -1124,169 +1125,6 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 								NodeValue: slot3StorageLeafNode,
 							},
 						},
-					},
-				},
-			},
-		},
-	}
-
-	for _, test := range tests {
-		diff, err := builder.BuildStateDiffObject(test.startingArguments, params)
-		if err != nil {
-			t.Error(err)
-		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
-		if err != nil {
-			t.Error(err)
-		}
-		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
-		if err != nil {
-			t.Error(err)
-		}
-		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
-		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
-		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
-			t.Logf("Test failed: %s", test.name)
-			t.Errorf("actual state diff: %+v\nexpected state diff: %+v", diff, test.expected)
-		}
-	}
-}
-
-func TestBuilderWithWatchedAddressAndStorageKeyList(t *testing.T) {
-	blocks, chain := test_helpers.MakeChain(3, test_helpers.Genesis, test_helpers.TestChainGen)
-	contractLeafKey = test_helpers.AddressToLeafKey(test_helpers.ContractAddr)
-	defer chain.Stop()
-	block0 = test_helpers.Genesis
-	block1 = blocks[0]
-	block2 = blocks[1]
-	block3 = blocks[2]
-	params := statediff.Params{
-		WatchedAddresses:    []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
-		WatchedStorageSlots: []common.Hash{slot1StorageKey},
-	}
-	builder = statediff.NewBuilder(chain.StateCache())
-
-	var tests = []struct {
-		name              string
-		startingArguments statediff.Args
-		expected          *types2.StateObject
-	}{
-		{
-			"testEmptyDiff",
-			statediff.Args{
-				OldStateRoot: block0.Root(),
-				NewStateRoot: block0.Root(),
-				BlockNumber:  block0.Number(),
-				BlockHash:    block0.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block0.Number(),
-				BlockHash:   block0.Hash(),
-				Nodes:       emptyDiffs,
-			},
-		},
-		{
-			"testBlock0",
-			//10000 transferred from testBankAddress to account1Addr
-			statediff.Args{
-				OldStateRoot: test_helpers.NullHash,
-				NewStateRoot: block0.Root(),
-				BlockNumber:  block0.Number(),
-				BlockHash:    block0.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block0.Number(),
-				BlockHash:   block0.Hash(),
-				Nodes:       emptyDiffs,
-			},
-		},
-		{
-			"testBlock1",
-			//10000 transferred from testBankAddress to account1Addr
-			statediff.Args{
-				OldStateRoot: block0.Root(),
-				NewStateRoot: block1.Root(),
-				BlockNumber:  block1.Number(),
-				BlockHash:    block1.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block1.Number(),
-				BlockHash:   block1.Hash(),
-				Nodes: []types2.StateNode{
-					{
-						Path:         []byte{'\x0e'},
-						NodeType:     types2.Leaf,
-						LeafKey:      test_helpers.Account1LeafKey,
-						NodeValue:    account1AtBlock1LeafNode,
-						StorageNodes: emptyStorage,
-					},
-				},
-			},
-		},
-		{
-			"testBlock2",
-			//1000 transferred from testBankAddress to account1Addr
-			//1000 transferred from account1Addr to account2Addr
-			statediff.Args{
-				OldStateRoot: block1.Root(),
-				NewStateRoot: block2.Root(),
-				BlockNumber:  block2.Number(),
-				BlockHash:    block2.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block2.Number(),
-				BlockHash:   block2.Hash(),
-				Nodes: []types2.StateNode{
-					{
-						Path:      []byte{'\x06'},
-						NodeType:  types2.Leaf,
-						LeafKey:   contractLeafKey,
-						NodeValue: contractAccountAtBlock2LeafNode,
-						StorageNodes: []types2.StorageNode{
-							{
-								Path:      []byte{'\x0b'},
-								NodeType:  types2.Leaf,
-								LeafKey:   slot1StorageKey.Bytes(),
-								NodeValue: slot1StorageLeafNode,
-							},
-						},
-					},
-					{
-						Path:         []byte{'\x0e'},
-						NodeType:     types2.Leaf,
-						LeafKey:      test_helpers.Account1LeafKey,
-						NodeValue:    account1AtBlock2LeafNode,
-						StorageNodes: emptyStorage,
-					},
-				},
-				CodeAndCodeHashes: []types2.CodeAndCodeHash{
-					{
-						Hash: test_helpers.CodeHash,
-						Code: test_helpers.ByteCodeAfterDeployment,
-					},
-				},
-			},
-		},
-		{
-			"testBlock3",
-			//the contract's storage is changed
-			//and the block is mined by account 2
-			statediff.Args{
-				OldStateRoot: block2.Root(),
-				NewStateRoot: block3.Root(),
-				BlockNumber:  block3.Number(),
-				BlockHash:    block3.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block3.Number(),
-				BlockHash:   block3.Hash(),
-				Nodes: []types2.StateNode{
-					{
-						Path:         []byte{'\x06'},
-						NodeType:     types2.Leaf,
-						LeafKey:      contractLeafKey,
-						NodeValue:    contractAccountAtBlock3LeafNode,
-						StorageNodes: emptyStorage,
 					},
 				},
 			},
@@ -1676,6 +1514,124 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
 					},
+					{
+						Path:         []byte{'\x0c'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account2LeafKey,
+						NodeValue:    account2AtBlock6LeafNode,
+						StorageNodes: emptyStorage,
+					},
+					{
+						Path:         []byte{'\x0e'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account1LeafKey,
+						NodeValue:    account1AtBlock6LeafNode,
+						StorageNodes: emptyStorage,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		diff, err := builder.BuildStateDiffObject(test.startingArguments, params)
+		if err != nil {
+			t.Error(err)
+		}
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		if err != nil {
+			t.Error(err)
+		}
+
+		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
+		if err != nil {
+			t.Error(err)
+		}
+
+		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
+		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
+		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
+			t.Logf("Test failed: %s", test.name)
+			t.Errorf("actual state diff: %+v\r\n\r\n\r\nexpected state diff: %+v", diff, test.expected)
+		}
+	}
+}
+
+func TestBuilderWithRemovedNonWatchedAccount(t *testing.T) {
+	blocks, chain := test_helpers.MakeChain(6, test_helpers.Genesis, test_helpers.TestChainGen)
+	contractLeafKey = test_helpers.AddressToLeafKey(test_helpers.ContractAddr)
+	defer chain.Stop()
+	block3 = blocks[2]
+	block4 = blocks[3]
+	block5 = blocks[4]
+	block6 = blocks[5]
+	params := statediff.Params{
+		WatchedAddresses: []common.Address{test_helpers.Account1Addr, test_helpers.Account2Addr},
+	}
+	params.ComputeWatchedAddressesLeafKeys()
+	builder = statediff.NewBuilder(chain.StateCache())
+
+	var tests = []struct {
+		name              string
+		startingArguments statediff.Args
+		expected          *types2.StateObject
+	}{
+		{
+			"testBlock4",
+			statediff.Args{
+				OldStateRoot: block3.Root(),
+				NewStateRoot: block4.Root(),
+				BlockNumber:  block4.Number(),
+				BlockHash:    block4.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block4.Number(),
+				BlockHash:   block4.Hash(),
+				Nodes: []types2.StateNode{
+					{
+						Path:         []byte{'\x0c'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account2LeafKey,
+						NodeValue:    account2AtBlock4LeafNode,
+						StorageNodes: emptyStorage,
+					},
+				},
+			},
+		},
+		{
+			"testBlock5",
+			statediff.Args{
+				OldStateRoot: block4.Root(),
+				NewStateRoot: block5.Root(),
+				BlockNumber:  block5.Number(),
+				BlockHash:    block5.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block5.Number(),
+				BlockHash:   block5.Hash(),
+				Nodes: []types2.StateNode{
+					{
+						Path:         []byte{'\x0e'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account1LeafKey,
+						NodeValue:    account1AtBlock5LeafNode,
+						StorageNodes: emptyStorage,
+					},
+				},
+			},
+		},
+		{
+			"testBlock6",
+			statediff.Args{
+				OldStateRoot: block5.Root(),
+				NewStateRoot: block6.Root(),
+				BlockNumber:  block6.Number(),
+				BlockHash:    block6.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block6.Number(),
+				BlockHash:   block6.Hash(),
+				Nodes: []types2.StateNode{
 					{
 						Path:         []byte{'\x0c'},
 						NodeType:     types2.Leaf,
