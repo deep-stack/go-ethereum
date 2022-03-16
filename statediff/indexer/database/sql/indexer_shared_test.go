@@ -24,12 +24,15 @@ var (
 	ind       interfaces.StateDiffIndexer
 	ipfsPgGet = `SELECT data FROM public.blocks
 					WHERE key = $1`
-	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5  []byte
-	mockBlock                                              *types.Block
-	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID cid.Cid
-	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID            cid.Cid
-	rctLeaf1, rctLeaf2, rctLeaf3, rctLeaf4, rctLeaf5       []byte
-	state1CID, state2CID, storageCID                       cid.Cid
+	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5                          []byte
+	mockBlock                                                                      *types.Block
+	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID                         cid.Cid
+	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID                                    cid.Cid
+	rctLeaf1, rctLeaf2, rctLeaf3, rctLeaf4, rctLeaf5                               []byte
+	state1CID, state2CID, storageCID                                               cid.Cid
+	contract1Address, contract2Address, contract3Address, contract4Address         string
+	contract1CreatedAt, contract2CreatedAt, contract3CreatedAt, contract4CreatedAt uint64
+	lastFilledAt, watchedAt1, watchedAt2, watchedAt3                               uint64
 )
 
 func init() {
@@ -134,6 +137,20 @@ func init() {
 	rctLeaf3 = orderedRctLeafNodes[2]
 	rctLeaf4 = orderedRctLeafNodes[3]
 	rctLeaf5 = orderedRctLeafNodes[4]
+
+	contract1Address = "0x5d663F5269090bD2A7DC2390c911dF6083D7b28F"
+	contract2Address = "0x6Eb7e5C66DB8af2E96159AC440cbc8CDB7fbD26B"
+	contract3Address = "0xcfeB164C328CA13EFd3C77E1980d94975aDfedfc"
+	contract4Address = "0x0Edf0c4f393a628DE4828B228C48175b3EA297fc"
+	contract1CreatedAt = uint64(1)
+	contract2CreatedAt = uint64(2)
+	contract3CreatedAt = uint64(3)
+	contract4CreatedAt = uint64(4)
+
+	lastFilledAt = uint64(0)
+	watchedAt1 = uint64(10)
+	watchedAt2 = uint64(15)
+	watchedAt3 = uint64(20)
 }
 
 func expectTrue(t *testing.T, value bool) {
