@@ -558,10 +558,9 @@ func (sdi *StateDiffIndexer) Close() error {
 
 // LoadWatchedAddresses reads watched addresses from the database
 func (sdi *StateDiffIndexer) LoadWatchedAddresses() ([]common.Address, error) {
-
 	addressStrings := make([]string, 0)
 	pgStr := "SELECT address FROM eth_meta.watched_addresses"
-	err := sdi.dbWriter.db.Select(sdi.dbWriter.db.Context(), &addressStrings, pgStr)
+	err := sdi.dbWriter.db.Select(sdi.ctx, &addressStrings, pgStr)
 	if err != nil {
 		return nil, fmt.Errorf("error loading watched addresses: %v", err)
 	}
@@ -592,7 +591,7 @@ func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressA
 	}()
 
 	for _, arg := range args {
-		_, err = tx.Exec(sdi.dbWriter.db.Context(), `INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
+		_, err = tx.Exec(sdi.ctx, `INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
 			arg.Address, arg.CreatedAt, currentBlockNumber.Uint64())
 		if err != nil {
 			return fmt.Errorf("error inserting watched_addresses entry: %v", err)
@@ -620,7 +619,7 @@ func (sdi *StateDiffIndexer) RemoveWatchedAddresses(args []sdtypes.WatchAddressA
 	}()
 
 	for _, arg := range args {
-		_, err = tx.Exec(sdi.dbWriter.db.Context(), `DELETE FROM eth_meta.watched_addresses WHERE address = $1`, arg.Address)
+		_, err = tx.Exec(sdi.ctx, `DELETE FROM eth_meta.watched_addresses WHERE address = $1`, arg.Address)
 		if err != nil {
 			return fmt.Errorf("error removing watched_addresses entry: %v", err)
 		}
@@ -646,13 +645,13 @@ func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg,
 		}
 	}()
 
-	_, err = tx.Exec(sdi.dbWriter.db.Context(), `DELETE FROM eth_meta.watched_addresses`)
+	_, err = tx.Exec(sdi.ctx, `DELETE FROM eth_meta.watched_addresses`)
 	if err != nil {
 		return fmt.Errorf("error setting watched_addresses table: %v", err)
 	}
 
 	for _, arg := range args {
-		_, err = tx.Exec(sdi.dbWriter.db.Context(), `INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
+		_, err = tx.Exec(sdi.ctx, `INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
 			arg.Address, arg.CreatedAt, currentBlockNumber.Uint64())
 		if err != nil {
 			return fmt.Errorf("error setting watched_addresses table: %v", err)
@@ -664,7 +663,7 @@ func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg,
 
 // ClearWatchedAddresses clears all the watched addresses from the database
 func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
-	_, err := sdi.dbWriter.db.Exec(sdi.dbWriter.db.Context(), `DELETE FROM eth_meta.watched_addresses`)
+	_, err := sdi.dbWriter.db.Exec(sdi.ctx, `DELETE FROM eth_meta.watched_addresses`)
 	if err != nil {
 		return fmt.Errorf("error clearing watched_addresses table: %v", err)
 	}
