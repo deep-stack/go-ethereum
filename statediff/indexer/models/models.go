@@ -20,8 +20,9 @@ import "github.com/lib/pq"
 
 // IPLDModel is the db model for public.blocks
 type IPLDModel struct {
-	Key  string `db:"key"`
-	Data []byte `db:"data"`
+	BlockNumber string `db:"block_number"`
+	Key         string `db:"key"`
+	Data        []byte `db:"data"`
 }
 
 // HeaderModel is the db model for eth.header_cids
@@ -46,30 +47,33 @@ type HeaderModel struct {
 
 // UncleModel is the db model for eth.uncle_cids
 type UncleModel struct {
-	HeaderID   string `db:"header_id"`
-	BlockHash  string `db:"block_hash"`
-	ParentHash string `db:"parent_hash"`
-	CID        string `db:"cid"`
-	MhKey      string `db:"mh_key"`
-	Reward     string `db:"reward"`
+	BlockNumber string `db:"block_number"`
+	HeaderID    string `db:"header_id"`
+	BlockHash   string `db:"block_hash"`
+	ParentHash  string `db:"parent_hash"`
+	CID         string `db:"cid"`
+	MhKey       string `db:"mh_key"`
+	Reward      string `db:"reward"`
 }
 
 // TxModel is the db model for eth.transaction_cids
 type TxModel struct {
-	HeaderID string `db:"header_id"`
-	Index    int64  `db:"index"`
-	TxHash   string `db:"tx_hash"`
-	CID      string `db:"cid"`
-	MhKey    string `db:"mh_key"`
-	Dst      string `db:"dst"`
-	Src      string `db:"src"`
-	Data     []byte `db:"tx_data"`
-	Type     uint8  `db:"tx_type"`
-	Value    string `db:"value"`
+	BlockNumber string `db:"block_number"`
+	HeaderID    string `db:"header_id"`
+	Index       int64  `db:"index"`
+	TxHash      string `db:"tx_hash"`
+	CID         string `db:"cid"`
+	MhKey       string `db:"mh_key"`
+	Dst         string `db:"dst"`
+	Src         string `db:"src"`
+	Data        []byte `db:"tx_data"`
+	Type        uint8  `db:"tx_type"`
+	Value       string `db:"value"`
 }
 
 // AccessListElementModel is the db model for eth.access_list_entry
 type AccessListElementModel struct {
+	BlockNumber string         `db:"block_number"`
 	Index       int64          `db:"index"`
 	TxID        string         `db:"tx_id"`
 	Address     string         `db:"address"`
@@ -78,6 +82,7 @@ type AccessListElementModel struct {
 
 // ReceiptModel is the db model for eth.receipt_cids
 type ReceiptModel struct {
+	BlockNumber  string `db:"block_number"`
 	TxID         string `db:"tx_id"`
 	LeafCID      string `db:"leaf_cid"`
 	LeafMhKey    string `db:"leaf_mh_key"`
@@ -90,42 +95,46 @@ type ReceiptModel struct {
 
 // StateNodeModel is the db model for eth.state_cids
 type StateNodeModel struct {
-	HeaderID string `db:"header_id"`
-	Path     []byte `db:"state_path"`
-	StateKey string `db:"state_leaf_key"`
-	NodeType int    `db:"node_type"`
-	CID      string `db:"cid"`
-	MhKey    string `db:"mh_key"`
-	Diff     bool   `db:"diff"`
+	BlockNumber string `db:"block_number"`
+	HeaderID    string `db:"header_id"`
+	Path        []byte `db:"state_path"`
+	StateKey    string `db:"state_leaf_key"`
+	NodeType    int    `db:"node_type"`
+	CID         string `db:"cid"`
+	MhKey       string `db:"mh_key"`
+	Diff        bool   `db:"diff"`
 }
 
 // StorageNodeModel is the db model for eth.storage_cids
 type StorageNodeModel struct {
-	HeaderID   string `db:"header_id"`
-	StatePath  []byte `db:"state_path"`
-	Path       []byte `db:"storage_path"`
-	StorageKey string `db:"storage_leaf_key"`
-	NodeType   int    `db:"node_type"`
-	CID        string `db:"cid"`
-	MhKey      string `db:"mh_key"`
-	Diff       bool   `db:"diff"`
+	BlockNumber string `db:"block_number"`
+	HeaderID    string `db:"header_id"`
+	StatePath   []byte `db:"state_path"`
+	Path        []byte `db:"storage_path"`
+	StorageKey  string `db:"storage_leaf_key"`
+	NodeType    int    `db:"node_type"`
+	CID         string `db:"cid"`
+	MhKey       string `db:"mh_key"`
+	Diff        bool   `db:"diff"`
 }
 
 // StorageNodeWithStateKeyModel is a db model for eth.storage_cids + eth.state_cids.state_key
 type StorageNodeWithStateKeyModel struct {
-	HeaderID   string `db:"header_id"`
-	StatePath  []byte `db:"state_path"`
-	Path       []byte `db:"storage_path"`
-	StateKey   string `db:"state_leaf_key"`
-	StorageKey string `db:"storage_leaf_key"`
-	NodeType   int    `db:"node_type"`
-	CID        string `db:"cid"`
-	MhKey      string `db:"mh_key"`
-	Diff       bool   `db:"diff"`
+	BlockNumber string `db:"block_number"`
+	HeaderID    string `db:"header_id"`
+	StatePath   []byte `db:"state_path"`
+	Path        []byte `db:"storage_path"`
+	StateKey    string `db:"state_leaf_key"`
+	StorageKey  string `db:"storage_leaf_key"`
+	NodeType    int    `db:"node_type"`
+	CID         string `db:"cid"`
+	MhKey       string `db:"mh_key"`
+	Diff        bool   `db:"diff"`
 }
 
 // StateAccountModel is a db model for an eth state account (decoded value of state leaf node)
 type StateAccountModel struct {
+	BlockNumber string `db:"block_number"`
 	HeaderID    string `db:"header_id"`
 	StatePath   []byte `db:"state_path"`
 	Balance     string `db:"balance"`
@@ -136,14 +145,15 @@ type StateAccountModel struct {
 
 // LogsModel is the db model for eth.logs
 type LogsModel struct {
-	ReceiptID string `db:"rct_id"`
-	LeafCID   string `db:"leaf_cid"`
-	LeafMhKey string `db:"leaf_mh_key"`
-	Address   string `db:"address"`
-	Index     int64  `db:"index"`
-	Data      []byte `db:"log_data"`
-	Topic0    string `db:"topic0"`
-	Topic1    string `db:"topic1"`
-	Topic2    string `db:"topic2"`
-	Topic3    string `db:"topic3"`
+	BlockNumber string `db:"block_number"`
+	ReceiptID   string `db:"rct_id"`
+	LeafCID     string `db:"leaf_cid"`
+	LeafMhKey   string `db:"leaf_mh_key"`
+	Address     string `db:"address"`
+	Index       int64  `db:"index"`
+	Data        []byte `db:"log_data"`
+	Topic0      string `db:"topic0"`
+	Topic1      string `db:"topic1"`
+	Topic2      string `db:"topic2"`
+	Topic3      string `db:"topic3"`
 }

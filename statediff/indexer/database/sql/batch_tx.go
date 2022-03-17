@@ -29,9 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 )
 
+const startingCacheCapacity = 1024 * 24
+
 // BatchTx wraps a sql tx with the state necessary for building the tx concurrently during trie difference iteration
 type BatchTx struct {
-	BlockNumber uint64
+	BlockNumber string
 	ctx         context.Context
 	dbtx        Tx
 	stm         string
@@ -48,7 +50,8 @@ func (tx *BatchTx) Submit(err error) error {
 }
 
 func (tx *BatchTx) flush() error {
-	_, err := tx.dbtx.Exec(tx.ctx, tx.stm, pq.Array(tx.ipldCache.Keys), pq.Array(tx.ipldCache.Values))
+	_, err := tx.dbtx.Exec(tx.ctx, tx.stm, pq.Array(tx.ipldCache.BlockNumbers), pq.Array(tx.ipldCache.Keys),
+		pq.Array(tx.ipldCache.Values))
 	if err != nil {
 		return err
 	}
@@ -61,6 +64,7 @@ func (tx *BatchTx) cache() {
 	for {
 		select {
 		case i := <-tx.iplds:
+			tx.ipldCache.BlockNumbers = append(tx.ipldCache.BlockNumbers, i.BlockNumber)
 			tx.ipldCache.Keys = append(tx.ipldCache.Keys, i.Key)
 			tx.ipldCache.Values = append(tx.ipldCache.Values, i.Data)
 		case <-tx.quit:
@@ -72,15 +76,17 @@ func (tx *BatchTx) cache() {
 
 func (tx *BatchTx) cacheDirect(key string, value []byte) {
 	tx.iplds <- models.IPLDModel{
-		Key:  key,
-		Data: value,
+		BlockNumber: tx.BlockNumber,
+		Key:         key,
+		Data:        value,
 	}
 }
 
 func (tx *BatchTx) cacheIPLD(i node.Node) {
 	tx.iplds <- models.IPLDModel{
-		Key:  blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(i.Cid().Hash()).String(),
-		Data: i.RawData(),
+		BlockNumber: tx.BlockNumber,
+		Key:         blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(i.Cid().Hash()).String(),
+		Data:        i.RawData(),
 	}
 }
 
@@ -91,8 +97,9 @@ func (tx *BatchTx) cacheRaw(codec, mh uint64, raw []byte) (string, string, error
 	}
 	prefixedKey := blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(c.Hash()).String()
 	tx.iplds <- models.IPLDModel{
-		Key:  prefixedKey,
-		Data: raw,
+		BlockNumber: tx.BlockNumber,
+		Key:         prefixedKey,
+		Data:        raw,
 	}
 	return c.String(), prefixedKey, err
 }
