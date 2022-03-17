@@ -74,10 +74,6 @@ var (
 		common.Hex2Bytes("32575a0e9e593c00f959f8c92f12db2869c3395a3b0502d05e2516446f71f85b"),
 		slot3StorageValue,
 	})
-	slot0StorageLeafRootNode, _ = rlp.EncodeToBytes([]interface{}{
-		common.Hex2Bytes("20290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"),
-		slot0StorageValue,
-	})
 
 	contractAccountAtBlock2, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    1,

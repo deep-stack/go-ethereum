@@ -422,7 +422,7 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffPathsAtB m
 				// if this node's path did not show up in diffPathsAtB
 				// that means the node at this path was deleted (or moved) in B
 				// emit an empty "removed" diff to signify as such
-				// emit emtpy "removed" diff for all storage nodes
+				// emit empty "removed" diff for all storage nodes
 				if _, ok := diffPathsAtB[common.Bytes2Hex(node.Path)]; !ok {
 					diff := types2.StateNode{
 						NodeType:  types2.Removed,
