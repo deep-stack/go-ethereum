@@ -178,6 +178,7 @@ var (
 		utils.StateDiffFilePath,
 		utils.StateDiffKnownGapsFilePath,
 		utils.StateDiffWaitForSync,
+		utils.StateDiffWatchedAddressesFilePath,
 		configFileFlag,
 	}
 

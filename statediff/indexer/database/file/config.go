@@ -23,8 +23,9 @@ import (
 
 // Config holds params for writing sql statements out to a file
 type Config struct {
-	FilePath string
-	NodeInfo node.Info
+	FilePath                 string
+	NodeInfo                 node.Info
+	WatchedAddressesFilePath string
 }
 
 // Type satisfies interfaces.Config

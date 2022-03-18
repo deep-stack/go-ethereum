@@ -497,32 +497,27 @@ func (sdi *StateDiffIndexer) Close() error {
 	return sdi.dump.Close()
 }
 
-// LoadWatchedAddresses reads watched addresses from the database
+// LoadWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
 func (sdi *StateDiffIndexer) LoadWatchedAddresses() ([]common.Address, error) {
-	// TODO implement
 	return nil, nil
 }
 
-// InsertWatchedAddresses inserts the given addresses in the database
+// InsertWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
 func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
-	// TODO implement
 	return nil
 }
 
-// RemoveWatchedAddresses removes the given watched addresses from the database
+// RemoveWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
 func (sdi *StateDiffIndexer) RemoveWatchedAddresses(args []sdtypes.WatchAddressArg) error {
-	// TODO implement
 	return nil
 }
 
-// SetWatchedAddresses clears and inserts the given addresses in the database
+// SetWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
 func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
-	// TODO implement
 	return nil
 }
 
-// ClearWatchedAddresses clears all the watched addresses from the database
+// ClearWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
 func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
-	// TODO implement
 	return nil
 }

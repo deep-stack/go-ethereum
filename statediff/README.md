@@ -120,6 +120,8 @@ This service introduces a CLI flag namespace `statediff`
 
 `--statediff.file.path` full path (including filename) to write statediff data out to when operating in file mode
 
+`--statediff.file.wapath` full path (including filename) to write statediff watched addresses out to when operating in file mode
+
 The service can only operate in full sync mode (`--syncmode=full`), but only the historical RPC endpoints require an archive node (`--gcmode=archive`)
 
 e.g.
