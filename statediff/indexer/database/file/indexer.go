@@ -86,7 +86,14 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 	if watchedAddressesFilePath == "" {
 		watchedAddressesFilePath = defaultWatchedAddressesFilePath
 	}
-	log.Info("Writing watched addresses SQL statements to file", "file", filePath)
+	if _, err := os.Stat(watchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("cannot create watched addresses file, file (%s) already exists", watchedAddressesFilePath)
+	}
+	_, err = os.Create(watchedAddressesFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create file (%s), err: %v", filePath, err)
+	}
+	log.Info("Writing watched addresses SQL statements to file", "file", watchedAddressesFilePath)
 
 	w := NewSQLWriter(file)
 	wg := new(sync.WaitGroup)
@@ -524,8 +531,24 @@ func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressA
 		return err
 	}
 
+	// get already watched addresses
+	var watchedAddresses []string
+	for _, stmt := range stmts {
+		addressString, err := parseWatchedAddressStmt(stmt)
+		if err != nil {
+			return err
+		}
+
+		watchedAddresses = append(watchedAddresses, addressString)
+	}
+
 	// append statements for new addresses to existing statements
 	for _, arg := range args {
+		// ignore if already watched
+		if funk.Contains(watchedAddresses, arg.Address) {
+			continue
+		}
+
 		stmt := fmt.Sprintf(watchedAddressesInsert, arg.Address, arg.CreatedAt, currentBlockNumber.Uint64())
 		stmts = append(stmts, stmt)
 	}
@@ -579,18 +602,13 @@ func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
 
 // loadWatchedAddressesStmts loads sql statements from the given file in a string slice
 func loadWatchedAddressesStmts(filePath string) ([]string, error) {
-	// return emtpy if file does not exist
-	if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
-		return []string{}, nil
-	}
-
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error opening watched addresses file: %v", err)
 	}
 	defer file.Close()
 
-	var stmts []string
+	stmts := []string{}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		stmts = append(stmts, scanner.Text())
@@ -607,7 +625,7 @@ func loadWatchedAddressesStmts(filePath string) ([]string, error) {
 func dumpWatchedAddressesStmts(filePath string, stmts []string) error {
 	file, err := os.Create(filePath)
 	if err != nil {
-		return fmt.Errorf("error creating watched addresses file (%s): %v", filePath, err)
+		return fmt.Errorf("error creating watched addresses file: %v", err)
 	}
 	defer file.Close()
 

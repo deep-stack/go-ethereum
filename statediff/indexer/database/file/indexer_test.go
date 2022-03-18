@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"testing"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
+	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -51,12 +53,15 @@ var (
 	ind       interfaces.StateDiffIndexer
 	ipfsPgGet = `SELECT data FROM public.blocks
 					WHERE key = $1`
-	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5  []byte
-	mockBlock                                              *types.Block
-	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID cid.Cid
-	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID            cid.Cid
-	rctLeaf1, rctLeaf2, rctLeaf3, rctLeaf4, rctLeaf5       []byte
-	state1CID, state2CID, storageCID                       cid.Cid
+	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5                          []byte
+	mockBlock                                                                      *types.Block
+	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID                         cid.Cid
+	rct1CID, rct2CID, rct3CID, rct4CID, rct5CID                                    cid.Cid
+	rctLeaf1, rctLeaf2, rctLeaf3, rctLeaf4, rctLeaf5                               []byte
+	state1CID, state2CID, storageCID                                               cid.Cid
+	contract1Address, contract2Address, contract3Address, contract4Address         string
+	contract1CreatedAt, contract2CreatedAt, contract3CreatedAt, contract4CreatedAt uint64
+	lastFilledAt, watchedAt1, watchedAt2, watchedAt3                               uint64
 )
 
 func init() {
@@ -161,15 +166,45 @@ func init() {
 	rctLeaf3 = orderedRctLeafNodes[2]
 	rctLeaf4 = orderedRctLeafNodes[3]
 	rctLeaf5 = orderedRctLeafNodes[4]
+
+	contract1Address = "0x5d663F5269090bD2A7DC2390c911dF6083D7b28F"
+	contract2Address = "0x6Eb7e5C66DB8af2E96159AC440cbc8CDB7fbD26B"
+	contract3Address = "0xcfeB164C328CA13EFd3C77E1980d94975aDfedfc"
+	contract4Address = "0x0Edf0c4f393a628DE4828B228C48175b3EA297fc"
+	contract1CreatedAt = uint64(1)
+	contract2CreatedAt = uint64(2)
+	contract3CreatedAt = uint64(3)
+	contract4CreatedAt = uint64(4)
+
+	lastFilledAt = uint64(0)
+	watchedAt1 = uint64(10)
+	watchedAt2 = uint64(15)
+	watchedAt3 = uint64(20)
 }
 
-func setup(t *testing.T) {
+func setupIndexer(t *testing.T) {
 	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
 		err := os.Remove(file.TestConfig.FilePath)
 		require.NoError(t, err)
 	}
+
+	if _, err := os.Stat(file.TestConfig.WatchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.WatchedAddressesFilePath)
+		require.NoError(t, err)
+	}
+
 	ind, err = file.NewStateDiffIndexer(context.Background(), mocks.TestConfig, file.TestConfig)
 	require.NoError(t, err)
+
+	connStr := postgres.DefaultConfig.DbConnectionString()
+	sqlxdb, err = sqlx.Connect("postgres", connStr)
+	if err != nil {
+		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
+	}
+}
+
+func setup(t *testing.T) {
+	setupIndexer(t)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
 		mockBlock,
@@ -192,19 +227,12 @@ func setup(t *testing.T) {
 	}
 
 	test_helpers.ExpectEqual(t, tx.(*file.BatchTx).BlockNumber, mocks.BlockNumber.Uint64())
-
-	connStr := postgres.DefaultConfig.DbConnectionString()
-
-	sqlxdb, err = sqlx.Connect("postgres", connStr)
-	if err != nil {
-		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
-	}
 }
 
 func TestFileIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
-		dumpData(t)
+		dumpFileData(t)
 		defer tearDown(t)
 		pgStr := `SELECT cid, td, reward, block_hash, coinbase
 				FROM eth.header_cids
@@ -242,7 +270,7 @@ func TestFileIndexer(t *testing.T) {
 	})
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
-		dumpData(t)
+		dumpFileData(t)
 		defer tearDown(t)
 
 		// check that txs were properly indexed and published
@@ -370,7 +398,7 @@ func TestFileIndexer(t *testing.T) {
 
 	t.Run("Publish and index log IPLDs for multiple receipt of a specific block", func(t *testing.T) {
 		setup(t)
-		dumpData(t)
+		dumpFileData(t)
 		defer tearDown(t)
 
 		rcts := make([]string, 0)
@@ -426,7 +454,7 @@ func TestFileIndexer(t *testing.T) {
 
 	t.Run("Publish and index receipt IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
-		dumpData(t)
+		dumpFileData(t)
 		defer tearDown(t)
 
 		// check receipts were properly indexed and published
@@ -527,7 +555,7 @@ func TestFileIndexer(t *testing.T) {
 
 	t.Run("Publish and index state IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
-		dumpData(t)
+		dumpFileData(t)
 		defer tearDown(t)
 
 		// check that state nodes were properly indexed and published
@@ -618,7 +646,7 @@ func TestFileIndexer(t *testing.T) {
 
 	t.Run("Publish and index storage IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
-		dumpData(t)
+		dumpFileData(t)
 		defer tearDown(t)
 
 		// check that storage nodes were properly indexed
@@ -686,5 +714,307 @@ func TestFileIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 		test_helpers.ExpectEqual(t, data, []byte{})
+	})
+}
+
+func TestFileWatchAddressMethods(t *testing.T) {
+	setupIndexer(t)
+	defer tearDown(t)
+
+	type res struct {
+		Address      string `db:"address"`
+		CreatedAt    uint64 `db:"created_at"`
+		WatchedAt    uint64 `db:"watched_at"`
+		LastFilledAt uint64 `db:"last_filled_at"`
+	}
+	pgStr := "SELECT * FROM eth_meta.watched_addresses"
+
+	t.Run("Insert watched addresses", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract1Address,
+				CreatedAt: contract1CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract1Address,
+				CreatedAt:    contract1CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract2Address,
+				CreatedAt:    contract2CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt1)))
+		dumpWatchedAddressesFileData(t)
+
+		rows := []res{}
+		err = sqlxdb.Select(&rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
+	t.Run("Insert watched addresses (some already watched)", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract3Address,
+				CreatedAt: contract3CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract1Address,
+				CreatedAt:    contract1CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract2Address,
+				CreatedAt:    contract2CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract3Address,
+				CreatedAt:    contract3CreatedAt,
+				WatchedAt:    watchedAt2,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
+		dumpWatchedAddressesFileData(t)
+
+		rows := []res{}
+		err = sqlxdb.Select(&rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
+	t.Run("Remove watched addresses", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract3Address,
+				CreatedAt: contract3CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract1Address,
+				CreatedAt:    contract1CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		ind.RemoveWatchedAddresses(args)
+		dumpWatchedAddressesFileData(t)
+
+		rows := []res{}
+		err = sqlxdb.Select(&rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
+	t.Run("Remove watched addresses (some non-watched)", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract1Address,
+				CreatedAt: contract1CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+		}
+		expectedData := []res{}
+
+		ind.RemoveWatchedAddresses(args)
+		dumpWatchedAddressesFileData(t)
+
+		rows := []res{}
+		err = sqlxdb.Select(&rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
+	t.Run("Set watched addresses", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract1Address,
+				CreatedAt: contract1CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+			{
+				Address:   contract3Address,
+				CreatedAt: contract3CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract1Address,
+				CreatedAt:    contract1CreatedAt,
+				WatchedAt:    watchedAt2,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract2Address,
+				CreatedAt:    contract2CreatedAt,
+				WatchedAt:    watchedAt2,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract3Address,
+				CreatedAt:    contract3CreatedAt,
+				WatchedAt:    watchedAt2,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
+		dumpWatchedAddressesFileData(t)
+
+		rows := []res{}
+		err = sqlxdb.Select(&rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
+	t.Run("Set watched addresses (some already watched)", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract4Address,
+				CreatedAt: contract4CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+			{
+				Address:   contract3Address,
+				CreatedAt: contract3CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract4Address,
+				CreatedAt:    contract4CreatedAt,
+				WatchedAt:    watchedAt3,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract2Address,
+				CreatedAt:    contract2CreatedAt,
+				WatchedAt:    watchedAt3,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract3Address,
+				CreatedAt:    contract3CreatedAt,
+				WatchedAt:    watchedAt3,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt3)))
+		dumpWatchedAddressesFileData(t)
+
+		rows := []res{}
+		err = sqlxdb.Select(&rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
+	t.Run("Clear watched addresses", func(t *testing.T) {
+		expectedData := []res{}
+
+		ind.ClearWatchedAddresses()
+		dumpWatchedAddressesFileData(t)
+
+		rows := []res{}
+		err = sqlxdb.Select(&rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
+	t.Run("Clear watched addresses (empty table)", func(t *testing.T) {
+		expectedData := []res{}
+
+		ind.ClearWatchedAddresses()
+		dumpWatchedAddressesFileData(t)
+
+		rows := []res{}
+		err = sqlxdb.Select(&rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
 	})
 }

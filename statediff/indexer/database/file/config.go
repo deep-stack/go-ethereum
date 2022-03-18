@@ -43,4 +43,5 @@ var TestConfig = Config{
 		ID:           "mockNodeID",
 		ClientName:   "go-ethereum",
 	},
+	WatchedAddressesFilePath: "./statediffing_watched_addresses_test_file.sql",
 }
