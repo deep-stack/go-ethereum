@@ -70,7 +70,7 @@ var (
 		bankAccount,
 	})
 	mockTotalDifficulty = big.NewInt(1337)
-	params              = statediff.Params{
+	parameters          = statediff.Params{
 		IntermediateStateNodes: false,
 		IncludeTD:              true,
 		IncludeBlock:           true,
@@ -176,7 +176,7 @@ func testSubscriptionAPI(t *testing.T) {
 		}
 	}()
 	time.Sleep(1)
-	mockService.Subscribe(id, payloadChan, quitChan, params)
+	mockService.Subscribe(id, payloadChan, quitChan, parameters)
 	blockChan <- block1
 	parentBlockChain <- block0
 	wg.Wait()
@@ -234,7 +234,7 @@ func testHTTPAPI(t *testing.T) {
 		Builder:    statediff.NewBuilder(chain.StateCache()),
 		BlockChain: mockBlockChain,
 	}
-	payload, err := mockService.StateDiffAt(block1.Number().Uint64(), params)
+	payload, err := mockService.StateDiffAt(block1.Number().Uint64(), parameters)
 	if err != nil {
 		t.Error(err)
 	}
