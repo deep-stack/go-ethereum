@@ -328,7 +328,7 @@ func createServiceWithMockBackend(curBlock uint64, highestBlock uint64) (*mocks.
 		SubscriptionTypes: make(map[common.Hash]statediff.Params),
 		BlockCache:        statediff.NewBlockCache(1),
 		BackendAPI:        &backend,
-		WaitforSync:       true,
+		WaitForSync:       true,
 	}
 	return &backend, service
 }
@@ -338,7 +338,7 @@ func createServiceWithMockBackend(curBlock uint64, highestBlock uint64) (*mocks.
 func testWaitForSync(t *testing.T) {
 	t.Log("Starting Sync")
 	_, service := createServiceWithMockBackend(10, 10)
-	err := service.WaitForSync()
+	err := service.WaitingForSync()
 	if err != nil {
 		t.Fatal("Sync Failed")
 	}
@@ -362,7 +362,7 @@ func testGetSyncStatus(t *testing.T) {
 		// Start the sync function which will wait for the sync
 		// Once the sync is complete add a value to the checkSyncComplet channel
 		t.Log("Starting Sync")
-		err := service.WaitForSync()
+		err := service.WaitingForSync()
 		if err != nil {
 			t.Error("Sync Failed")
 			checkSyncComplete <- 1
@@ -400,42 +400,36 @@ func testGetSyncStatus(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		// Make sure if syncStatus is false that WaitForSync has completed!
-		if syncStatus == false && len(checkSyncComplete) == 0 {
+		if !syncStatus && len(checkSyncComplete) == 0 {
 			t.Error("Sync is complete but WaitForSync is not")
 		}
 
-		if syncStatus != false && len(checkSyncComplete) == 1 {
+		if syncStatus && len(checkSyncComplete) == 1 {
 			t.Error("Sync is not complete but WaitForSync is")
 		}
 
 		// Make sure sync hasn't completed and that the checkSyncComplete channel is empty
-		if syncStatus != false && len(checkSyncComplete) == 0 {
+		if syncStatus && len(checkSyncComplete) == 0 {
 			continue
 		}
 
 		// This code will only be run if the sync is complete and the WaitForSync function is complete
-		//t.Log("Backend: ", backend)
-		//t.Log("Sync Status: ", syncStatus)
 
 		// If syncstatus is complete, make sure that the blocks match
-		if syncStatus == false && table.currentBlock != table.highestBlock {
+		if !syncStatus && table.currentBlock != table.highestBlock {
 			t.Errorf("syncStatus indicated sync was complete even when current block, %d, and highest block %d aren't equal",
 				table.currentBlock, table.highestBlock)
 		}
 
 		// Make sure that WaitForSync completed once the current block caught up to head!
-		if len(checkSyncComplete) == 1 {
-			checkSyncCompleteVal := <-checkSyncComplete
-			if checkSyncCompleteVal != 0 {
-				t.Errorf("syncStatus indicated sync was complete but the checkSyncComplete has a value of %d",
-					checkSyncCompleteVal)
-			} else {
-				t.Log("Test Passed!")
-			}
-
+		checkSyncCompleteVal := <-checkSyncComplete
+		if checkSyncCompleteVal != 0 {
+			t.Errorf("syncStatus indicated sync was complete but the checkSyncComplete has a value of %d",
+				checkSyncCompleteVal)
 		} else {
-			t.Error("checkSyncComplete is empty: ", len(checkSyncComplete))
+			t.Log("Test Passed!")
 		}
+
 	}
 
 }

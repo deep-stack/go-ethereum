@@ -122,7 +122,7 @@ type Service struct {
 	// The publicBackendAPI which provides useful information about the current state
 	BackendAPI ethapi.Backend
 	// Should the statediff service wait for geth to sync to head?
-	WaitforSync bool
+	WaitForSync bool
 	// Whether or not we have any subscribers; only if we do, do we processes state diffs
 	subscribers int32
 	// Interface for publishing statediffs as PG-IPLD objects
@@ -183,7 +183,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		SubscriptionTypes: make(map[common.Hash]Params),
 		BlockCache:        NewBlockCache(workers),
 		BackendAPI:        backend,
-		WaitforSync:       params.WaitForSync,
+		WaitForSync:       params.WaitForSync,
 		indexer:           indexer,
 		enableWriteLoop:   params.EnableWriteLoop,
 		numWorkers:        workers,
@@ -537,19 +537,23 @@ func (sds *Service) Unsubscribe(id rpc.ID) error {
 
 // This function will check the status of geth syncing.
 // It will return false if geth has finished syncing.
-// It will return a non false value if geth is not done syncing.
-func (sds *Service) GetSyncStatus(pubEthAPI *ethapi.PublicEthereumAPI) (interface{}, error) {
+// It will return a true Geth is still syncing.
+func (sds *Service) GetSyncStatus(pubEthAPI *ethapi.PublicEthereumAPI) (bool, error) {
 	syncStatus, err := pubEthAPI.Syncing()
 	if err != nil {
-		return nil, err
+		return true, err
 	}
-	return syncStatus, err
+
+	if syncStatus != false {
+		return true, err
+	}
+	return false, err
 }
 
 // This function calls GetSyncStatus to check if we have caught up to head.
 // It will keep looking and checking if we have caught up to head.
 // It will only complete if we catch up to head, otherwise it will keep looping forever.
-func (sds *Service) WaitForSync() error {
+func (sds *Service) WaitingForSync() error {
 	log.Info("We are going to wait for geth to sync to head!")
 
 	// Has the geth node synced to head?
@@ -560,9 +564,11 @@ func (sds *Service) WaitForSync() error {
 		if err != nil {
 			return err
 		}
-		if syncStatus == false {
+		if !syncStatus {
 			log.Info("Geth has caught up to the head of the chain")
 			Synced = true
+		} else {
+			time.Sleep(1 * time.Second)
 		}
 	}
 	return nil
@@ -572,9 +578,12 @@ func (sds *Service) WaitForSync() error {
 func (sds *Service) Start() error {
 	log.Info("Starting statediff service")
 
-	if sds.WaitforSync {
+	if sds.WaitForSync {
 		log.Info("Statediff service will wait until geth has caught up to the head of the chain.")
-		sds.WaitForSync()
+		err := sds.WaitingForSync()
+		if err != nil {
+			return err
+		}
 		log.Info("Continuing with startdiff start process")
 	}
 	chainEventCh := make(chan core.ChainEvent, chainEventChanSize)
