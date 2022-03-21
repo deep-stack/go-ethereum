@@ -24,8 +24,8 @@ import (
 // Config holds params for writing sql statements out to a file
 type Config struct {
 	FilePath                 string
-	NodeInfo                 node.Info
 	WatchedAddressesFilePath string
+	NodeInfo                 node.Info
 }
 
 // Type satisfies interfaces.Config
@@ -35,7 +35,8 @@ func (c Config) Type() shared.DBType {
 
 // TestConfig config for unit tests
 var TestConfig = Config{
-	FilePath: "./statediffing_test_file.sql",
+	FilePath:                 "./statediffing_test_file.sql",
+	WatchedAddressesFilePath: "./statediffing_watched_addresses_test_file.sql",
 	NodeInfo: node.Info{
 		GenesisBlock: "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
 		NetworkID:    "1",
@@ -43,5 +44,4 @@ var TestConfig = Config{
 		ID:           "mockNodeID",
 		ClientName:   "go-ethereum",
 	},
-	WatchedAddressesFilePath: "./statediffing_watched_addresses_test_file.sql",
 }

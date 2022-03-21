@@ -89,7 +89,7 @@ func dumpFileData(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func dumpWatchedAddressesFileData(t *testing.T) {
+func resetAndDumpWatchedAddressesFileData(t *testing.T) {
 	resetDB(t)
 
 	sqlFileBytes, err := os.ReadFile(file.TestConfig.WatchedAddressesFilePath)
@@ -115,8 +115,9 @@ func tearDown(t *testing.T) {
 	err := os.Remove(file.TestConfig.FilePath)
 	require.NoError(t, err)
 
-	err = os.Remove(file.TestConfig.WatchedAddressesFilePath)
-	require.NoError(t, err)
+	if err := os.Remove(file.TestConfig.WatchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {
+		require.NoError(t, err)
+	}
 
 	err = sqlxdb.Close()
 	require.NoError(t, err)
