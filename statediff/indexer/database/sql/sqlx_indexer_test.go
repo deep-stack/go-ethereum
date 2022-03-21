@@ -570,6 +570,18 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 	}
 	pgStr := "SELECT * FROM eth_meta.watched_addresses"
 
+	t.Run("Load watched addresses (empty table)", func(t *testing.T) {
+		expectedData := []common.Address{}
+
+		rows, err := ind.LoadWatchedAddresses()
+		require.NoError(t, err)
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
 	t.Run("Insert watched addresses", func(t *testing.T) {
 		args := []sdtypes.WatchAddressArg{
 			{
@@ -596,7 +608,8 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 			},
 		}
 
-		ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt1)))
+		err = ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt1)))
+		require.NoError(t, err)
 
 		rows := []res{}
 		err = db.Select(context.Background(), &rows, pgStr)
@@ -642,7 +655,8 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 			},
 		}
 
-		ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
+		err = ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
+		require.NoError(t, err)
 
 		rows := []res{}
 		err = db.Select(context.Background(), &rows, pgStr)
@@ -676,7 +690,8 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 			},
 		}
 
-		ind.RemoveWatchedAddresses(args)
+		err = ind.RemoveWatchedAddresses(args)
+		require.NoError(t, err)
 
 		rows := []res{}
 		err = db.Select(context.Background(), &rows, pgStr)
@@ -703,7 +718,8 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 		}
 		expectedData := []res{}
 
-		ind.RemoveWatchedAddresses(args)
+		err = ind.RemoveWatchedAddresses(args)
+		require.NoError(t, err)
 
 		rows := []res{}
 		err = db.Select(context.Background(), &rows, pgStr)
@@ -753,7 +769,8 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 			},
 		}
 
-		ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
+		err = ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
+		require.NoError(t, err)
 
 		rows := []res{}
 		err = db.Select(context.Background(), &rows, pgStr)
@@ -803,7 +820,8 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 			},
 		}
 
-		ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt3)))
+		err = ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt3)))
+		require.NoError(t, err)
 
 		rows := []res{}
 		err = db.Select(context.Background(), &rows, pgStr)
@@ -817,10 +835,27 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 		}
 	})
 
+	t.Run("Load watched addresses", func(t *testing.T) {
+		expectedData := []common.Address{
+			common.HexToAddress(contract4Address),
+			common.HexToAddress(contract2Address),
+			common.HexToAddress(contract3Address),
+		}
+
+		rows, err := ind.LoadWatchedAddresses()
+		require.NoError(t, err)
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			test_helpers.ExpectEqual(t, row, expectedData[idx])
+		}
+	})
+
 	t.Run("Clear watched addresses", func(t *testing.T) {
 		expectedData := []res{}
 
-		ind.ClearWatchedAddresses()
+		err = ind.ClearWatchedAddresses()
+		require.NoError(t, err)
 
 		rows := []res{}
 		err = db.Select(context.Background(), &rows, pgStr)
@@ -837,7 +872,8 @@ func TestSQLXWatchAddressMethods(t *testing.T) {
 	t.Run("Clear watched addresses (empty table)", func(t *testing.T) {
 		expectedData := []res{}
 
-		ind.ClearWatchedAddresses()
+		err = ind.ClearWatchedAddresses()
+		require.NoError(t, err)
 
 		rows := []res{}
 		err = db.Select(context.Background(), &rows, pgStr)
