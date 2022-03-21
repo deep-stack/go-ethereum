@@ -553,3 +553,27 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(batch interfaces.Batch, codeAnd
 func (sdi *StateDiffIndexer) Close() error {
 	return sdi.dbWriter.Close()
 }
+
+// CLEAN UP!!
+func (sdi *StateDiffIndexer) PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64) error {
+	knownGap := models.KnownGapsModel{
+		StartingBlockNumber: startingBlockNumber.String(),
+		EndingBlockNumber:   endingBlockNumber.String(),
+		CheckedOut:          checkedOut,
+		ProcessingKey:       processingKey,
+	}
+	tx, err := sdi.dbWriter.db.Begin(sdi.ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := sdi.dbWriter.upsertKnownGaps(tx, knownGap); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(sdi.ctx); err != nil {
+		return err
+	}
+
+	return nil
+}

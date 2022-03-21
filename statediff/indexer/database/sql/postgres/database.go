@@ -36,6 +36,7 @@ type DB struct {
 }
 
 // InsertHeaderStm satisfies the sql.Statements interface
+// Stm == Statement
 func (db *DB) InsertHeaderStm() string {
 	return `INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, node_id, reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, coinbase)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
@@ -98,4 +99,9 @@ func (db *DB) InsertIPLDStm() string {
 // InsertIPLDsStm satisfies the sql.Statements interface
 func (db *DB) InsertIPLDsStm() string {
 	return `INSERT INTO public.blocks (key, data) VALUES (unnest($1::TEXT[]), unnest($2::BYTEA[])) ON CONFLICT (key) DO NOTHING`
+}
+
+func (db *DB) InsertKnownGapsStm() string {
+	return `INSERT INTO eth.known_gaps (starting_block_number, ending_block_number, checked_out, processing_key) VALUES ($1, $2, $3, $4)`
+	//return `INSERT INTO eth.known_gaps (starting_block_number, ending_block_number, checked_out, processing_key) VALUES (1, 2, true, 1)`
 }

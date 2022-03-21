@@ -54,6 +54,7 @@ type Statements interface {
 	InsertStorageStm() string
 	InsertIPLDStm() string
 	InsertIPLDsStm() string
+	InsertKnownGapsStm() string
 }
 
 // Tx interface to accommodate different concrete SQL transaction types
