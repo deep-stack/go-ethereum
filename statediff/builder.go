@@ -202,7 +202,7 @@ func (sdb *builder) buildStateDiffWithIntermediateStateNodes(args types2.StateRo
 	// a map of their leafkey to all the accounts that were touched and exist at A
 	diffAccountsAtA, err := sdb.deletedOrUpdatedState(
 		oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}),
-		diffPathsAtB, params.watchedAddressesLeafKeys,
+		diffAccountsAtB, diffPathsAtB, params.watchedAddressesLeafKeys,
 		params.IntermediateStorageNodes, output)
 	if err != nil {
 		return fmt.Errorf("error collecting deletedOrUpdatedNodes: %v", err)
@@ -257,7 +257,7 @@ func (sdb *builder) buildStateDiffWithoutIntermediateStateNodes(args types2.Stat
 	// a map of their leafkey to all the accounts that were touched and exist at A
 	diffAccountsAtA, err := sdb.deletedOrUpdatedState(
 		oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}),
-		diffPathsAtB, params.watchedAddressesLeafKeys,
+		diffAccountsAtB, diffPathsAtB, params.watchedAddressesLeafKeys,
 		params.IntermediateStorageNodes, output)
 	if err != nil {
 		return fmt.Errorf("error collecting deletedOrUpdatedNodes: %v", err)
@@ -388,7 +388,7 @@ func (sdb *builder) createdAndUpdatedStateWithIntermediateNodes(a, b trie.NodeIt
 
 // deletedOrUpdatedState returns a slice of all the pathes that are emptied at B
 // and a mapping of their leafkeys to all the accounts that exist in a different state at A than B
-func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffPathsAtB map[string]bool, watchedAddressesLeafKeys map[common.Hash]struct{}, intermediateStorageNodes bool, output types2.StateNodeSink) (types2.AccountMap, error) {
+func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAtB types2.AccountMap, diffPathsAtB map[string]bool, watchedAddressesLeafKeys map[common.Hash]struct{}, intermediateStorageNodes bool, output types2.StateNodeSink) (types2.AccountMap, error) {
 	diffAccountAtA := make(types2.AccountMap)
 	it, _ := trie.NewDifferenceIterator(b, a)
 	for it.Next(true) {
@@ -421,22 +421,34 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffPathsAtB m
 				}
 				// if this node's path did not show up in diffPathsAtB
 				// that means the node at this path was deleted (or moved) in B
-				// emit an empty "removed" diff to signify as such
-				// emit empty "removed" diff for all storage nodes
 				if _, ok := diffPathsAtB[common.Bytes2Hex(node.Path)]; !ok {
-					diff := types2.StateNode{
-						NodeType:  types2.Removed,
-						Path:      node.Path,
-						LeafKey:   leafKey,
-						NodeValue: []byte{},
-					}
+					var diff types2.StateNode
+					// if this node's leaf key also did not show up in diffAccountsAtB
+					// that means the node was deleted
+					// in that case, emit an empty "removed" diff state node
+					// include empty "removed" diff storage nodes for all the storage slots
+					if _, ok := diffAccountsAtB[common.Bytes2Hex(leafKey)]; !ok {
+						diff = types2.StateNode{
+							NodeType:  types2.Removed,
+							Path:      node.Path,
+							LeafKey:   leafKey,
+							NodeValue: []byte{},
+						}
 
-					var storageDiffs []types2.StorageNode
-					err := sdb.buildRemovedAccountStorageNodes(account.Root, intermediateStorageNodes, storageNodeAppender(&storageDiffs))
-					if err != nil {
-						return nil, fmt.Errorf("failed building storage diffs for removed node %x\r\nerror: %v", node.Path, err)
+						var storageDiffs []types2.StorageNode
+						err := sdb.buildRemovedAccountStorageNodes(account.Root, intermediateStorageNodes, storageNodeAppender(&storageDiffs))
+						if err != nil {
+							return nil, fmt.Errorf("failed building storage diffs for removed node %x\r\nerror: %v", node.Path, err)
+						}
+						diff.StorageNodes = storageDiffs
+					} else {
+						// emit an empty "removed" diff with empty leaf key if the account was moved
+						diff = types2.StateNode{
+							NodeType:  types2.Removed,
+							Path:      node.Path,
+							NodeValue: []byte{},
+						}
 					}
-					diff.StorageNodes = storageDiffs
 
 					if err := output(diff); err != nil {
 						return nil, err
@@ -679,22 +691,23 @@ func (sdb *builder) buildStorageNodesIncremental(oldSR common.Hash, newSR common
 		return err
 	}
 
-	diffPathsAtB, err := sdb.createdAndUpdatedStorage(
+	diffSlotsAtB, diffPathsAtB, err := sdb.createdAndUpdatedStorage(
 		oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}),
 		intermediateNodes, output)
 	if err != nil {
 		return err
 	}
 	err = sdb.deletedOrUpdatedStorage(oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}),
-		diffPathsAtB, intermediateNodes, output)
+		diffSlotsAtB, diffPathsAtB, intermediateNodes, output)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (sdb *builder) createdAndUpdatedStorage(a, b trie.NodeIterator, intermediateNodes bool, output types2.StorageNodeSink) (map[string]bool, error) {
+func (sdb *builder) createdAndUpdatedStorage(a, b trie.NodeIterator, intermediateNodes bool, output types2.StorageNodeSink) (map[string]bool, map[string]bool, error) {
 	diffPathsAtB := make(map[string]bool)
+	diffSlotsAtB := make(map[string]bool)
 	it, _ := trie.NewDifferenceIterator(a, b)
 	for it.Next(true) {
 		// skip value nodes
@@ -703,7 +716,7 @@ func (sdb *builder) createdAndUpdatedStorage(a, b trie.NodeIterator, intermediat
 		}
 		node, nodeElements, err := trie_helpers.ResolveNode(it, sdb.stateCache.TrieDB())
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		switch node.NodeType {
 		case types2.Leaf:
@@ -711,13 +724,14 @@ func (sdb *builder) createdAndUpdatedStorage(a, b trie.NodeIterator, intermediat
 			valueNodePath := append(node.Path, partialPath...)
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
+			diffSlotsAtB[common.Bytes2Hex(leafKey)] = true
 			if err := output(types2.StorageNode{
 				NodeType:  node.NodeType,
 				Path:      node.Path,
 				NodeValue: node.NodeValue,
 				LeafKey:   leafKey,
 			}); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		case types2.Extension, types2.Branch:
 			if intermediateNodes {
@@ -726,18 +740,18 @@ func (sdb *builder) createdAndUpdatedStorage(a, b trie.NodeIterator, intermediat
 					Path:      node.Path,
 					NodeValue: node.NodeValue,
 				}); err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			}
 		default:
-			return nil, fmt.Errorf("unexpected node type %s", node.NodeType)
+			return nil, nil, fmt.Errorf("unexpected node type %s", node.NodeType)
 		}
 		diffPathsAtB[common.Bytes2Hex(node.Path)] = true
 	}
-	return diffPathsAtB, it.Error()
+	return diffSlotsAtB, diffPathsAtB, it.Error()
 }
 
-func (sdb *builder) deletedOrUpdatedStorage(a, b trie.NodeIterator, diffPathsAtB map[string]bool, intermediateNodes bool, output types2.StorageNodeSink) error {
+func (sdb *builder) deletedOrUpdatedStorage(a, b trie.NodeIterator, diffSlotsAtB, diffPathsAtB map[string]bool, intermediateNodes bool, output types2.StorageNodeSink) error {
 	it, _ := trie.NewDifferenceIterator(b, a)
 	for it.Next(true) {
 		// skip value nodes
@@ -748,34 +762,53 @@ func (sdb *builder) deletedOrUpdatedStorage(a, b trie.NodeIterator, diffPathsAtB
 		if err != nil {
 			return err
 		}
-		// if this node path showed up in diffPathsAtB
-		// that means this node was updated at B and we already have the updated diff for it
-		// otherwise that means this node was deleted in B and we need to add a "removed" diff to represent that event
-		if _, ok := diffPathsAtB[common.Bytes2Hex(node.Path)]; ok {
-			continue
-		}
+
 		switch node.NodeType {
 		case types2.Leaf:
 			partialPath := trie.CompactToHex(nodeElements[0].([]byte))
 			valueNodePath := append(node.Path, partialPath...)
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
-			if err := output(types2.StorageNode{
-				NodeType:  types2.Removed,
-				Path:      node.Path,
-				NodeValue: []byte{},
-				LeafKey:   leafKey,
-			}); err != nil {
-				return err
+
+			// if this node's path did not show up in diffPathsAtB
+			// that means the node at this path was deleted (or moved) in B
+			if _, ok := diffPathsAtB[common.Bytes2Hex(node.Path)]; !ok {
+				// if this node's leaf key also did not show up in diffSlotsAtB
+				// that means the node was deleted
+				// in that case, emit an empty "removed" diff storage node
+				if _, ok := diffSlotsAtB[common.Bytes2Hex(leafKey)]; !ok {
+					if err := output(types2.StorageNode{
+						NodeType:  types2.Removed,
+						Path:      node.Path,
+						NodeValue: []byte{},
+						LeafKey:   leafKey,
+					}); err != nil {
+						return err
+					}
+				} else {
+					// emit an empty "removed" diff with empty leaf key if the account was moved
+					if err := output(types2.StorageNode{
+						NodeType:  types2.Removed,
+						Path:      node.Path,
+						NodeValue: []byte{},
+					}); err != nil {
+						return err
+					}
+				}
 			}
 		case types2.Extension, types2.Branch:
-			if intermediateNodes {
-				if err := output(types2.StorageNode{
-					NodeType:  types2.Removed,
-					Path:      node.Path,
-					NodeValue: []byte{},
-				}); err != nil {
-					return err
+			// if this node's path did not show up in diffPathsAtB
+			// that means the node at this path was deleted in B
+			// in that case, emit an empty "removed" diff storage node
+			if _, ok := diffPathsAtB[common.Bytes2Hex(node.Path)]; !ok {
+				if intermediateNodes {
+					if err := output(types2.StorageNode{
+						NodeType:  types2.Removed,
+						Path:      node.Path,
+						NodeValue: []byte{},
+					}); err != nil {
+						return err
+					}
 				}
 			}
 		default:

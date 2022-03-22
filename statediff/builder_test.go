@@ -2087,7 +2087,6 @@ func TestBuilderWithMovedAccount(t *testing.T) {
 					{
 						Path:      []byte{'\x00'},
 						NodeType:  types2.Removed,
-						LeafKey:   test_helpers.BankLeafKey,
 						NodeValue: []byte{},
 					},
 				},
@@ -2224,7 +2223,6 @@ func TestBuilderWithMovedAccountOnlyLeafs(t *testing.T) {
 					{
 						Path:      []byte{'\x00'},
 						NodeType:  types2.Removed,
-						LeafKey:   test_helpers.BankLeafKey,
 						NodeValue: []byte{},
 					},
 				},
