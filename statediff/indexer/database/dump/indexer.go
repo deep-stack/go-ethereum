@@ -500,3 +500,7 @@ func (sdi *StateDiffIndexer) Close() error {
 func (sdi *StateDiffIndexer) PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64) error {
 	return nil
 }
+
+func (sdi *StateDiffIndexer) QueryDb(queryString string) (string, error) {
+	return "", nil
+}
