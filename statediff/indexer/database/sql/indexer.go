@@ -562,18 +562,8 @@ func (sdi *StateDiffIndexer) PushKnownGaps(startingBlockNumber *big.Int, endingB
 		CheckedOut:          checkedOut,
 		ProcessingKey:       processingKey,
 	}
-	tx, err := sdi.dbWriter.db.Begin(sdi.ctx)
-	if err != nil {
+	if err := sdi.dbWriter.upsertKnownGaps(knownGap); err != nil {
 		return err
 	}
-
-	if err := sdi.dbWriter.upsertKnownGaps(tx, knownGap); err != nil {
-		return err
-	}
-
-	if err := tx.Commit(sdi.ctx); err != nil {
-		return err
-	}
-
 	return nil
 }
