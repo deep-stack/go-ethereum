@@ -32,8 +32,7 @@ type StateDiffIndexer interface {
 	PushStateNode(tx Batch, stateNode sdtypes.StateNode, headerID string) error
 	PushCodeAndCodeHash(tx Batch, codeAndCodeHash sdtypes.CodeAndCodeHash) error
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
-	PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64) error
-	QueryDb(queryString string) (string, error)
+	FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64) error
 	io.Closer
 }
 
