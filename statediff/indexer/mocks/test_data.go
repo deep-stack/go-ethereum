@@ -106,10 +106,12 @@ var (
 		StorageKeys: []common.Hash{common.BytesToHash(StorageLeafKey), common.BytesToHash(MockStorageLeafKey)},
 	}
 	AccessListEntry1Model = models.AccessListElementModel{
-		Index:   0,
-		Address: Address.Hex(),
+		BlockNumber: BlockNumber.String(),
+		Index:       0,
+		Address:     Address.Hex(),
 	}
 	AccessListEntry2Model = models.AccessListElementModel{
+		BlockNumber: BlockNumber.String(),
 		Index:       1,
 		Address:     AnotherAddress.Hex(),
 		StorageKeys: []string{common.BytesToHash(StorageLeafKey).Hex(), common.BytesToHash(MockStorageLeafKey).Hex()},

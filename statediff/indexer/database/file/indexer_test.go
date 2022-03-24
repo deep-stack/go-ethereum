@@ -191,7 +191,7 @@ func setup(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*file.BatchTx).BlockNumber, mocks.BlockNumber.Uint64())
+	require.Equal(t, mocks.BlockNumber.String(), tx.(*file.BatchTx).BlockNumber)
 
 	connStr := postgres.DefaultConfig.DbConnectionString()
 
@@ -223,10 +223,10 @@ func TestFileIndexer(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		test_helpers.ExpectEqual(t, header.CID, headerCID.String())
-		test_helpers.ExpectEqual(t, header.TD, mocks.MockBlock.Difficulty().String())
-		test_helpers.ExpectEqual(t, header.Reward, "2000000000000021250")
-		test_helpers.ExpectEqual(t, header.Coinbase, mocks.MockHeader.Coinbase.String())
+		require.Equal(t, headerCID.String(), header.CID)
+		require.Equal(t, mocks.MockBlock.Difficulty().String(), header.TD)
+		require.Equal(t, "2000000000000021250", header.Reward)
+		require.Equal(t, mocks.MockHeader.Coinbase.String(), header.Coinbase)
 		dc, err := cid.Decode(header.CID)
 		if err != nil {
 			t.Fatal(err)
@@ -238,7 +238,7 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, data, mocks.MockHeaderRlp)
+		require.Equal(t, mocks.MockHeaderRlp, data)
 	})
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
@@ -253,7 +253,7 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, len(trxs), 5)
+		require.Equal(t, 5, len(trxs))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx1CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx2CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(trxs, trx3CID.String()))
@@ -280,7 +280,7 @@ func TestFileIndexer(t *testing.T) {
 			txTypeAndValueStr := `SELECT tx_type, value FROM eth.transaction_cids WHERE cid = $1`
 			switch c {
 			case trx1CID.String():
-				test_helpers.ExpectEqual(t, data, tx1)
+				require.Equal(t, tx1, data)
 				txRes := new(txResult)
 				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
@@ -293,7 +293,7 @@ func TestFileIndexer(t *testing.T) {
 					t.Fatalf("expected tx value %s got %s", transactions[0].Value().String(), txRes.Value)
 				}
 			case trx2CID.String():
-				test_helpers.ExpectEqual(t, data, tx2)
+				require.Equal(t, tx2, data)
 				txRes := new(txResult)
 				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
@@ -306,7 +306,7 @@ func TestFileIndexer(t *testing.T) {
 					t.Fatalf("expected tx value %s got %s", transactions[1].Value().String(), txRes.Value)
 				}
 			case trx3CID.String():
-				test_helpers.ExpectEqual(t, data, tx3)
+				require.Equal(t, tx3, data)
 				txRes := new(txResult)
 				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
@@ -319,7 +319,7 @@ func TestFileIndexer(t *testing.T) {
 					t.Fatalf("expected tx value %s got %s", transactions[2].Value().String(), txRes.Value)
 				}
 			case trx4CID.String():
-				test_helpers.ExpectEqual(t, data, tx4)
+				require.Equal(t, tx4, data)
 				txRes := new(txResult)
 				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
@@ -332,7 +332,9 @@ func TestFileIndexer(t *testing.T) {
 					t.Fatalf("expected tx value %s got %s", transactions[3].Value().String(), txRes.Value)
 				}
 				accessListElementModels := make([]models.AccessListElementModel, 0)
-				pgStr = `SELECT access_list_elements.* FROM eth.access_list_elements INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC`
+				pgStr = "SELECT cast(access_list_elements.block_number AS TEXT), access_list_elements.index, access_list_elements.tx_id, " +
+					"access_list_elements.address, access_list_elements.storage_keys FROM eth.access_list_elements " +
+					"INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC"
 				err = sqlxdb.Select(&accessListElementModels, pgStr, c)
 				if err != nil {
 					t.Fatal(err)
@@ -341,18 +343,20 @@ func TestFileIndexer(t *testing.T) {
 					t.Fatalf("expected two access list entries, got %d", len(accessListElementModels))
 				}
 				model1 := models.AccessListElementModel{
-					Index:   accessListElementModels[0].Index,
-					Address: accessListElementModels[0].Address,
+					BlockNumber: mocks.BlockNumber.String(),
+					Index:       accessListElementModels[0].Index,
+					Address:     accessListElementModels[0].Address,
 				}
 				model2 := models.AccessListElementModel{
+					BlockNumber: mocks.BlockNumber.String(),
 					Index:       accessListElementModels[1].Index,
 					Address:     accessListElementModels[1].Address,
 					StorageKeys: accessListElementModels[1].StorageKeys,
 				}
-				test_helpers.ExpectEqual(t, model1, mocks.AccessListEntry1Model)
-				test_helpers.ExpectEqual(t, model2, mocks.AccessListEntry2Model)
+				require.Equal(t, mocks.AccessListEntry1Model, model1)
+				require.Equal(t, mocks.AccessListEntry2Model, model2)
 			case trx5CID.String():
-				test_helpers.ExpectEqual(t, data, tx5)
+				require.Equal(t, tx5, data)
 				txRes := new(txResult)
 				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
@@ -402,7 +406,7 @@ func TestFileIndexer(t *testing.T) {
 
 			// expecting MockLog1 and MockLog2 for mockReceipt4
 			expectedLogs := mocks.MockReceipts[i].Logs
-			test_helpers.ExpectEqual(t, len(results), len(expectedLogs))
+			require.Equal(t, len(expectedLogs), len(results))
 
 			var nodeElements []interface{}
 			for idx, r := range results {
@@ -413,12 +417,12 @@ func TestFileIndexer(t *testing.T) {
 					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
 					require.NoError(t, err)
 					// 2nd element of the leaf node contains the encoded log data.
-					test_helpers.ExpectEqual(t, logRaw, nodeElements[1].([]byte))
+					require.Equal(t, nodeElements[1].([]byte), logRaw)
 				} else {
 					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
 					require.NoError(t, err)
 					// raw log was IPLDized
-					test_helpers.ExpectEqual(t, logRaw, r.Data)
+					require.Equal(t, r.Data, logRaw)
 				}
 			}
 		}
@@ -439,7 +443,7 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, len(rcts), 5)
+		require.Equal(t, 5, len(rcts))
 		expectTrue(t, test_helpers.ListContainsString(rcts, rct1CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(rcts, rct2CID.String()))
 		expectTrue(t, test_helpers.ListContainsString(rcts, rct3CID.String()))
@@ -465,7 +469,7 @@ func TestFileIndexer(t *testing.T) {
 			expectedRct, err := mocks.MockReceipts[idx].MarshalBinary()
 			require.NoError(t, err)
 
-			test_helpers.ExpectEqual(t, expectedRct, nodeElements[1].([]byte))
+			require.Equal(t, expectedRct, nodeElements[1].([]byte))
 
 			dc, err := cid.Decode(c)
 			if err != nil {
@@ -481,46 +485,46 @@ func TestFileIndexer(t *testing.T) {
 			postStatePgStr := `SELECT post_state FROM eth.receipt_cids WHERE leaf_cid = $1`
 			switch c {
 			case rct1CID.String():
-				test_helpers.ExpectEqual(t, data, rctLeaf1)
+				require.Equal(t, rctLeaf1, data)
 				var postStatus uint64
 				pgStr = `SELECT post_status FROM eth.receipt_cids WHERE leaf_cid = $1`
 				err = sqlxdb.Get(&postStatus, pgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				test_helpers.ExpectEqual(t, postStatus, mocks.ExpectedPostStatus)
+				require.Equal(t, mocks.ExpectedPostStatus, postStatus)
 			case rct2CID.String():
-				test_helpers.ExpectEqual(t, data, rctLeaf2)
+				require.Equal(t, rctLeaf2, data)
 				var postState string
 				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState1)
+				require.Equal(t, mocks.ExpectedPostState1, postState)
 			case rct3CID.String():
-				test_helpers.ExpectEqual(t, data, rctLeaf3)
+				require.Equal(t, rctLeaf3, data)
 				var postState string
 				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState2)
+				require.Equal(t, mocks.ExpectedPostState2, postState)
 			case rct4CID.String():
-				test_helpers.ExpectEqual(t, data, rctLeaf4)
+				require.Equal(t, rctLeaf4, data)
 				var postState string
 				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState3)
+				require.Equal(t, mocks.ExpectedPostState3, postState)
 			case rct5CID.String():
-				test_helpers.ExpectEqual(t, data, rctLeaf5)
+				require.Equal(t, rctLeaf5, data)
 				var postState string
 				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
-				test_helpers.ExpectEqual(t, postState, mocks.ExpectedPostState3)
+				require.Equal(t, mocks.ExpectedPostState3, postState)
 			}
 		}
 	})
@@ -539,7 +543,7 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, len(stateNodes), 2)
+		require.Equal(t, 2, len(stateNodes))
 		for _, stateNode := range stateNodes {
 			var data []byte
 			dc, err := cid.Decode(stateNode.CID)
@@ -552,39 +556,41 @@ func TestFileIndexer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			pgStr = `SELECT * from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
+			pgStr = `SELECT cast(block_number AS TEXT), header_id, state_path, cast(balance AS TEXT), nonce, code_hash, storage_root from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
 			var account models.StateAccountModel
 			err = sqlxdb.Get(&account, pgStr, stateNode.HeaderID, stateNode.Path)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if stateNode.CID == state1CID.String() {
-				test_helpers.ExpectEqual(t, stateNode.NodeType, 2)
-				test_helpers.ExpectEqual(t, stateNode.StateKey, common.BytesToHash(mocks.ContractLeafKey).Hex())
-				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x06'})
-				test_helpers.ExpectEqual(t, data, mocks.ContractLeafNode)
-				test_helpers.ExpectEqual(t, account, models.StateAccountModel{
+				require.Equal(t, 2, stateNode.NodeType)
+				require.Equal(t, common.BytesToHash(mocks.ContractLeafKey).Hex(), stateNode.StateKey)
+				require.Equal(t, []byte{'\x06'}, stateNode.Path)
+				require.Equal(t, mocks.ContractLeafNode, data)
+				require.Equal(t, models.StateAccountModel{
+					BlockNumber: mocks.BlockNumber.String(),
 					HeaderID:    account.HeaderID,
 					StatePath:   stateNode.Path,
 					Balance:     "0",
 					CodeHash:    mocks.ContractCodeHash.Bytes(),
 					StorageRoot: mocks.ContractRoot,
 					Nonce:       1,
-				})
+				}, account)
 			}
 			if stateNode.CID == state2CID.String() {
-				test_helpers.ExpectEqual(t, stateNode.NodeType, 2)
-				test_helpers.ExpectEqual(t, stateNode.StateKey, common.BytesToHash(mocks.AccountLeafKey).Hex())
-				test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x0c'})
-				test_helpers.ExpectEqual(t, data, mocks.AccountLeafNode)
-				test_helpers.ExpectEqual(t, account, models.StateAccountModel{
+				require.Equal(t, 2, stateNode.NodeType)
+				require.Equal(t, common.BytesToHash(mocks.AccountLeafKey).Hex(), stateNode.StateKey)
+				require.Equal(t, []byte{'\x0c'}, stateNode.Path)
+				require.Equal(t, mocks.AccountLeafNode, data)
+				require.Equal(t, models.StateAccountModel{
+					BlockNumber: mocks.BlockNumber.String(),
 					HeaderID:    account.HeaderID,
 					StatePath:   stateNode.Path,
 					Balance:     "1000",
 					CodeHash:    mocks.AccountCodeHash.Bytes(),
 					StorageRoot: mocks.AccountRoot,
 					Nonce:       0,
-				})
+				}, account)
 			}
 		}
 
@@ -597,7 +603,7 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, len(stateNodes), 1)
+		require.Equal(t, 1, len(stateNodes))
 		stateNode := stateNodes[0]
 		var data []byte
 		dc, err := cid.Decode(stateNode.CID)
@@ -606,14 +612,14 @@ func TestFileIndexer(t *testing.T) {
 		}
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
-		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
+		require.Equal(t, shared.RemovedNodeMhKey, prefixedKey)
 		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, stateNode.CID, shared.RemovedNodeStateCID)
-		test_helpers.ExpectEqual(t, stateNode.Path, []byte{'\x02'})
-		test_helpers.ExpectEqual(t, data, []byte{})
+		require.Equal(t, shared.RemovedNodeStateCID, stateNode.CID)
+		require.Equal(t, []byte{'\x02'}, stateNode.Path)
+		require.Equal(t, []byte{}, data)
 	})
 
 	t.Run("Publish and index storage IPLDs in a single tx", func(t *testing.T) {
@@ -623,7 +629,7 @@ func TestFileIndexer(t *testing.T) {
 
 		// check that storage nodes were properly indexed
 		storageNodes := make([]models.StorageNodeWithStateKeyModel, 0)
-		pgStr := `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
+		pgStr := `SELECT cast(storage_cids.block_number AS TEXT), storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
 				FROM eth.storage_cids, eth.state_cids, eth.header_cids
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
 				AND state_cids.header_id = header_cids.block_hash
@@ -633,14 +639,15 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, len(storageNodes), 1)
-		test_helpers.ExpectEqual(t, storageNodes[0], models.StorageNodeWithStateKeyModel{
-			CID:        storageCID.String(),
-			NodeType:   2,
-			StorageKey: common.BytesToHash(mocks.StorageLeafKey).Hex(),
-			StateKey:   common.BytesToHash(mocks.ContractLeafKey).Hex(),
-			Path:       []byte{},
-		})
+		require.Equal(t, 1, len(storageNodes))
+		require.Equal(t, models.StorageNodeWithStateKeyModel{
+			BlockNumber: mocks.BlockNumber.String(),
+			CID:         storageCID.String(),
+			NodeType:    2,
+			StorageKey:  common.BytesToHash(mocks.StorageLeafKey).Hex(),
+			StateKey:    common.BytesToHash(mocks.ContractLeafKey).Hex(),
+			Path:        []byte{},
+		}, storageNodes[0])
 		var data []byte
 		dc, err := cid.Decode(storageNodes[0].CID)
 		if err != nil {
@@ -652,11 +659,11 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, data, mocks.StorageLeafNode)
+		require.Equal(t, mocks.StorageLeafNode, data)
 
 		// check that Removed storage nodes were properly indexed
 		storageNodes = make([]models.StorageNodeWithStateKeyModel, 0)
-		pgStr = `SELECT storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
+		pgStr = `SELECT cast(storage_cids.block_number AS TEXT), storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
 				FROM eth.storage_cids, eth.state_cids, eth.header_cids
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
 				AND state_cids.header_id = header_cids.block_hash
@@ -666,25 +673,26 @@ func TestFileIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, len(storageNodes), 1)
-		test_helpers.ExpectEqual(t, storageNodes[0], models.StorageNodeWithStateKeyModel{
-			CID:        shared.RemovedNodeStorageCID,
-			NodeType:   3,
-			StorageKey: common.BytesToHash(mocks.RemovedLeafKey).Hex(),
-			StateKey:   common.BytesToHash(mocks.ContractLeafKey).Hex(),
-			Path:       []byte{'\x03'},
-		})
+		require.Equal(t, 1, len(storageNodes))
+		require.Equal(t, models.StorageNodeWithStateKeyModel{
+			BlockNumber: mocks.BlockNumber.String(),
+			CID:         shared.RemovedNodeStorageCID,
+			NodeType:    3,
+			StorageKey:  common.BytesToHash(mocks.RemovedLeafKey).Hex(),
+			StateKey:    common.BytesToHash(mocks.ContractLeafKey).Hex(),
+			Path:        []byte{'\x03'},
+		}, storageNodes[0])
 		dc, err = cid.Decode(storageNodes[0].CID)
 		if err != nil {
 			t.Fatal(err)
 		}
 		mhKey = dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
-		test_helpers.ExpectEqual(t, prefixedKey, shared.RemovedNodeMhKey)
+		require.Equal(t, shared.RemovedNodeMhKey, prefixedKey)
 		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		test_helpers.ExpectEqual(t, data, []byte{})
+		require.Equal(t, []byte{}, data)
 	})
 }
