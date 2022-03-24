@@ -55,14 +55,11 @@ type StateDiffIndexer struct {
 	ctx         context.Context
 	chainConfig *params.ChainConfig
 	dbWriter    *Writer
+	blockNumber string
 }
 
 // NewStateDiffIndexer creates a sql implementation of interfaces.StateDiffIndexer
 func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, db Database) (*StateDiffIndexer, error) {
-	// Write the removed node to the db on init
-	if _, err := db.Exec(ctx, db.InsertIPLDStm(), shared.RemovedNodeMhKey, []byte{}); err != nil {
-		return nil, err
-	}
 	return &StateDiffIndexer{
 		ctx:         ctx,
 		chainConfig: chainConfig,
@@ -93,6 +90,7 @@ func (sdi *StateDiffIndexer) ReportDBMetrics(delay time.Duration, quit <-chan bo
 // Returns an initiated DB transaction which must be Closed via defer to commit or rollback
 func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receipts, totalDifficulty *big.Int) (interfaces.Batch, error) {
 	start, t := time.Now(), time.Now()
+	sdi.blockNumber = block.Number().String()
 	blockHash := block.Hash()
 	blockHashStr := blockHash.String()
 	height := block.NumberU64()
@@ -140,11 +138,12 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 		}
 	}()
 	blockTx := &BatchTx{
-		ctx:         sdi.ctx,
-		BlockNumber: block.Number().String(),
-		stm:         sdi.dbWriter.db.InsertIPLDsStm(),
-		iplds:       make(chan models.IPLDModel),
-		quit:        make(chan struct{}),
+		removedCacheFlag: new(uint32),
+		ctx:              sdi.ctx,
+		BlockNumber:      sdi.blockNumber,
+		stm:              sdi.dbWriter.db.InsertIPLDsStm(),
+		iplds:            make(chan models.IPLDModel),
+		quit:             make(chan struct{}),
 		ipldCache: models.IPLDBatch{
 			BlockNumbers: make([]string, 0, startingCacheCapacity),
 			Keys:         make([]string, 0, startingCacheCapacity),
@@ -204,7 +203,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	traceMsg += fmt.Sprintf("header processing time: %s\r\n", tDiff.String())
 	t = time.Now()
 	// Publish and index uncles
-	err = sdi.processUncles(blockTx, headerID, block.Number(), uncleNodes)
+	err = sdi.processUncles(blockTx, headerID, block.NumberU64(), uncleNodes)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +252,7 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 		CID:             headerNode.Cid().String(),
 		MhKey:           shared.MultihashKeyFromCID(headerNode.Cid()),
 		ParentHash:      header.ParentHash.String(),
-		BlockNumber:     header.Number.String(),
+		BlockNumber:     sdi.blockNumber,
 		BlockHash:       headerID,
 		TotalDifficulty: td.String(),
 		Reward:          reward.String(),
@@ -268,7 +267,7 @@ func (sdi *StateDiffIndexer) processHeader(tx *BatchTx, header *types.Header, he
 }
 
 // processUncles publishes and indexes uncle IPLDs in Postgres
-func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerID string, blockNumber *big.Int, uncleNodes []*ipld2.EthHeader) error {
+func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerID string, blockNumber uint64, uncleNodes []*ipld2.EthHeader) error {
 	// publish and index uncles
 	for _, uncleNode := range uncleNodes {
 		tx.cacheIPLD(uncleNode)
@@ -277,10 +276,10 @@ func (sdi *StateDiffIndexer) processUncles(tx *BatchTx, headerID string, blockNu
 		if sdi.chainConfig.Clique != nil {
 			uncleReward = big.NewInt(0)
 		} else {
-			uncleReward = shared.CalcUncleMinerReward(blockNumber.Uint64(), uncleNode.Number.Uint64())
+			uncleReward = shared.CalcUncleMinerReward(blockNumber, uncleNode.Number.Uint64())
 		}
 		uncle := models.UncleModel{
-			BlockNumber: blockNumber.String(),
+			BlockNumber: sdi.blockNumber,
 			HeaderID:    headerID,
 			CID:         uncleNode.Cid().String(),
 			MhKey:       shared.MultihashKeyFromCID(uncleNode.Cid()),
@@ -336,7 +335,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			return fmt.Errorf("error deriving tx sender: %v", err)
 		}
 		txModel := models.TxModel{
-			BlockNumber: args.blockNumber.String(),
+			BlockNumber: sdi.blockNumber,
 			HeaderID:    args.headerID,
 			Dst:         shared.HandleZeroAddrPointer(trx.To()),
 			Src:         shared.HandleZeroAddr(from),
@@ -359,7 +358,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 				storageKeys[k] = storageKey.Hex()
 			}
 			accessListElementModel := models.AccessListElementModel{
-				BlockNumber: args.blockNumber.String(),
+				BlockNumber: sdi.blockNumber,
 				TxID:        txID,
 				Index:       int64(j),
 				Address:     accessListElement.Address.Hex(),
@@ -383,7 +382,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 		}
 
 		rctModel := &models.ReceiptModel{
-			BlockNumber:  args.blockNumber.String(),
+			BlockNumber:  sdi.blockNumber,
 			TxID:         txID,
 			Contract:     contract,
 			ContractHash: contractHash,
@@ -414,7 +413,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 			}
 
 			logDataSet[idx] = &models.LogsModel{
-				BlockNumber: args.blockNumber.String(),
+				BlockNumber: sdi.blockNumber,
 				ReceiptID:   txID,
 				Address:     l.Address.String(),
 				Index:       int64(l.Index),
@@ -443,17 +442,16 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(tx *BatchTx, args processArgs
 }
 
 // PushStateNode publishes and indexes a state diff node object (including any child storage nodes) in the IPLD sql
-func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode, blockNumber, headerID string) error {
+func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode, headerID string) error {
 	tx, ok := batch.(*BatchTx)
 	if !ok {
 		return fmt.Errorf("sql batch is expected to be of type %T, got %T", &BatchTx{}, batch)
 	}
 	// publish the state node
 	if stateNode.NodeType == sdtypes.Removed {
-		// short circuit if it is a Removed node
-		// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
+		tx.cacheRemoved(shared.RemovedNodeMhKey, []byte{})
 		stateModel := models.StateNodeModel{
-			BlockNumber: blockNumber,
+			BlockNumber: sdi.blockNumber,
 			HeaderID:    headerID,
 			Path:        stateNode.Path,
 			StateKey:    common.BytesToHash(stateNode.LeafKey).String(),
@@ -468,7 +466,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
 	}
 	stateModel := models.StateNodeModel{
-		BlockNumber: blockNumber,
+		BlockNumber: sdi.blockNumber,
 		HeaderID:    headerID,
 		Path:        stateNode.Path,
 		StateKey:    common.BytesToHash(stateNode.LeafKey).String(),
@@ -494,7 +492,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			return fmt.Errorf("error decoding state account rlp: %s", err.Error())
 		}
 		accountModel := models.StateAccountModel{
-			BlockNumber: blockNumber,
+			BlockNumber: sdi.blockNumber,
 			HeaderID:    headerID,
 			StatePath:   stateNode.Path,
 			Balance:     account.Balance.String(),
@@ -509,10 +507,9 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 	// if there are any storage nodes associated with this node, publish and index them
 	for _, storageNode := range stateNode.StorageNodes {
 		if storageNode.NodeType == sdtypes.Removed {
-			// short circuit if it is a Removed node
-			// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
+			tx.cacheRemoved(shared.RemovedNodeMhKey, []byte{})
 			storageModel := models.StorageNodeModel{
-				BlockNumber: blockNumber,
+				BlockNumber: sdi.blockNumber,
 				HeaderID:    headerID,
 				StatePath:   stateNode.Path,
 				Path:        storageNode.Path,
@@ -531,7 +528,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			return fmt.Errorf("error generating and cacheing storage node IPLD: %v", err)
 		}
 		storageModel := models.StorageNodeModel{
-			BlockNumber: blockNumber,
+			BlockNumber: sdi.blockNumber,
 			HeaderID:    headerID,
 			StatePath:   stateNode.Path,
 			Path:        storageNode.Path,

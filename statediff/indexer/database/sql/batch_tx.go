@@ -18,6 +18,7 @@ package sql
 
 import (
 	"context"
+	"sync/atomic"
 
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
@@ -33,13 +34,14 @@ const startingCacheCapacity = 1024 * 24
 
 // BatchTx wraps a sql tx with the state necessary for building the tx concurrently during trie difference iteration
 type BatchTx struct {
-	BlockNumber string
-	ctx         context.Context
-	dbtx        Tx
-	stm         string
-	quit        chan struct{}
-	iplds       chan models.IPLDModel
-	ipldCache   models.IPLDBatch
+	BlockNumber      string
+	ctx              context.Context
+	dbtx             Tx
+	stm              string
+	quit             chan struct{}
+	iplds            chan models.IPLDModel
+	ipldCache        models.IPLDBatch
+	removedCacheFlag *uint32
 
 	submit func(blockTx *BatchTx, err error) error
 }
@@ -102,6 +104,17 @@ func (tx *BatchTx) cacheRaw(codec, mh uint64, raw []byte) (string, string, error
 		Data:        raw,
 	}
 	return c.String(), prefixedKey, err
+}
+
+func (tx *BatchTx) cacheRemoved(key string, value []byte) {
+	if atomic.LoadUint32(tx.removedCacheFlag) == 0 {
+		atomic.StoreUint32(tx.removedCacheFlag, 1)
+		tx.iplds <- models.IPLDModel{
+			BlockNumber: tx.BlockNumber,
+			Key:         key,
+			Data:        value,
+		}
+	}
 }
 
 // rollback sql transaction and log any error
