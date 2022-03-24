@@ -23,7 +23,7 @@ var (
 	err       error
 	ind       interfaces.StateDiffIndexer
 	ipfsPgGet = `SELECT data FROM public.blocks
-					WHERE key = $1`
+					WHERE key = $1 AND block_number = $2`
 	tx1, tx2, tx3, tx4, tx5, rct1, rct2, rct3, rct4, rct5  []byte
 	mockBlock                                              *types.Block
 	headerCID, trx1CID, trx2CID, trx3CID, trx4CID, trx5CID cid.Cid

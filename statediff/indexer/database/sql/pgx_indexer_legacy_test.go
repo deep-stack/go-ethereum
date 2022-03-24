@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
 func setupLegacyPGX(t *testing.T) {
@@ -56,7 +55,7 @@ func setupLegacyPGX(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, legacyData.BlockNumber.Uint64())
+	require.Equal(t, legacyData.BlockNumber.String(), tx.(*sql.BatchTx).BlockNumber)
 }
 
 func TestLegacyPGXIndexer(t *testing.T) {
@@ -81,10 +80,10 @@ func TestLegacyPGXIndexer(t *testing.T) {
 			&header.CID, &header.TD, &header.Reward, &header.BlockHash, &header.Coinbase)
 		require.NoError(t, err)
 
-		test_helpers.ExpectEqual(t, header.CID, legacyHeaderCID.String())
-		test_helpers.ExpectEqual(t, header.TD, legacyData.MockBlock.Difficulty().String())
-		test_helpers.ExpectEqual(t, header.Reward, "5000000000000011250")
-		test_helpers.ExpectEqual(t, header.Coinbase, legacyData.MockHeader.Coinbase.String())
+		require.Equal(t, legacyHeaderCID.String(), header.CID)
+		require.Equal(t, legacyData.MockBlock.Difficulty().String(), header.TD)
+		require.Equal(t, "5000000000000011250", header.Reward)
+		require.Equal(t, legacyData.MockHeader.Coinbase.String(), header.Coinbase)
 		require.Nil(t, legacyData.MockHeader.BaseFee)
 	})
 }

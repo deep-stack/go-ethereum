@@ -18,7 +18,7 @@ package file
 
 // BatchTx wraps a void with the state necessary for building the tx concurrently during trie difference iteration
 type BatchTx struct {
-	BlockNumber uint64
+	BlockNumber string
 
 	submit func(blockTx *BatchTx, err error) error
 }
