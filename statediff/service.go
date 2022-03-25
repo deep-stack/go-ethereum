@@ -18,6 +18,7 @@ package statediff
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -123,6 +124,8 @@ type Service struct {
 	BackendAPI ethapi.Backend
 	// Should the statediff service wait for geth to sync to head?
 	WaitForSync bool
+	// Used to signal if we should check for KnownGaps
+	KnownGaps KnownGaps
 	// Whether or not we have any subscribers; only if we do, do we processes state diffs
 	subscribers int32
 	// Interface for publishing statediffs as PG-IPLD objects
@@ -133,6 +136,91 @@ type Service struct {
 	numWorkers uint
 	// Number of retry for aborted transactions due to deadlock.
 	maxRetry uint
+}
+
+type KnownGaps struct {
+	// Should we check for gaps by looking at the DB and comparing the latest block with head
+	checkForGaps bool
+	// Arbitrary processingKey that can be used down the line to differentiate different geth nodes.
+	processingKey int64
+	// This number indicates the expected difference between blocks.
+	// Currently, this is 1 since the geth node processes each block. But down the road this can be used in
+	// Tandom with the processingKey to differentiate block processing logic.
+	expectedDifference *big.Int
+	// Indicates if Geth is in an error state
+	// This is used to indicate the right time to upserts
+	errorState bool
+	// This array keeps track of errorBlocks as they occur.
+	// When the errorState is false again, we can process these blocks.
+	// Do we need a list, can we have /KnownStartErrorBlock and knownEndErrorBlock ints instead?
+	knownErrorBlocks []*big.Int
+	// The last processed block keeps track of the last processed block.
+	// Its used to make sure we didn't skip over any block!
+	lastProcessedBlock *big.Int
+}
+
+// This function will capture any missed blocks that were not captured in sds.KnownGaps.knownErrorBlocks.
+// It is invoked when the sds.KnownGaps.lastProcessed block is not one unit
+// away from sds.KnownGaps.expectedDifference
+// Essentially, if geth ever misses blocks but doesn't output an error, we are covered.
+func (sds *Service) capturedMissedBlocks(currentBlock *big.Int, knownErrorBlocks []*big.Int, lastProcessedBlock *big.Int) {
+	// last processed: 110
+	// current block: 125
+	if len(knownErrorBlocks) > 0 {
+		// 115
+		startErrorBlock := new(big.Int).Set(knownErrorBlocks[0])
+		// 120
+		endErrorBlock := new(big.Int).Set(knownErrorBlocks[len(knownErrorBlocks)-1])
+
+		// 111
+		expectedStartErrorBlock := big.NewInt(0).Add(lastProcessedBlock, sds.KnownGaps.expectedDifference)
+		// 124
+		expectedEndErrorBlock := big.NewInt(0).Sub(currentBlock, sds.KnownGaps.expectedDifference)
+
+		if (expectedStartErrorBlock == startErrorBlock) &&
+			(expectedEndErrorBlock == endErrorBlock) {
+			log.Info("All Gaps already captured in knownErrorBlocks")
+		}
+
+		if expectedEndErrorBlock.Cmp(endErrorBlock) == 1 {
+			log.Warn(fmt.Sprint("There are gaps in the knownErrorBlocks list: ", knownErrorBlocks))
+			log.Warn("But there are gaps that were also not added there.")
+			log.Warn(fmt.Sprint("Last Block in knownErrorBlocks: ", endErrorBlock))
+			log.Warn(fmt.Sprint("Last processed Block: ", lastProcessedBlock))
+			log.Warn(fmt.Sprint("Current Block: ", currentBlock))
+			//120 + 1 == 121
+			startBlock := big.NewInt(0).Add(endErrorBlock, sds.KnownGaps.expectedDifference)
+			// 121 to 124
+			log.Warn(fmt.Sprintf("Adding the following block range to known_gaps table: %d - %d", startBlock, expectedEndErrorBlock))
+			sds.indexer.PushKnownGaps(startBlock, expectedEndErrorBlock, false, sds.KnownGaps.processingKey)
+		}
+
+		if expectedStartErrorBlock.Cmp(startErrorBlock) == -1 {
+			log.Warn(fmt.Sprint("There are gaps in the knownErrorBlocks list: ", knownErrorBlocks))
+			log.Warn("But there are gaps that were also not added there.")
+			log.Warn(fmt.Sprint("First Block in knownErrorBlocks: ", startErrorBlock))
+			log.Warn(fmt.Sprint("Last processed Block: ", lastProcessedBlock))
+			// 115 - 1 == 114
+			endBlock := big.NewInt(0).Sub(startErrorBlock, sds.KnownGaps.expectedDifference)
+			// 111 to 114
+			log.Warn(fmt.Sprintf("Adding the following block range to known_gaps table: %d - %d", expectedStartErrorBlock, endBlock))
+			sds.indexer.PushKnownGaps(expectedStartErrorBlock, endBlock, false, sds.KnownGaps.processingKey)
+		}
+
+		log.Warn(fmt.Sprint("The following Gaps were found: ", knownErrorBlocks))
+		log.Warn(fmt.Sprint("Updating known Gaps table from ", startErrorBlock, " to ", endErrorBlock, " with processing key, ", sds.KnownGaps.processingKey))
+		sds.indexer.PushKnownGaps(startErrorBlock, endErrorBlock, false, sds.KnownGaps.processingKey)
+
+	} else {
+		log.Warn("We missed blocks without any errors.")
+		// 110 + 1 == 111
+		startBlock := big.NewInt(0).Add(lastProcessedBlock, sds.KnownGaps.expectedDifference)
+		// 125 - 1 == 124
+		endBlock := big.NewInt(0).Sub(currentBlock, sds.KnownGaps.expectedDifference)
+		log.Warn(fmt.Sprint("Missed blocks starting from: ", startBlock))
+		log.Warn(fmt.Sprint("Missed blocks ending at: ", endBlock))
+		sds.indexer.PushKnownGaps(startBlock, endBlock, false, sds.KnownGaps.processingKey)
+	}
 }
 
 // BlockCache caches the last block for safe access from different service loops
@@ -174,6 +262,14 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	if workers == 0 {
 		workers = 1
 	}
+	// If we ever have multiple processingKeys we can update them here
+	// along with the expectedDifference
+	knownGaps := &KnownGaps{
+		checkForGaps:       true,
+		processingKey:      0,
+		expectedDifference: big.NewInt(1),
+		errorState:         false,
+	}
 	sds := &Service{
 		Mutex:             sync.Mutex{},
 		BlockChain:        blockChain,
@@ -184,6 +280,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		BlockCache:        NewBlockCache(workers),
 		BackendAPI:        backend,
 		WaitForSync:       params.WaitForSync,
+		KnownGaps:         *knownGaps,
 		indexer:           indexer,
 		enableWriteLoop:   params.EnableWriteLoop,
 		numWorkers:        workers,
@@ -308,12 +405,40 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 				sds.writeGenesisStateDiff(parentBlock, params.id)
 			}
 
+			// If for any reason we need to check for gaps,
+			// Check and update the gaps table.
+			if sds.KnownGaps.checkForGaps && !sds.KnownGaps.errorState {
+				log.Info("Checking for Gaps at current block: ", currentBlock.Number())
+				go sds.indexer.FindAndUpdateGaps(currentBlock.Number(), sds.KnownGaps.expectedDifference, sds.KnownGaps.processingKey)
+				sds.KnownGaps.checkForGaps = false
+			}
+
 			log.Info("Writing state diff", "block height", currentBlock.Number().Uint64(), "worker", params.id)
 			err := sds.writeStateDiffWithRetry(currentBlock, parentBlock.Root(), writeLoopParams)
 			if err != nil {
 				log.Error("statediff.Service.WriteLoop: processing error", "block height", currentBlock.Number().Uint64(), "error", err.Error(), "worker", params.id)
+				sds.KnownGaps.errorState = true
+				sds.KnownGaps.knownErrorBlocks = append(sds.KnownGaps.knownErrorBlocks, currentBlock.Number())
+				log.Warn("Updating the following block to knownErrorBlocks to be inserted into knownGaps table: ", currentBlock.Number())
+				// Write object to startdiff
 				continue
 			}
+			sds.KnownGaps.errorState = false
+			// Understand what the last block that should have been processed is
+			previousExpectedBlock := big.NewInt(0).Sub(currentBlock.Number(), sds.KnownGaps.expectedDifference)
+			// If we last block which should have been processed is not
+			// the actual lastProcessedBlock, add it to known gaps table.
+			if previousExpectedBlock != sds.KnownGaps.lastProcessedBlock && sds.KnownGaps.lastProcessedBlock != nil {
+				// We must pass in parameters by VALUE not reference.
+				// If we pass them in my reference, the references can change before the computation is complete!
+				staticKnownErrorBlocks := make([]*big.Int, len(sds.KnownGaps.knownErrorBlocks))
+				copy(staticKnownErrorBlocks, sds.KnownGaps.knownErrorBlocks)
+				staticLastProcessedBlock := new(big.Int).Set(sds.KnownGaps.lastProcessedBlock)
+				go sds.capturedMissedBlocks(currentBlock.Number(), staticKnownErrorBlocks, staticLastProcessedBlock)
+				sds.KnownGaps.knownErrorBlocks = nil
+			}
+			sds.KnownGaps.lastProcessedBlock = currentBlock.Number()
+
 			// TODO: how to handle with concurrent workers
 			statediffMetrics.lastStatediffHeight.Update(int64(currentBlock.Number().Uint64()))
 		case <-sds.QuitChan:

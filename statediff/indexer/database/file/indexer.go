@@ -482,3 +482,7 @@ func (sdi *StateDiffIndexer) Close() error {
 func (sdi *StateDiffIndexer) FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64) error {
 	return nil
 }
+
+func (sdi *StateDiffIndexer) PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64) error {
+	return nil
+}
