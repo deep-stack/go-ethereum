@@ -44,6 +44,7 @@ import (
 	ind "github.com/ethereum/go-ethereum/statediff/indexer"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	types2 "github.com/ethereum/go-ethereum/statediff/types"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -125,7 +126,7 @@ type Service struct {
 	// Should the statediff service wait for geth to sync to head?
 	WaitForSync bool
 	// Used to signal if we should check for KnownGaps
-	KnownGaps KnownGaps
+	KnownGaps KnownGapsState
 	// Whether or not we have any subscribers; only if we do, do we processes state diffs
 	subscribers int32
 	// Interface for publishing statediffs as PG-IPLD objects
@@ -138,7 +139,8 @@ type Service struct {
 	maxRetry uint
 }
 
-type KnownGaps struct {
+// This structure keeps track of the knownGaps at any given moment in time
+type KnownGapsState struct {
 	// Should we check for gaps by looking at the DB and comparing the latest block with head
 	checkForGaps bool
 	// Arbitrary processingKey that can be used down the line to differentiate different geth nodes.
@@ -157,6 +159,9 @@ type KnownGaps struct {
 	// The last processed block keeps track of the last processed block.
 	// Its used to make sure we didn't skip over any block!
 	lastProcessedBlock *big.Int
+	// This fileIndexer is used to write the knownGaps to file
+	// If we can't properly write to DB
+	fileIndexer interfaces.StateDiffIndexer
 }
 
 // This function will capture any missed blocks that were not captured in sds.KnownGaps.knownErrorBlocks.
@@ -192,7 +197,7 @@ func (sds *Service) capturedMissedBlocks(currentBlock *big.Int, knownErrorBlocks
 			startBlock := big.NewInt(0).Add(endErrorBlock, sds.KnownGaps.expectedDifference)
 			// 121 to 124
 			log.Warn(fmt.Sprintf("Adding the following block range to known_gaps table: %d - %d", startBlock, expectedEndErrorBlock))
-			sds.indexer.PushKnownGaps(startBlock, expectedEndErrorBlock, false, sds.KnownGaps.processingKey)
+			sds.indexer.PushKnownGaps(startBlock, expectedEndErrorBlock, false, sds.KnownGaps.processingKey, sds.KnownGaps.fileIndexer)
 		}
 
 		if expectedStartErrorBlock.Cmp(startErrorBlock) == -1 {
@@ -204,12 +209,12 @@ func (sds *Service) capturedMissedBlocks(currentBlock *big.Int, knownErrorBlocks
 			endBlock := big.NewInt(0).Sub(startErrorBlock, sds.KnownGaps.expectedDifference)
 			// 111 to 114
 			log.Warn(fmt.Sprintf("Adding the following block range to known_gaps table: %d - %d", expectedStartErrorBlock, endBlock))
-			sds.indexer.PushKnownGaps(expectedStartErrorBlock, endBlock, false, sds.KnownGaps.processingKey)
+			sds.indexer.PushKnownGaps(expectedStartErrorBlock, endBlock, false, sds.KnownGaps.processingKey, sds.KnownGaps.fileIndexer)
 		}
 
 		log.Warn(fmt.Sprint("The following Gaps were found: ", knownErrorBlocks))
 		log.Warn(fmt.Sprint("Updating known Gaps table from ", startErrorBlock, " to ", endErrorBlock, " with processing key, ", sds.KnownGaps.processingKey))
-		sds.indexer.PushKnownGaps(startErrorBlock, endErrorBlock, false, sds.KnownGaps.processingKey)
+		sds.indexer.PushKnownGaps(startErrorBlock, endErrorBlock, false, sds.KnownGaps.processingKey, sds.KnownGaps.fileIndexer)
 
 	} else {
 		log.Warn("We missed blocks without any errors.")
@@ -219,7 +224,7 @@ func (sds *Service) capturedMissedBlocks(currentBlock *big.Int, knownErrorBlocks
 		endBlock := big.NewInt(0).Sub(currentBlock, sds.KnownGaps.expectedDifference)
 		log.Warn(fmt.Sprint("Missed blocks starting from: ", startBlock))
 		log.Warn(fmt.Sprint("Missed blocks ending at: ", endBlock))
-		sds.indexer.PushKnownGaps(startBlock, endBlock, false, sds.KnownGaps.processingKey)
+		sds.indexer.PushKnownGaps(startBlock, endBlock, false, sds.KnownGaps.processingKey, sds.KnownGaps.fileIndexer)
 	}
 }
 
@@ -242,6 +247,7 @@ func NewBlockCache(max uint) BlockCache {
 func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params Config, backend ethapi.Backend) error {
 	blockChain := ethServ.BlockChain()
 	var indexer interfaces.StateDiffIndexer
+	var fileIndexer interfaces.StateDiffIndexer
 	quitCh := make(chan bool)
 	if params.IndexerConfig != nil {
 		info := nodeinfo.Info{
@@ -252,23 +258,37 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 			ClientName:   params.ClientName,
 		}
 		var err error
-		indexer, err = ind.NewStateDiffIndexer(params.Context, blockChain.Config(), info, params.IndexerConfig)
+		indexer, err = ind.NewStateDiffIndexer(params.Context, blockChain.Config(), info, params.IndexerConfig, "")
 		if err != nil {
 			return err
 		}
+		if params.IndexerConfig.Type() != shared.FILE {
+			fileIndexer, err = ind.NewStateDiffIndexer(params.Context, blockChain.Config(), info, params.IndexerConfig, "")
+			log.Info("Starting the statediff service in ", "mode", params.IndexerConfig.Type())
+			if err != nil {
+				return err
+			}
+
+		} else {
+			log.Info("Starting the statediff service in ", "mode", "File")
+			fileIndexer = indexer
+		}
+		//fileIndexer, fileErr = file.NewStateDiffIndexer(params.Context, blockChain.Config(), info)
 		indexer.ReportDBMetrics(10*time.Second, quitCh)
 	}
+
 	workers := params.NumWorkers
 	if workers == 0 {
 		workers = 1
 	}
 	// If we ever have multiple processingKeys we can update them here
 	// along with the expectedDifference
-	knownGaps := &KnownGaps{
+	knownGaps := &KnownGapsState{
 		checkForGaps:       true,
 		processingKey:      0,
 		expectedDifference: big.NewInt(1),
 		errorState:         false,
+		fileIndexer:        fileIndexer,
 	}
 	sds := &Service{
 		Mutex:             sync.Mutex{},
@@ -409,7 +429,7 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 			// Check and update the gaps table.
 			if sds.KnownGaps.checkForGaps && !sds.KnownGaps.errorState {
 				log.Info("Checking for Gaps at current block: ", currentBlock.Number())
-				go sds.indexer.FindAndUpdateGaps(currentBlock.Number(), sds.KnownGaps.expectedDifference, sds.KnownGaps.processingKey)
+				go sds.indexer.FindAndUpdateGaps(currentBlock.Number(), sds.KnownGaps.expectedDifference, sds.KnownGaps.processingKey, sds.KnownGaps.fileIndexer)
 				sds.KnownGaps.checkForGaps = false
 			}
 

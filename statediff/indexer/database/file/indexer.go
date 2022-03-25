@@ -479,10 +479,22 @@ func (sdi *StateDiffIndexer) Close() error {
 	return sdi.fileWriter.Close()
 }
 
-func (sdi *StateDiffIndexer) FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64) error {
+func (sdi *StateDiffIndexer) FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64, indexer interfaces.StateDiffIndexer) error {
 	return nil
 }
 
-func (sdi *StateDiffIndexer) PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64) error {
+func (sdi *StateDiffIndexer) PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64, indexer interfaces.StateDiffIndexer) error {
+	log.Info("Writing Gaps to file")
+	if startingBlockNumber.Cmp(endingBlockNumber) != -1 {
+		return fmt.Errorf("Starting Block %d, is greater than ending block %d", startingBlockNumber, endingBlockNumber)
+	}
+	knownGap := models.KnownGapsModel{
+		StartingBlockNumber: startingBlockNumber.String(),
+		EndingBlockNumber:   endingBlockNumber.String(),
+		CheckedOut:          checkedOut,
+		ProcessingKey:       processingKey,
+	}
+
+	sdi.fileWriter.upsertKnownGaps(knownGap)
 	return nil
 }
