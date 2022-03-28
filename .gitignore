@@ -54,3 +54,5 @@ foundry/projects/local-private-network/geth-linux-amd64
 related-repositories/foundry-test/**
 related-repositories/hive/**
 related-repositories/ipld-eth-db/**
+statediff/indexer/database/sql/statediffing_test_file.sql
+statediff/statediffing_test_file.sql

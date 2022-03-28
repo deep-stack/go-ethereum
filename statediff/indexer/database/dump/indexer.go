@@ -497,9 +497,26 @@ func (sdi *StateDiffIndexer) Close() error {
 	return sdi.dump.Close()
 }
 
+// Only needed to satisfy use cases
 func (sdi *StateDiffIndexer) FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64, index interfaces.StateDiffIndexer) error {
-	return nil
+	log.Error("We can't find gaps in write mode!")
+	return fmt.Errorf("We can't find gaps in write mode!")
 }
+
+// Written but not tested. Unsure if there is a real use case for this anywhere.
 func (sdi *StateDiffIndexer) PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64, index interfaces.StateDiffIndexer) error {
+	log.Info("Dumping known gaps")
+	if startingBlockNumber.Cmp(endingBlockNumber) != -1 {
+		return fmt.Errorf("Starting Block %d, is greater than ending block %d", startingBlockNumber, endingBlockNumber)
+	}
+	knownGap := models.KnownGapsModel{
+		StartingBlockNumber: startingBlockNumber.String(),
+		EndingBlockNumber:   endingBlockNumber.String(),
+		CheckedOut:          checkedOut,
+		ProcessingKey:       processingKey,
+	}
+	if _, err := fmt.Fprintf(sdi.dump, "%+v\r\n", knownGap); err != nil {
+		return err
+	}
 	return nil
 }

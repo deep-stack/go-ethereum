@@ -480,7 +480,8 @@ func (sdi *StateDiffIndexer) Close() error {
 }
 
 func (sdi *StateDiffIndexer) FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64, indexer interfaces.StateDiffIndexer) error {
-	return nil
+	log.Error("We can't find gaps in write mode!")
+	return fmt.Errorf("We can't find gaps in write mode!")
 }
 
 func (sdi *StateDiffIndexer) PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64, indexer interfaces.StateDiffIndexer) error {

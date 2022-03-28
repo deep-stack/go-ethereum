@@ -26,7 +26,10 @@ import (
 
 // Config contains instantiation parameters for the state diffing service
 type Config struct {
+	// The configuration used for the primary stateDiff Indexer
 	IndexerConfig interfaces.Config
+	// The configuration used for the file stateDiff Indexer. This indexer is used if the primary indexer fails and is not a FILE indexer.
+	FileConfig interfaces.Config
 	// A unique ID used for this service
 	ID string
 	// Name for the client this service is running

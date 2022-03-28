@@ -35,11 +35,12 @@ import (
 // You can specify the specific
 func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, nodeInfo node.Info, config interfaces.Config, specificIndexer shared.DBType) (interfaces.StateDiffIndexer, error) {
 	var indexerToCreate shared.DBType
-	if specificIndexer != "" {
+	if specificIndexer == "" {
 		indexerToCreate = config.Type()
 	} else {
 		indexerToCreate = specificIndexer
 	}
+	log.Info("Indexer to create is", "indexer", indexerToCreate)
 	switch indexerToCreate {
 	case shared.FILE:
 		log.Info("Creating a statediff indexer in SQL file writing mode")
