@@ -32,10 +32,6 @@ type StateDiffIndexer interface {
 	PushStateNode(tx Batch, stateNode sdtypes.StateNode, headerID string) error
 	PushCodeAndCodeHash(tx Batch, codeAndCodeHash sdtypes.CodeAndCodeHash) error
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
-	FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64, indexer StateDiffIndexer) error
-	// The indexer at the end allows us to pass one indexer to another.
-	// We use then for the SQL indexer, we pass it the file indexer so it can write to file if writing to the DB fails.
-	PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64, indexer StateDiffIndexer) error
 	io.Closer
 }
 

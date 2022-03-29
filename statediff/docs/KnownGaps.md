@@ -10,7 +10,6 @@ The known gaps table is updated when the following events occur:
 
 1. At start up we check the latest block from the `eth.headers_cid` table. We compare the first block that we are processing with the latest block from the DB. If they are not one unit of expectedDifference away from each other, add the gap between the two blocks.
 2. If there is any error in processing a block (db connection, deadlock, etc), add that block to the knownErrorBlocks slice, when the next block is successfully written, write this slice into the DB.
-3. If the last processed block is not one unit of expectedDifference away from the current block being processed. This can be due to any unknown or unhandled errors in geth.
 
 # Glossary
 

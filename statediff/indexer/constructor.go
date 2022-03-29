@@ -32,29 +32,22 @@ import (
 )
 
 // NewStateDiffIndexer creates and returns an implementation of the StateDiffIndexer interface.
-// You can specify the specific
-func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, nodeInfo node.Info, config interfaces.Config, specificIndexer shared.DBType) (interfaces.StateDiffIndexer, error) {
-	var indexerToCreate shared.DBType
-	if specificIndexer == "" {
-		indexerToCreate = config.Type()
-	} else {
-		indexerToCreate = specificIndexer
-	}
-	log.Info("Indexer to create is", "indexer", indexerToCreate)
-	switch indexerToCreate {
+func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, nodeInfo node.Info, config interfaces.Config) (sql.Database, interfaces.StateDiffIndexer, error) {
+	switch config.Type() {
 	case shared.FILE:
-		log.Info("Creating a statediff indexer in SQL file writing mode")
+		log.Info("Starting statediff service in SQL file writing mode")
 		fc, ok := config.(file.Config)
 		if !ok {
-			return nil, fmt.Errorf("file config is not the correct type: got %T, expected %T", config, file.Config{})
+			return nil, nil, fmt.Errorf("file config is not the correct type: got %T, expected %T", config, file.Config{})
 		}
 		fc.NodeInfo = nodeInfo
-		return file.NewStateDiffIndexer(ctx, chainConfig, fc)
+		ind, err := file.NewStateDiffIndexer(ctx, chainConfig, fc)
+		return nil, ind, err
 	case shared.POSTGRES:
-		log.Info("Creating a statediff service in Postgres writing mode")
+		log.Info("Starting statediff service in Postgres writing mode")
 		pgc, ok := config.(postgres.Config)
 		if !ok {
-			return nil, fmt.Errorf("postgres config is not the correct type: got %T, expected %T", config, postgres.Config{})
+			return nil, nil, fmt.Errorf("postgres config is not the correct type: got %T, expected %T", config, postgres.Config{})
 		}
 		var err error
 		var driver sql.Driver
@@ -62,25 +55,27 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, n
 		case postgres.PGX:
 			driver, err = postgres.NewPGXDriver(ctx, pgc, nodeInfo)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		case postgres.SQLX:
 			driver, err = postgres.NewSQLXDriver(ctx, pgc, nodeInfo)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		default:
-			return nil, fmt.Errorf("unrecognized Postgres driver type: %s", pgc.Driver)
+			return nil, nil, fmt.Errorf("unrecognized Postgres driver type: %s", pgc.Driver)
 		}
-		return sql.NewStateDiffIndexer(ctx, chainConfig, postgres.NewPostgresDB(driver))
+		db := postgres.NewPostgresDB(driver)
+		ind, err := sql.NewStateDiffIndexer(ctx, chainConfig, db)
+		return db, ind, err
 	case shared.DUMP:
-		log.Info("Creating statediff indexer in data dump mode")
+		log.Info("Starting statediff service in data dump mode")
 		dumpc, ok := config.(dump.Config)
 		if !ok {
-			return nil, fmt.Errorf("dump config is not the correct type: got %T, expected %T", config, dump.Config{})
+			return nil, nil, fmt.Errorf("dump config is not the correct type: got %T, expected %T", config, dump.Config{})
 		}
-		return dump.NewStateDiffIndexer(chainConfig, dumpc), nil
+		return nil, dump.NewStateDiffIndexer(chainConfig, dumpc), nil
 	default:
-		return nil, fmt.Errorf("unrecognized database type: %s", indexerToCreate)
+		return nil, nil, fmt.Errorf("unrecognized database type: %s", config.Type())
 	}
 }
