@@ -8,14 +8,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	chainConf         = params.MainnetChainConfig
 	knownGapsFilePath = "./known_gaps.sql"
 )
 
@@ -46,7 +44,7 @@ func TestKnownGaps(t *testing.T) {
 
 	testWriteToDb(t, tests, true)
 	testWriteToFile(t, tests, true)
-	//testFindAndUpdateGaps(t, true)
+	testFindAndUpdateGaps(t, true)
 }
 
 // test writing blocks to the DB
@@ -204,7 +202,6 @@ func setupDb(t *testing.T) sql.Database {
 		t.Error("Can't create a DB connection....")
 		t.Fatal(err)
 	}
-	// stateDiff, err := sql.NewStateDiffIndexer(context.Background(), chainConf, db)
 	return db
 }
 

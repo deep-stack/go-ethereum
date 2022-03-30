@@ -75,17 +75,12 @@ func testPushBlockAndState(t *testing.T, block *types.Block, receipts types.Rece
 	})
 }
 
-func setupDb(t *testing.T) (interfaces.StateDiffIndexer, error) {
+func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 	db, err = postgres.SetupSQLXDB()
 	if err != nil {
 		t.Fatal(err)
 	}
 	ind, err = sql.NewStateDiffIndexer(context.Background(), chainConf, db)
-	return ind, err
-}
-
-func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) (interfaces.StateDiffIndexer, interfaces.Batch) {
-	ind, err = setupDb(t)
 	require.NoError(t, err)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
@@ -105,7 +100,6 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) (i
 	}
 
 	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, testBlock.Number().Uint64())
-	return ind, tx
 }
 
 func tearDown(t *testing.T) {
