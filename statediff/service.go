@@ -185,11 +185,13 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	// If we ever have multiple processingKeys we can update them here
 	// along with the expectedDifference
 	knownGaps := &KnownGapsState{
-		processingKey:      0,
-		expectedDifference: big.NewInt(1),
-		errorState:         false,
-		writeFilePath:      params.KnownGapsFilePath,
-		db:                 db,
+		processingKey:          0,
+		expectedDifference:     big.NewInt(1),
+		errorState:             false,
+		writeFilePath:          params.KnownGapsFilePath,
+		db:                     db,
+		statediffMetrics:       statediffMetrics,
+		sqlFileWaitingForWrite: false,
 	}
 	if params.IndexerConfig.Type() == shared.POSTGRES {
 		knownGaps.checkForGaps = true
@@ -336,7 +338,7 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 			// Check and update the gaps table.
 			if sds.KnownGaps.checkForGaps && !sds.KnownGaps.errorState {
 				log.Info("Checking for Gaps at", "current block", currentBlock.Number())
-				go sds.KnownGaps.FindAndUpdateGaps(currentBlock.Number(), sds.KnownGaps.expectedDifference, sds.KnownGaps.processingKey)
+				go sds.KnownGaps.findAndUpdateGaps(currentBlock.Number(), sds.KnownGaps.expectedDifference, sds.KnownGaps.processingKey)
 				sds.KnownGaps.checkForGaps = false
 			}
 
@@ -357,9 +359,15 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 				staticKnownErrorBlocks := make([]*big.Int, len(sds.KnownGaps.knownErrorBlocks))
 				copy(staticKnownErrorBlocks, sds.KnownGaps.knownErrorBlocks)
 				sds.KnownGaps.knownErrorBlocks = nil
-
-				log.Debug("Starting capturedMissedBlocks")
 				go sds.KnownGaps.captureErrorBlocks(staticKnownErrorBlocks)
+			}
+
+			if sds.KnownGaps.sqlFileWaitingForWrite {
+				log.Info("There are entries in the SQL file for knownGaps that should be written")
+				err := sds.KnownGaps.writeSqlFileStmtToDb()
+				if err != nil {
+					log.Error("Unable to write KnownGap sql file to DB")
+				}
 			}
 
 			// TODO: how to handle with concurrent workers

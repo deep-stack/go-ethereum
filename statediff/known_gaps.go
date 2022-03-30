@@ -19,8 +19,10 @@ package statediff
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
@@ -35,11 +37,6 @@ var (
 	dbQueryString        = "SELECT MAX(block_number) FROM eth.header_cids"
 	defaultWriteFilePath = "./known_gaps.sql"
 )
-
-type KnownGaps interface {
-	PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64) error
-	FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64) error
-}
 
 type KnownGapsState struct {
 	// Should we check for gaps by looking at the DB and comparing the latest block with head
@@ -61,10 +58,15 @@ type KnownGapsState struct {
 	writeFilePath string
 	// DB object to use for reading and writing to the DB
 	db sql.Database
+	//Do we have entries in the local sql file that need to be written to the DB
+	sqlFileWaitingForWrite bool
+	// Metrics object used to track metrics.
+	statediffMetrics statediffMetricsHandles
 }
 
+// Unused
 func NewKnownGapsState(checkForGaps bool, processingKey int64, expectedDifference *big.Int,
-	errorState bool, writeFilePath string, db sql.Database) *KnownGapsState {
+	errorState bool, writeFilePath string, db sql.Database, statediffMetrics statediffMetricsHandles) *KnownGapsState {
 
 	return &KnownGapsState{
 		checkForGaps:       checkForGaps,
@@ -73,11 +75,12 @@ func NewKnownGapsState(checkForGaps bool, processingKey int64, expectedDifferenc
 		errorState:         errorState,
 		writeFilePath:      writeFilePath,
 		db:                 db,
+		statediffMetrics:   statediffMetrics,
 	}
 
 }
 
-func MinMax(array []*big.Int) (*big.Int, *big.Int) {
+func minMax(array []*big.Int) (*big.Int, *big.Int) {
 	var max *big.Int = array[0]
 	var min *big.Int = array[0]
 	for _, value := range array {
@@ -96,7 +99,7 @@ func MinMax(array []*big.Int) (*big.Int, *big.Int) {
 // 2. Write to sql file locally.
 // 3. Write to prometheus directly.
 // 4. Logs and error.
-func (kg *KnownGapsState) PushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64) error {
+func (kg *KnownGapsState) pushKnownGaps(startingBlockNumber *big.Int, endingBlockNumber *big.Int, checkedOut bool, processingKey int64) error {
 	if startingBlockNumber.Cmp(endingBlockNumber) != -1 {
 		return fmt.Errorf("Starting Block %d, is greater than ending block %d", startingBlockNumber, endingBlockNumber)
 	}
@@ -106,9 +109,13 @@ func (kg *KnownGapsState) PushKnownGaps(startingBlockNumber *big.Int, endingBloc
 		CheckedOut:          checkedOut,
 		ProcessingKey:       processingKey,
 	}
-	log.Info("Writing known gaps to the DB")
+
+	log.Info("Updating Metrics for the start and end block")
+	//kg.statediffMetrics.knownGapStart.Update(startingBlockNumber.Int64())
+	//kg.statediffMetrics.knownGapEnd.Update(endingBlockNumber.Int64())
 
 	var writeErr error
+	log.Info("Writing known gaps to the DB")
 	if kg.db != nil {
 		dbErr := kg.upsertKnownGaps(knownGap)
 		if dbErr != nil {
@@ -117,22 +124,24 @@ func (kg *KnownGapsState) PushKnownGaps(startingBlockNumber *big.Int, endingBloc
 		}
 	} else {
 		writeErr = kg.upsertKnownGapsFile(knownGap)
-
 	}
 	if writeErr != nil {
-		log.Info("Unsuccessful when writing to a file", "Error", writeErr)
-		return writeErr
+		log.Error("Unsuccessful when writing to a file", "Error", writeErr)
+		log.Error("Updating Metrics for the start and end error block")
+		log.Error("Unable to write the following Gaps to DB or File", "startBlock", startingBlockNumber, "endBlock", endingBlockNumber)
+		kg.statediffMetrics.knownGapErrorStart.Update(startingBlockNumber.Int64())
+		kg.statediffMetrics.knownGapErrorEnd.Update(endingBlockNumber.Int64())
 	}
 	return nil
 }
 
 // This is a simple wrapper function to write gaps from a knownErrorBlocks array.
 func (kg *KnownGapsState) captureErrorBlocks(knownErrorBlocks []*big.Int) {
-	startErrorBlock, endErrorBlock := MinMax(knownErrorBlocks)
+	startErrorBlock, endErrorBlock := minMax(knownErrorBlocks)
 
 	log.Warn("The following Gaps were found", "knownErrorBlocks", knownErrorBlocks)
 	log.Warn("Updating known Gaps table", "startErrorBlock", startErrorBlock, "endErrorBlock", endErrorBlock, "processingKey", kg.processingKey)
-	kg.PushKnownGaps(startErrorBlock, endErrorBlock, false, kg.processingKey)
+	kg.pushKnownGaps(startErrorBlock, endErrorBlock, false, kg.processingKey)
 
 }
 
@@ -156,9 +165,9 @@ func isGap(latestBlockInDb *big.Int, latestBlockOnChain *big.Int, expectedDiffer
 // TODO:
 // REmove the return value
 // Write to file if err in writing to DB
-func (kg *KnownGapsState) FindAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64) error {
+func (kg *KnownGapsState) findAndUpdateGaps(latestBlockOnChain *big.Int, expectedDifference *big.Int, processingKey int64) error {
 	// Make this global
-	latestBlockInDb, err := kg.QueryDbToBigInt(dbQueryString)
+	latestBlockInDb, err := kg.queryDbToBigInt(dbQueryString)
 	if err != nil {
 		return err
 	}
@@ -171,7 +180,7 @@ func (kg *KnownGapsState) FindAndUpdateGaps(latestBlockOnChain *big.Int, expecte
 		endBlock.Sub(latestBlockOnChain, expectedDifference)
 
 		log.Warn("Found Gaps starting at", "startBlock", startBlock, "endingBlock", endBlock)
-		err := kg.PushKnownGaps(startBlock, endBlock, false, processingKey)
+		err := kg.pushKnownGaps(startBlock, endBlock, false, processingKey)
 		if err != nil {
 			log.Error("We were unable to write the following gap to the DB", "start Block", startBlock, "endBlock", endBlock, "error", err)
 			return err
@@ -212,11 +221,37 @@ func (kg *KnownGapsState) upsertKnownGapsFile(knownGaps models.KnownGapsModel) e
 		return err
 	}
 	log.Info("Wrote the gaps to a local SQL file")
+	kg.sqlFileWaitingForWrite = true
+	return nil
+}
+
+func (kg *KnownGapsState) writeSqlFileStmtToDb() error {
+	log.Info("Writing the local SQL file for KnownGaps to the DB")
+	file, ioErr := ioutil.ReadFile(kg.writeFilePath)
+
+	if ioErr != nil {
+		log.Error("Unable to open local SQL File for writing")
+		return ioErr
+	}
+
+	requests := strings.Split(string(file), ";")
+
+	for _, request := range requests {
+		_, err := kg.db.Exec(context.Background(), request)
+		if err != nil {
+			log.Error("Unable to run insert statement from file to the DB")
+			return err
+		}
+	}
+	if err := os.Truncate(kg.writeFilePath, 0); err != nil {
+		log.Info("Failed to empty knownGaps file after inserting statements to the DB", "error", err)
+	}
+	kg.sqlFileWaitingForWrite = false
 	return nil
 }
 
 // This is a simple wrapper function which will run QueryRow on the DB
-func (kg *KnownGapsState) QueryDb(queryString string) (string, error) {
+func (kg *KnownGapsState) queryDb(queryString string) (string, error) {
 	var ret string
 	err := kg.db.QueryRow(context.Background(), queryString).Scan(&ret)
 	if err != nil {
@@ -228,9 +263,9 @@ func (kg *KnownGapsState) QueryDb(queryString string) (string, error) {
 
 // This function is a simple wrapper which will call QueryDb but the return value will be
 // a big int instead of a string
-func (kg *KnownGapsState) QueryDbToBigInt(queryString string) (*big.Int, error) {
+func (kg *KnownGapsState) queryDbToBigInt(queryString string) (*big.Int, error) {
 	ret := new(big.Int)
-	res, err := kg.QueryDb(queryString)
+	res, err := kg.queryDb(queryString)
 	if err != nil {
 		return ret, err
 	}

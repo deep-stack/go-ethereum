@@ -3,12 +3,11 @@ package statediff
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
-	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
@@ -68,6 +67,7 @@ func testWriteToDb(t *testing.T, tests []gapValues, wipeDbBeforeStart bool) {
 			processingKey:      tc.processingKey,
 			expectedDifference: big.NewInt(tc.expectedDif),
 			db:                 db,
+			statediffMetrics:   RegisterStatediffMetrics(metrics.DefaultRegistry),
 		}
 		service := &Service{
 			KnownGaps: knownGaps,
@@ -106,6 +106,7 @@ func testWriteToFile(t *testing.T, tests []gapValues, wipeDbBeforeStart bool) {
 			processingKey:      tc.processingKey,
 			expectedDifference: big.NewInt(tc.expectedDif),
 			writeFilePath:      knownGapsFilePath,
+			statediffMetrics:   RegisterStatediffMetrics(metrics.DefaultRegistry),
 			db:                 nil, // Only set to nil to be verbose that we can't use it
 		}
 		service := &Service{
@@ -116,18 +117,13 @@ func testWriteToFile(t *testing.T, tests []gapValues, wipeDbBeforeStart bool) {
 		service.KnownGaps.knownErrorBlocks = knownErrorBlocks
 
 		testCaptureErrorBlocks(t, service)
-
-		file, ioErr := ioutil.ReadFile(knownGapsFilePath)
-		require.NoError(t, ioErr)
-
-		requests := strings.Split(string(file), ";")
-
 		newDb := setupDb(t)
 		service.KnownGaps.db = newDb
-		for _, request := range requests {
-			_, err := newDb.Exec(context.Background(), request)
-			require.NoError(t, err)
+		if service.KnownGaps.sqlFileWaitingForWrite {
+			writeErr := service.KnownGaps.writeSqlFileStmtToDb()
+			require.NoError(t, writeErr)
 		}
+
 		// Validate that the upsert was done correctly.
 		validateUpsert(t, service, tc.knownErrorBlocksStart, tc.knownErrorBlocksEnd)
 		tearDown(t, newDb)
@@ -145,12 +141,13 @@ func testFindAndUpdateGaps(t *testing.T, wipeDbBeforeStart bool) {
 		processingKey:      1,
 		expectedDifference: big.NewInt(1),
 		db:                 db,
+		statediffMetrics:   RegisterStatediffMetrics(metrics.DefaultRegistry),
 	}
 	service := &Service{
 		KnownGaps: knownGaps,
 	}
 
-	latestBlockInDb, err := service.KnownGaps.QueryDbToBigInt("SELECT MAX(block_number) FROM eth.header_cids")
+	latestBlockInDb, err := service.KnownGaps.queryDbToBigInt("SELECT MAX(block_number) FROM eth.header_cids")
 	if err != nil {
 		t.Skip("Can't find a block in the eth.header_cids table.. Please put one there")
 	}
@@ -165,7 +162,7 @@ func testFindAndUpdateGaps(t *testing.T, wipeDbBeforeStart bool) {
 	t.Log("The latest block on the chain is: ", latestBlockOnChain)
 	t.Log("The latest block on the DB is: ", latestBlockInDb)
 
-	gapUpsertErr := service.KnownGaps.FindAndUpdateGaps(latestBlockOnChain, expectedDifference, 0)
+	gapUpsertErr := service.KnownGaps.findAndUpdateGaps(latestBlockOnChain, expectedDifference, 0)
 	require.NoError(t, gapUpsertErr)
 
 	startBlock := big.NewInt(0)
@@ -195,7 +192,7 @@ func validateUpsert(t *testing.T, service *Service, startingBlock int64, endingB
 	t.Logf("Starting to query blocks: %d - %d", startingBlock, endingBlock)
 	queryString := fmt.Sprintf("SELECT starting_block_number from eth.known_gaps WHERE starting_block_number = %d AND ending_block_number = %d", startingBlock, endingBlock)
 
-	_, queryErr := service.KnownGaps.QueryDb(queryString) // Figure out the string.
+	_, queryErr := service.KnownGaps.queryDb(queryString) // Figure out the string.
 	t.Logf("Updated Known Gaps table starting from, %d, and ending at, %d", startingBlock, endingBlock)
 	require.NoError(t, queryErr)
 }
