@@ -64,7 +64,7 @@ type KnownGapsState struct {
 	statediffMetrics statediffMetricsHandles
 }
 
-// Unused
+// Create a new KnownGapsState struct, currently unused.
 func NewKnownGapsState(checkForGaps bool, processingKey int64, expectedDifference *big.Int,
 	errorState bool, writeFilePath string, db sql.Database, statediffMetrics statediffMetricsHandles) *KnownGapsState {
 
@@ -111,8 +111,8 @@ func (kg *KnownGapsState) pushKnownGaps(startingBlockNumber *big.Int, endingBloc
 	}
 
 	log.Info("Updating Metrics for the start and end block")
-	//kg.statediffMetrics.knownGapStart.Update(startingBlockNumber.Int64())
-	//kg.statediffMetrics.knownGapEnd.Update(endingBlockNumber.Int64())
+	kg.statediffMetrics.knownGapStart.Update(startingBlockNumber.Int64())
+	kg.statediffMetrics.knownGapEnd.Update(endingBlockNumber.Int64())
 
 	var writeErr error
 	log.Info("Writing known gaps to the DB")
@@ -227,11 +227,11 @@ func (kg *KnownGapsState) upsertKnownGapsFile(knownGaps models.KnownGapsModel) e
 
 func (kg *KnownGapsState) writeSqlFileStmtToDb() error {
 	log.Info("Writing the local SQL file for KnownGaps to the DB")
-	file, ioErr := ioutil.ReadFile(kg.writeFilePath)
+	file, err := ioutil.ReadFile(kg.writeFilePath)
 
-	if ioErr != nil {
+	if err != nil {
 		log.Error("Unable to open local SQL File for writing")
-		return ioErr
+		return err
 	}
 
 	requests := strings.Split(string(file), ";")
