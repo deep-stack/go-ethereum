@@ -148,7 +148,7 @@ type LogsModel struct {
 	Topic3    string `db:"topic3"`
 }
 
-// KnownGaps is the data structure for eth.known_gaps
+// KnownGaps is the data structure for eth_meta.known_gaps
 type KnownGapsModel struct {
 	StartingBlockNumber string `db:"starting_block_number"`
 	EndingBlockNumber   string `db:"ending_block_number"`

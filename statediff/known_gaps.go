@@ -30,10 +30,10 @@ import (
 )
 
 var (
-	knownGapsInsert = "INSERT INTO eth.known_gaps (starting_block_number, ending_block_number, checked_out, processing_key) " +
+	knownGapsInsert = "INSERT INTO eth_meta.known_gaps (starting_block_number, ending_block_number, checked_out, processing_key) " +
 		"VALUES ('%s', '%s', %t, %d) " +
 		"ON CONFLICT (starting_block_number) DO UPDATE SET (ending_block_number, processing_key) = ('%s', %d) " +
-		"WHERE eth.known_gaps.ending_block_number <= '%s';\n"
+		"WHERE eth_meta.known_gaps.ending_block_number <= '%s';\n"
 	dbQueryString        = "SELECT MAX(block_number) FROM eth.header_cids"
 	defaultWriteFilePath = "./known_gaps.sql"
 )
@@ -191,7 +191,6 @@ func (kg *KnownGapsState) findAndUpdateGaps(latestBlockOnChain *big.Int, expecte
 }
 
 // Upserts known gaps to the DB.
-// INSERT INTO eth.known_gaps (starting_block_number, ending_block_number, checked_out, processing_key) VALUES ($1, $2, $3, $4)
 func (kg *KnownGapsState) upsertKnownGaps(knownGaps models.KnownGapsModel) error {
 	_, err := kg.db.Exec(context.Background(), kg.db.InsertKnownGapsStm(),
 		knownGaps.StartingBlockNumber, knownGaps.EndingBlockNumber, knownGaps.CheckedOut, knownGaps.ProcessingKey)
@@ -202,6 +201,7 @@ func (kg *KnownGapsState) upsertKnownGaps(knownGaps models.KnownGapsModel) error
 	return nil
 }
 
+// Write upsert statement into a local file.
 func (kg *KnownGapsState) upsertKnownGapsFile(knownGaps models.KnownGapsModel) error {
 	insertStmt := []byte(fmt.Sprintf(knownGapsInsert, knownGaps.StartingBlockNumber, knownGaps.EndingBlockNumber, knownGaps.CheckedOut, knownGaps.ProcessingKey,
 		knownGaps.EndingBlockNumber, knownGaps.ProcessingKey, knownGaps.EndingBlockNumber))

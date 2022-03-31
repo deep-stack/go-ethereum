@@ -55,8 +55,8 @@ func testWriteToDb(t *testing.T, tests []gapValues, wipeDbBeforeStart bool) {
 	// Clear Table first, this is needed because we updated an entry to have a larger endblock number
 	// so we can't find the original start and endblock pair.
 	if wipeDbBeforeStart {
-		t.Log("Cleaning up eth.known_gaps table")
-		db.Exec(context.Background(), "DELETE FROM eth.known_gaps")
+		t.Log("Cleaning up eth_meta.known_gaps table")
+		db.Exec(context.Background(), "DELETE FROM eth_meta.known_gaps")
 	}
 
 	for _, tc := range tests {
@@ -89,8 +89,8 @@ func testWriteToFile(t *testing.T, tests []gapValues, wipeDbBeforeStart bool) {
 	// Clear Table first, this is needed because we updated an entry to have a larger endblock number
 	// so we can't find the original start and endblock pair.
 	if wipeDbBeforeStart {
-		t.Log("Cleaning up eth.known_gaps table")
-		db.Exec(context.Background(), "DELETE FROM eth.known_gaps")
+		t.Log("Cleaning up eth_meta.known_gaps table")
+		db.Exec(context.Background(), "DELETE FROM eth_meta.known_gaps")
 	}
 	if _, err := os.Stat(knownGapsFilePath); err == nil {
 		err := os.Remove(knownGapsFilePath)
@@ -133,7 +133,7 @@ func testFindAndUpdateGaps(t *testing.T, wipeDbBeforeStart bool) {
 	db := setupDb(t)
 
 	if wipeDbBeforeStart {
-		db.Exec(context.Background(), "DELETE FROM eth.known_gaps")
+		db.Exec(context.Background(), "DELETE FROM eth_meta.known_gaps")
 	}
 	knownGaps := KnownGapsState{
 		processingKey:      1,
@@ -188,7 +188,7 @@ func createKnownErrorBlocks(knownErrorBlocks []*big.Int, knownErrorBlocksStart i
 // Make sure the upsert was performed correctly
 func validateUpsert(t *testing.T, service *Service, startingBlock int64, endingBlock int64) {
 	t.Logf("Starting to query blocks: %d - %d", startingBlock, endingBlock)
-	queryString := fmt.Sprintf("SELECT starting_block_number from eth.known_gaps WHERE starting_block_number = %d AND ending_block_number = %d", startingBlock, endingBlock)
+	queryString := fmt.Sprintf("SELECT starting_block_number from eth_meta.known_gaps WHERE starting_block_number = %d AND ending_block_number = %d", startingBlock, endingBlock)
 
 	_, queryErr := service.KnownGaps.queryDb(queryString) // Figure out the string.
 	t.Logf("Updated Known Gaps table starting from, %d, and ending at, %d", startingBlock, endingBlock)
