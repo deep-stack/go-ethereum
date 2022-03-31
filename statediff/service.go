@@ -41,8 +41,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	ind "github.com/ethereum/go-ethereum/statediff/indexer"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	types2 "github.com/ethereum/go-ethereum/statediff/types"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -123,6 +125,8 @@ type Service struct {
 	BackendAPI ethapi.Backend
 	// Should the statediff service wait for geth to sync to head?
 	WaitForSync bool
+	// Used to signal if we should check for KnownGaps
+	KnownGaps KnownGapsState
 	// Whether or not we have any subscribers; only if we do, do we processes state diffs
 	subscribers int32
 	// Interface for publishing statediffs as PG-IPLD objects
@@ -154,6 +158,7 @@ func NewBlockCache(max uint) BlockCache {
 func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params Config, backend ethapi.Backend) error {
 	blockChain := ethServ.BlockChain()
 	var indexer interfaces.StateDiffIndexer
+	var db sql.Database
 	quitCh := make(chan bool)
 	if params.IndexerConfig != nil {
 		info := nodeinfo.Info{
@@ -164,15 +169,33 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 			ClientName:   params.ClientName,
 		}
 		var err error
-		indexer, err = ind.NewStateDiffIndexer(params.Context, blockChain.Config(), info, params.IndexerConfig)
+		db, indexer, err = ind.NewStateDiffIndexer(params.Context, blockChain.Config(), info, params.IndexerConfig)
 		if err != nil {
 			return err
 		}
 		indexer.ReportDBMetrics(10*time.Second, quitCh)
 	}
+
 	workers := params.NumWorkers
 	if workers == 0 {
 		workers = 1
+	}
+	// If we ever have multiple processingKeys we can update them here
+	// along with the expectedDifference
+	knownGaps := &KnownGapsState{
+		processingKey:          0,
+		expectedDifference:     big.NewInt(1),
+		errorState:             false,
+		writeFilePath:          params.KnownGapsFilePath,
+		db:                     db,
+		statediffMetrics:       statediffMetrics,
+		sqlFileWaitingForWrite: false,
+	}
+	if params.IndexerConfig.Type() == shared.POSTGRES {
+		knownGaps.checkForGaps = true
+	} else {
+		log.Info("We are not going to check for gaps on start up since we are not connected to Postgres!")
+		knownGaps.checkForGaps = false
 	}
 	sds := &Service{
 		Mutex:             sync.Mutex{},
@@ -184,6 +207,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 		BlockCache:        NewBlockCache(workers),
 		BackendAPI:        backend,
 		WaitForSync:       params.WaitForSync,
+		KnownGaps:         *knownGaps,
 		indexer:           indexer,
 		enableWriteLoop:   params.EnableWriteLoop,
 		numWorkers:        workers,
@@ -308,12 +332,42 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 				sds.writeGenesisStateDiff(parentBlock, params.id)
 			}
 
+			// If for any reason we need to check for gaps,
+			// Check and update the gaps table.
+			if sds.KnownGaps.checkForGaps && !sds.KnownGaps.errorState {
+				log.Info("Checking for Gaps at", "current block", currentBlock.Number())
+				go sds.KnownGaps.findAndUpdateGaps(currentBlock.Number(), sds.KnownGaps.expectedDifference, sds.KnownGaps.processingKey)
+				sds.KnownGaps.checkForGaps = false
+			}
+
 			log.Info("Writing state diff", "block height", currentBlock.Number().Uint64(), "worker", params.id)
 			err := sds.writeStateDiffWithRetry(currentBlock, parentBlock.Root(), writeLoopParams)
 			if err != nil {
 				log.Error("statediff.Service.WriteLoop: processing error", "block height", currentBlock.Number().Uint64(), "error", err.Error(), "worker", params.id)
+				sds.KnownGaps.errorState = true
+				log.Warn("Updating the following block to knownErrorBlocks to be inserted into knownGaps table", "blockNumber", currentBlock.Number())
+				sds.KnownGaps.knownErrorBlocks = append(sds.KnownGaps.knownErrorBlocks, currentBlock.Number())
+				// Write object to startdiff
 				continue
 			}
+			sds.KnownGaps.errorState = false
+			if sds.KnownGaps.knownErrorBlocks != nil {
+				// We must pass in parameters by VALUE not reference.
+				// If we pass them in my reference, the references can change before the computation is complete!
+				staticKnownErrorBlocks := make([]*big.Int, len(sds.KnownGaps.knownErrorBlocks))
+				copy(staticKnownErrorBlocks, sds.KnownGaps.knownErrorBlocks)
+				sds.KnownGaps.knownErrorBlocks = nil
+				go sds.KnownGaps.captureErrorBlocks(staticKnownErrorBlocks)
+			}
+
+			if sds.KnownGaps.sqlFileWaitingForWrite {
+				log.Info("There are entries in the SQL file for knownGaps that should be written")
+				err := sds.KnownGaps.writeSqlFileStmtToDb()
+				if err != nil {
+					log.Error("Unable to write KnownGap sql file to DB")
+				}
+			}
+
 			// TODO: how to handle with concurrent workers
 			statediffMetrics.lastStatediffHeight.Update(int64(currentBlock.Number().Uint64()))
 		case <-sds.QuitChan:

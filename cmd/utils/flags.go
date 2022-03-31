@@ -867,6 +867,11 @@ var (
 		Name:  "statediff.file.path",
 		Usage: "Full path (including filename) to write statediff data out to when operating in file mode",
 	}
+	StateDiffKnownGapsFilePath = cli.StringFlag{
+		Name:  "statediff.knowngapsfile.path",
+		Usage: "Full path (including filename) to write knownGaps statements when the DB is unavailable.",
+		Value: "./known_gaps.sql",
+	}
 	StateDiffDBClientNameFlag = cli.StringFlag{
 		Name:  "statediff.db.clientname",
 		Usage: "Client name to use when writing state diffs to database",

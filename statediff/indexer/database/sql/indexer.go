@@ -553,3 +553,5 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(batch interfaces.Batch, codeAnd
 func (sdi *StateDiffIndexer) Close() error {
 	return sdi.dbWriter.Close()
 }
+
+// Update the known gaps table with the gap information.
