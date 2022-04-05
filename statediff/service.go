@@ -18,6 +18,7 @@ package statediff
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -47,28 +48,34 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	types2 "github.com/ethereum/go-ethereum/statediff/types"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/thoas/go-funk"
 )
 
 const (
-	chainEventChanSize = 20000
-	genesisBlockNumber = 0
-	defaultRetryLimit  = 3                   // default retry limit once deadlock is detected.
-	deadlockDetected   = "deadlock detected" // 40P01 https://www.postgresql.org/docs/current/errcodes-appendix.html
+	chainEventChanSize  = 20000
+	genesisBlockNumber  = 0
+	defaultRetryLimit   = 3                   // default retry limit once deadlock is detected.
+	deadlockDetected    = "deadlock detected" // 40P01 https://www.postgresql.org/docs/current/errcodes-appendix.html
+	typeAssertionFailed = "type assertion failed"
+	unexpectedOperation = "unexpected operation"
 )
 
-var writeLoopParams = Params{
-	IntermediateStateNodes:   true,
-	IntermediateStorageNodes: true,
-	IncludeBlock:             true,
-	IncludeReceipts:          true,
-	IncludeTD:                true,
-	IncludeCode:              true,
+var writeLoopParams = ParamsWithMutex{
+	Params: Params{
+		IntermediateStateNodes:   true,
+		IntermediateStorageNodes: true,
+		IncludeBlock:             true,
+		IncludeReceipts:          true,
+		IncludeTD:                true,
+		IncludeCode:              true,
+	},
 }
 
 var statediffMetrics = RegisterStatediffMetrics(metrics.DefaultRegistry)
 
 type blockChain interface {
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
+	CurrentBlock() *types.Block
 	GetBlockByHash(hash common.Hash) *types.Block
 	GetBlockByNumber(number uint64) *types.Block
 	GetReceiptsByHash(hash common.Hash) types.Receipts
@@ -103,6 +110,8 @@ type IService interface {
 	WriteStateDiffFor(blockHash common.Hash, params Params) error
 	// WriteLoop event loop for progressively processing and writing diffs directly to DB
 	WriteLoop(chainEventCh chan core.ChainEvent)
+	// Method to change the addresses being watched in write loop params
+	WatchAddress(operation types2.OperationType, args []types2.WatchAddressArg) error
 }
 
 // Service is the underlying struct for the state diffing service
@@ -159,6 +168,7 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	blockChain := ethServ.BlockChain()
 	var indexer interfaces.StateDiffIndexer
 	var db sql.Database
+	var err error
 	quitCh := make(chan bool)
 	if params.IndexerConfig != nil {
 		info := nodeinfo.Info{
@@ -215,6 +225,12 @@ func New(stack *node.Node, ethServ *eth.Ethereum, cfg *ethconfig.Config, params 
 	}
 	stack.RegisterLifecycle(sds)
 	stack.RegisterAPIs(sds.APIs())
+
+	err = loadWatchedAddresses(indexer)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -304,7 +320,9 @@ func (sds *Service) WriteLoop(chainEventCh chan core.ChainEvent) {
 func (sds *Service) writeGenesisStateDiff(currBlock *types.Block, workerId uint) {
 	// For genesis block we need to return the entire state trie hence we diff it with an empty trie.
 	log.Info("Writing state diff", "block height", genesisBlockNumber, "worker", workerId)
-	err := sds.writeStateDiffWithRetry(currBlock, common.Hash{}, writeLoopParams)
+	writeLoopParams.RLock()
+	err := sds.writeStateDiffWithRetry(currBlock, common.Hash{}, writeLoopParams.Params)
+	writeLoopParams.RUnlock()
 	if err != nil {
 		log.Error("statediff.Service.WriteLoop: processing error", "block height",
 			genesisBlockNumber, "error", err.Error(), "worker", workerId)
@@ -341,7 +359,9 @@ func (sds *Service) writeLoopWorker(params workerParams) {
 			}
 
 			log.Info("Writing state diff", "block height", currentBlock.Number().Uint64(), "worker", params.id)
-			err := sds.writeStateDiffWithRetry(currentBlock, parentBlock.Root(), writeLoopParams)
+			writeLoopParams.RLock()
+			err := sds.writeStateDiffWithRetry(currentBlock, parentBlock.Root(), writeLoopParams.Params)
+			writeLoopParams.RUnlock()
 			if err != nil {
 				log.Error("statediff.Service.WriteLoop: processing error", "block height", currentBlock.Number().Uint64(), "error", err.Error(), "worker", params.id)
 				sds.KnownGaps.errorState = true
@@ -456,6 +476,10 @@ func (sds *Service) streamStateDiff(currentBlock *types.Block, parentRoot common
 func (sds *Service) StateDiffAt(blockNumber uint64, params Params) (*Payload, error) {
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	log.Info("sending state diff", "block height", blockNumber)
+
+	// compute leaf keys of watched addresses in the params
+	params.ComputeWatchedAddressesLeafKeys()
+
 	if blockNumber == 0 {
 		return sds.processStateDiff(currentBlock, common.Hash{}, params)
 	}
@@ -468,6 +492,10 @@ func (sds *Service) StateDiffAt(blockNumber uint64, params Params) (*Payload, er
 func (sds *Service) StateDiffFor(blockHash common.Hash, params Params) (*Payload, error) {
 	currentBlock := sds.BlockChain.GetBlockByHash(blockHash)
 	log.Info("sending state diff", "block hash", blockHash)
+
+	// compute leaf keys of watched addresses in the params
+	params.ComputeWatchedAddressesLeafKeys()
+
 	if currentBlock.NumberU64() == 0 {
 		return sds.processStateDiff(currentBlock, common.Hash{}, params)
 	}
@@ -526,6 +554,10 @@ func (sds *Service) newPayload(stateObject []byte, block *types.Block, params Pa
 func (sds *Service) StateTrieAt(blockNumber uint64, params Params) (*Payload, error) {
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	log.Info("sending state trie", "block height", blockNumber)
+
+	// compute leaf keys of watched addresses in the params
+	params.ComputeWatchedAddressesLeafKeys()
+
 	return sds.processStateTrie(currentBlock, params)
 }
 
@@ -548,6 +580,10 @@ func (sds *Service) Subscribe(id rpc.ID, sub chan<- Payload, quitChan chan<- boo
 	if atomic.CompareAndSwapInt32(&sds.subscribers, 0, 1) {
 		log.Info("State diffing subscription received; beginning statediff processing")
 	}
+
+	// compute leaf keys of watched addresses in the params
+	params.ComputeWatchedAddressesLeafKeys()
+
 	// Subscription type is defined as the hash of the rlp-serialized subscription params
 	by, err := rlp.EncodeToBytes(params)
 	if err != nil {
@@ -644,7 +680,7 @@ func (sds *Service) Start() error {
 	go sds.Loop(chainEventCh)
 
 	if sds.enableWriteLoop {
-		log.Info("Starting statediff DB write loop", "params", writeLoopParams)
+		log.Info("Starting statediff DB write loop", "params", writeLoopParams.Params)
 		chainEventCh := make(chan core.ChainEvent, chainEventChanSize)
 		go sds.WriteLoop(chainEventCh)
 	}
@@ -741,6 +777,9 @@ func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- typ
 // This operation cannot be performed back past the point of db pruning; it requires an archival node
 // for historical data
 func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
+	// compute leaf keys of watched addresses in the params
+	params.ComputeWatchedAddressesLeafKeys()
+
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	parentRoot := common.Hash{}
 	if blockNumber != 0 {
@@ -754,6 +793,9 @@ func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
 // This operation cannot be performed back past the point of db pruning; it requires an archival node
 // for historical data
 func (sds *Service) WriteStateDiffFor(blockHash common.Hash, params Params) error {
+	// compute leaf keys of watched addresses in the params
+	params.ComputeWatchedAddressesLeafKeys()
+
 	currentBlock := sds.BlockChain.GetBlockByHash(blockHash)
 	parentRoot := common.Hash{}
 	if currentBlock.NumberU64() != 0 {
@@ -820,4 +862,131 @@ func (sds *Service) writeStateDiffWithRetry(block *types.Block, parentRoot commo
 		break
 	}
 	return err
+}
+
+// Performs one of following operations on the watched addresses in writeLoopParams and the db:
+// add | remove | set | clear
+func (sds *Service) WatchAddress(operation types2.OperationType, args []types2.WatchAddressArg) error {
+	// lock writeLoopParams for a write
+	writeLoopParams.Lock()
+	defer writeLoopParams.Unlock()
+
+	// get the current block number
+	currentBlockNumber := sds.BlockChain.CurrentBlock().Number()
+
+	switch operation {
+	case types2.Add:
+		// filter out args having an already watched address with a warning
+		filteredArgs, ok := funk.Filter(args, func(arg types2.WatchAddressArg) bool {
+			if funk.Contains(writeLoopParams.WatchedAddresses, common.HexToAddress(arg.Address)) {
+				log.Warn("Address already being watched", "address", arg.Address)
+				return false
+			}
+			return true
+		}).([]types2.WatchAddressArg)
+		if !ok {
+			return fmt.Errorf("add: filtered args %s", typeAssertionFailed)
+		}
+
+		// get addresses from the filtered args
+		filteredAddresses, err := MapWatchAddressArgsToAddresses(filteredArgs)
+		if err != nil {
+			return fmt.Errorf("add: filtered addresses %s", err.Error())
+		}
+
+		// update the db
+		err = sds.indexer.InsertWatchedAddresses(filteredArgs, currentBlockNumber)
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		writeLoopParams.WatchedAddresses = append(writeLoopParams.WatchedAddresses, filteredAddresses...)
+		funk.ForEach(filteredAddresses, func(address common.Address) {
+			writeLoopParams.watchedAddressesLeafKeys[crypto.Keccak256Hash(address.Bytes())] = struct{}{}
+		})
+	case types2.Remove:
+		// get addresses from args
+		argAddresses, err := MapWatchAddressArgsToAddresses(args)
+		if err != nil {
+			return fmt.Errorf("remove: mapped addresses %s", err.Error())
+		}
+
+		// remove the provided addresses from currently watched addresses
+		addresses, ok := funk.Subtract(writeLoopParams.WatchedAddresses, argAddresses).([]common.Address)
+		if !ok {
+			return fmt.Errorf("remove: filtered addresses %s", typeAssertionFailed)
+		}
+
+		// update the db
+		err = sds.indexer.RemoveWatchedAddresses(args)
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		writeLoopParams.WatchedAddresses = addresses
+		funk.ForEach(argAddresses, func(address common.Address) {
+			delete(writeLoopParams.watchedAddressesLeafKeys, crypto.Keccak256Hash(address.Bytes()))
+		})
+	case types2.Set:
+		// get addresses from args
+		argAddresses, err := MapWatchAddressArgsToAddresses(args)
+		if err != nil {
+			return fmt.Errorf("set: mapped addresses %s", err.Error())
+		}
+
+		// update the db
+		err = sds.indexer.SetWatchedAddresses(args, currentBlockNumber)
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		writeLoopParams.WatchedAddresses = argAddresses
+		writeLoopParams.ComputeWatchedAddressesLeafKeys()
+	case types2.Clear:
+		// update the db
+		err := sds.indexer.ClearWatchedAddresses()
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		writeLoopParams.WatchedAddresses = []common.Address{}
+		writeLoopParams.ComputeWatchedAddressesLeafKeys()
+
+	default:
+		return fmt.Errorf("%s %s", unexpectedOperation, operation)
+	}
+
+	return nil
+}
+
+// loadWatchedAddresses loads watched addresses to in-memory write loop params
+func loadWatchedAddresses(indexer interfaces.StateDiffIndexer) error {
+	watchedAddresses, err := indexer.LoadWatchedAddresses()
+	if err != nil {
+		return err
+	}
+
+	writeLoopParams.Lock()
+	defer writeLoopParams.Unlock()
+
+	writeLoopParams.WatchedAddresses = watchedAddresses
+	writeLoopParams.ComputeWatchedAddressesLeafKeys()
+
+	return nil
+}
+
+// MapWatchAddressArgsToAddresses maps []WatchAddressArg to corresponding []common.Address
+func MapWatchAddressArgsToAddresses(args []types2.WatchAddressArg) ([]common.Address, error) {
+	addresses, ok := funk.Map(args, func(arg types2.WatchAddressArg) common.Address {
+		return common.HexToAddress(arg.Address)
+	}).([]common.Address)
+	if !ok {
+		return nil, fmt.Errorf(typeAssertionFailed)
+	}
+
+	return addresses, nil
 }

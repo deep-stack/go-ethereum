@@ -496,3 +496,28 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(batch interfaces.Batch, codeAnd
 func (sdi *StateDiffIndexer) Close() error {
 	return sdi.dump.Close()
 }
+
+// LoadWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
+func (sdi *StateDiffIndexer) LoadWatchedAddresses() ([]common.Address, error) {
+	return nil, nil
+}
+
+// InsertWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
+func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+	return nil
+}
+
+// RemoveWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
+func (sdi *StateDiffIndexer) RemoveWatchedAddresses(args []sdtypes.WatchAddressArg) error {
+	return nil
+}
+
+// SetWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
+func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+	return nil
+}
+
+// ClearWatchedAddresses satisfies the interfaces.StateDiffIndexer interface
+func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
+	return nil
+}

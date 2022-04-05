@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
@@ -32,6 +33,14 @@ type StateDiffIndexer interface {
 	PushStateNode(tx Batch, stateNode sdtypes.StateNode, headerID string) error
 	PushCodeAndCodeHash(tx Batch, codeAndCodeHash sdtypes.CodeAndCodeHash) error
 	ReportDBMetrics(delay time.Duration, quit <-chan bool)
+
+	// Methods used by WatchAddress API/functionality
+	LoadWatchedAddresses() ([]common.Address, error)
+	InsertWatchedAddresses(addresses []sdtypes.WatchAddressArg, currentBlock *big.Int) error
+	RemoveWatchedAddresses(addresses []sdtypes.WatchAddressArg) error
+	SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error
+	ClearWatchedAddresses() error
+
 	io.Closer
 }
 
