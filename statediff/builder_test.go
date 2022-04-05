@@ -74,10 +74,6 @@ var (
 		common.Hex2Bytes("32575a0e9e593c00f959f8c92f12db2869c3395a3b0502d05e2516446f71f85b"),
 		slot3StorageValue,
 	})
-	slot0StorageLeafRootNode, _ = rlp.EncodeToBytes([]interface{}{
-		common.Hex2Bytes("20290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"),
-		slot0StorageValue,
-	})
 
 	contractAccountAtBlock2, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    1,
@@ -113,7 +109,7 @@ var (
 		Nonce:    1,
 		Balance:  big.NewInt(0),
 		CodeHash: common.HexToHash("0xaaea5efba4fd7b45d7ec03918ac5d8b31aa93b48986af0e6b591f0f087c80127").Bytes(),
-		Root:     crypto.Keccak256Hash(slot0StorageLeafRootNode),
+		Root:     crypto.Keccak256Hash(block5StorageBranchRootNode),
 	})
 	contractAccountAtBlock5LeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("3114658a74d9cc9f7acf2c5cd696c3494d7c344d78bfec3add0d91ec4e8d1c45"),
@@ -163,7 +159,7 @@ var (
 	})
 	account1AtBlock5, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    2,
-		Balance:  big.NewInt(2999566008847709960),
+		Balance:  big.NewInt(2999586469962854280),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
@@ -173,7 +169,7 @@ var (
 	})
 	account1AtBlock6, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    3,
-		Balance:  big.NewInt(2999537516847709960),
+		Balance:  big.NewInt(2999557977962854280),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
@@ -214,7 +210,7 @@ var (
 	})
 	account2AtBlock6, _ = rlp.EncodeToBytes(types.StateAccount{
 		Nonce:    0,
-		Balance:  big.NewInt(6000063293259748636),
+		Balance:  big.NewInt(6000063258066544204),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
@@ -278,8 +274,8 @@ var (
 		bankAccountAtBlock4,
 	})
 	bankAccountAtBlock5, _ = rlp.EncodeToBytes(types.StateAccount{
-		Nonce:    7,
-		Balance:  big.NewInt(999805027999990000),
+		Nonce:    8,
+		Balance:  big.NewInt(999761283999990000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
@@ -455,6 +451,25 @@ var (
 		[]byte{},
 		[]byte{},
 		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+	})
+	block5StorageBranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+		[]byte{},
+		[]byte{},
+		crypto.Keccak256(slot0StorageLeafNode),
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		crypto.Keccak256(slot3StorageLeafNode),
 		[]byte{},
 		[]byte{},
 		[]byte{},
@@ -1272,15 +1287,14 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 						StorageNodes: []types2.StorageNode{
 							{
 								Path:      []byte{},
-								NodeType:  types2.Leaf,
-								NodeValue: slot0StorageLeafRootNode,
-								LeafKey:   slot0StorageKey.Bytes(),
+								NodeType:  types2.Branch,
+								NodeValue: block5StorageBranchRootNode,
 							},
 							{
-								Path:      []byte{'\x02'},
-								NodeType:  types2.Removed,
-								LeafKey:   slot0StorageKey.Bytes(),
-								NodeValue: []byte{},
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Leaf,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: slot3StorageLeafNode,
 							},
 							{
 								Path:      []byte{'\x04'},
@@ -1319,11 +1333,29 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 						StorageNodes: emptyStorage,
 					},
 					{
-						Path:         []byte{'\x06'},
-						NodeType:     types2.Removed,
-						LeafKey:      contractLeafKey,
-						NodeValue:    []byte{},
-						StorageNodes: emptyStorage,
+						Path:      []byte{'\x06'},
+						NodeType:  types2.Removed,
+						LeafKey:   contractLeafKey,
+						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{},
+								NodeType:  types2.Removed,
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x02'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot0StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+						},
 					},
 					{
 						Path:         []byte{'\x0c'},
@@ -1467,16 +1499,10 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 						NodeValue: contractAccountAtBlock5LeafNode,
 						StorageNodes: []types2.StorageNode{
 							{
-								Path:      []byte{},
+								Path:      []byte{'\x0c'},
 								NodeType:  types2.Leaf,
-								LeafKey:   slot0StorageKey.Bytes(),
-								NodeValue: slot0StorageLeafRootNode,
-							},
-							{
-								Path:      []byte{'\x02'},
-								NodeType:  types2.Removed,
-								LeafKey:   slot0StorageKey.Bytes(),
-								NodeValue: []byte{},
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: slot3StorageLeafNode,
 							},
 							{
 								Path:      []byte{'\x04'},
@@ -1513,6 +1539,20 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 						NodeType:  types2.Removed,
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{'\x02'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot0StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+						},
 					},
 					{
 						Path:         []byte{'\x0c'},
@@ -1754,16 +1794,10 @@ func TestBuilderWithRemovedWatchedAccount(t *testing.T) {
 						NodeValue: contractAccountAtBlock5LeafNode,
 						StorageNodes: []types2.StorageNode{
 							{
-								Path:      []byte{},
+								Path:      []byte{'\x0c'},
 								NodeType:  types2.Leaf,
-								LeafKey:   slot0StorageKey.Bytes(),
-								NodeValue: slot0StorageLeafRootNode,
-							},
-							{
-								Path:      []byte{'\x02'},
-								NodeType:  types2.Removed,
-								LeafKey:   slot0StorageKey.Bytes(),
-								NodeValue: []byte{},
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: slot3StorageLeafNode,
 							},
 							{
 								Path:      []byte{'\x04'},
@@ -1800,6 +1834,20 @@ func TestBuilderWithRemovedWatchedAccount(t *testing.T) {
 						NodeType:  types2.Removed,
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{'\x02'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot0StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+						},
 					},
 					{
 						Path:         []byte{'\x0e'},
@@ -2019,11 +2067,26 @@ func TestBuilderWithMovedAccount(t *testing.T) {
 						NodeType:  types2.Removed,
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:     []byte{},
+								NodeType: types2.Removed,
+							},
+							{
+								Path:     []byte{'\x02'},
+								NodeType: types2.Removed,
+								LeafKey:  slot0StorageKey.Bytes(),
+							},
+							{
+								Path:     []byte{'\x0b'},
+								NodeType: types2.Removed,
+								LeafKey:  slot1StorageKey.Bytes(),
+							},
+						},
 					},
 					{
 						Path:      []byte{'\x00'},
 						NodeType:  types2.Removed,
-						LeafKey:   test_helpers.BankLeafKey,
 						NodeValue: []byte{},
 					},
 				},
@@ -2144,11 +2207,22 @@ func TestBuilderWithMovedAccountOnlyLeafs(t *testing.T) {
 						NodeType:  types2.Removed,
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:     []byte{'\x02'},
+								NodeType: types2.Removed,
+								LeafKey:  slot0StorageKey.Bytes(),
+							},
+							{
+								Path:     []byte{'\x0b'},
+								NodeType: types2.Removed,
+								LeafKey:  slot1StorageKey.Bytes(),
+							},
+						},
 					},
 					{
 						Path:      []byte{'\x00'},
 						NodeType:  types2.Removed,
-						LeafKey:   test_helpers.BankLeafKey,
 						NodeValue: []byte{},
 					},
 				},

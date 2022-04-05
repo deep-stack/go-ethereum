@@ -392,10 +392,11 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 // PushStateNode writes a state diff node object (including any child storage nodes) IPLD insert SQL stmt to a file
 func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode, headerID string) error {
 	// publish the state node
+	var stateModel models.StateNodeModel
 	if stateNode.NodeType == sdtypes.Removed {
 		// short circuit if it is a Removed node
 		// this assumes the db has been initialized and a public.blocks entry for the Removed node is present
-		stateModel := models.StateNodeModel{
+		stateModel = models.StateNodeModel{
 			HeaderID: headerID,
 			Path:     stateNode.Path,
 			StateKey: common.BytesToHash(stateNode.LeafKey).String(),
@@ -403,23 +404,24 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			MhKey:    shared.RemovedNodeMhKey,
 			NodeType: stateNode.NodeType.Int(),
 		}
-		sdi.fileWriter.upsertStateCID(stateModel)
-		return nil
+	} else {
+		stateCIDStr, stateMhKey, err := sdi.fileWriter.upsertIPLDRaw(ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
+		if err != nil {
+			return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
+		}
+		stateModel = models.StateNodeModel{
+			HeaderID: headerID,
+			Path:     stateNode.Path,
+			StateKey: common.BytesToHash(stateNode.LeafKey).String(),
+			CID:      stateCIDStr,
+			MhKey:    stateMhKey,
+			NodeType: stateNode.NodeType.Int(),
+		}
 	}
-	stateCIDStr, stateMhKey, err := sdi.fileWriter.upsertIPLDRaw(ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
-	if err != nil {
-		return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
-	}
-	stateModel := models.StateNodeModel{
-		HeaderID: headerID,
-		Path:     stateNode.Path,
-		StateKey: common.BytesToHash(stateNode.LeafKey).String(),
-		CID:      stateCIDStr,
-		MhKey:    stateMhKey,
-		NodeType: stateNode.NodeType.Int(),
-	}
+
 	// index the state node
 	sdi.fileWriter.upsertStateCID(stateModel)
+
 	// if we have a leaf, decode and index the account data
 	if stateNode.NodeType == sdtypes.Leaf {
 		var i []interface{}
@@ -443,6 +445,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		}
 		sdi.fileWriter.upsertStateAccount(accountModel)
 	}
+
 	// if there are any storage nodes associated with this node, publish and index them
 	for _, storageNode := range stateNode.StorageNodes {
 		if storageNode.NodeType == sdtypes.Removed {

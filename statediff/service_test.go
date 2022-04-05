@@ -402,7 +402,7 @@ func testGetSyncStatus(t *testing.T) {
 			t.Fatal("Sync Failed")
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 
 		// Make sure if syncStatus is false that WaitForSync has completed!
 		if !syncStatus && len(checkSyncComplete) == 0 {

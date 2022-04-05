@@ -106,13 +106,17 @@ func TestChainGen(i int, block *core.BlockGen) {
 		block.AddTx(tx3)
 	case 4:
 		// Block 5 has one tx from bankAccount to the contract, that transfers no value
-		// It sets the remaining storage value to zero
+		// It sets the one storage value to zero and the other to new value.
 		// Block 5 is mined by Account1Addr
 		block.SetCoinbase(Account1Addr)
-		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000")
+		data1 := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000")
+		data2 := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003")
 		nonce := block.TxNonce(TestBankAddress)
-		tx, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data), signer, TestBankKey)
-		block.AddTx(tx)
+		tx1, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data1), signer, TestBankKey)
+		nonce++
+		tx2, _ := types.SignTx(types.NewTransaction(nonce, ContractAddr, big.NewInt(0), 100000, big.NewInt(params.InitialBaseFee), data2), signer, TestBankKey)
+		block.AddTx(tx1)
+		block.AddTx(tx2)
 	case 5:
 		// Block 6 has a tx from Account1Key which self-destructs the contract, it transfers no value
 		// Block 6 is mined by Account2Addr
