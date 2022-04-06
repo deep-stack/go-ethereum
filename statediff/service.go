@@ -516,7 +516,7 @@ func (sds *Service) processStateDiff(currentBlock *types.Block, parentRoot commo
 	if err != nil {
 		return nil, err
 	}
-	stateDiffRlp, err := rlp.EncodeToBytes(stateDiff)
+	stateDiffRlp, err := rlp.EncodeToBytes(&stateDiff)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +566,7 @@ func (sds *Service) processStateTrie(block *types.Block, params Params) (*Payloa
 	if err != nil {
 		return nil, err
 	}
-	stateTrieRlp, err := rlp.EncodeToBytes(stateNodes)
+	stateTrieRlp, err := rlp.EncodeToBytes(&stateNodes)
 	if err != nil {
 		return nil, err
 	}
@@ -585,7 +585,7 @@ func (sds *Service) Subscribe(id rpc.ID, sub chan<- Payload, quitChan chan<- boo
 	params.ComputeWatchedAddressesLeafKeys()
 
 	// Subscription type is defined as the hash of the rlp-serialized subscription params
-	by, err := rlp.EncodeToBytes(params)
+	by, err := rlp.EncodeToBytes(&params)
 	if err != nil {
 		log.Error("State diffing params need to be rlp-serializable")
 		return

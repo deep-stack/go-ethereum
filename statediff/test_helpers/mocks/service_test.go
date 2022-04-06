@@ -40,33 +40,33 @@ var (
 	emptyStorage   = make([]sdtypes.StorageNode, 0)
 	block0, block1 *types.Block
 	minerLeafKey   = test_helpers.AddressToLeafKey(common.HexToAddress("0x0"))
-	account1, _    = rlp.EncodeToBytes(types.StateAccount{
+	account1, _    = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    uint64(0),
 		Balance:  big.NewInt(10000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
 		Root:     common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	})
-	account1LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account1LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3926db69aaced518e9b9f0f434a473e7174109c943548bb8f23be41ca76d9ad2"),
 		account1,
 	})
-	minerAccount, _ = rlp.EncodeToBytes(types.StateAccount{
+	minerAccount, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    uint64(0),
 		Balance:  big.NewInt(2000002625000000000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
 		Root:     common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	})
-	minerAccountLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	minerAccountLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3380c7b7ae81a58eb98d9c78de4a1fd7fd9535fc953ed2be602daaa41767312a"),
 		minerAccount,
 	})
-	bankAccount, _ = rlp.EncodeToBytes(types.StateAccount{
+	bankAccount, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    uint64(1),
 		Balance:  big.NewInt(1999978999999990000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
 		Root:     common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	})
-	bankAccountLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccount,
 	})
@@ -97,12 +97,12 @@ func testSubscriptionAPI(t *testing.T) {
 	defer chain.Stop()
 	block0 = test_helpers.Genesis
 	block1 = blocks[0]
-	expectedBlockRlp, _ := rlp.EncodeToBytes(block1)
+	expectedBlockRlp, _ := rlp.EncodeToBytes(&block1)
 	mockReceipt := &types.Receipt{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
 	}
-	expectedReceiptBytes, _ := rlp.EncodeToBytes(types.Receipts{mockReceipt})
+	expectedReceiptBytes, _ := rlp.EncodeToBytes(&types.Receipts{mockReceipt})
 	expectedStateDiff := sdtypes.StateObject{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
@@ -130,7 +130,7 @@ func testSubscriptionAPI(t *testing.T) {
 			},
 		},
 	}
-	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
+	expectedStateDiffBytes, _ := rlp.EncodeToBytes(&expectedStateDiff)
 
 	blockChan := make(chan *types.Block)
 	parentBlockChain := make(chan *types.Block)
@@ -189,12 +189,12 @@ func testHTTPAPI(t *testing.T) {
 	defer chain.Stop()
 	block0 = test_helpers.Genesis
 	block1 = blocks[0]
-	expectedBlockRlp, _ := rlp.EncodeToBytes(block1)
+	expectedBlockRlp, _ := rlp.EncodeToBytes(&block1)
 	mockReceipt := &types.Receipt{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
 	}
-	expectedReceiptBytes, _ := rlp.EncodeToBytes(types.Receipts{mockReceipt})
+	expectedReceiptBytes, _ := rlp.EncodeToBytes(&types.Receipts{mockReceipt})
 	expectedStateDiff := sdtypes.StateObject{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
@@ -222,7 +222,7 @@ func testHTTPAPI(t *testing.T) {
 			},
 		},
 	}
-	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
+	expectedStateDiffBytes, _ := rlp.EncodeToBytes(&expectedStateDiff)
 	mockBlockChain := &BlockChain{}
 	mockBlockChain.SetBlocksForHashes(map[common.Hash]*types.Block{
 		block0.Hash(): block0,

@@ -102,7 +102,7 @@ func FromBlockJSON(r io.Reader) (*EthHeader, []*EthTx, []*EthTxTrie, error) {
 		return nil, nil, nil, err
 	}
 
-	headerRawData := getRLP(obj.Result.Header)
+	headerRawData := getRLP(&obj.Result.Header)
 	c, err := RawdataToCid(MEthHeader, headerRawData, multihash.KECCAK_256)
 	if err != nil {
 		return nil, nil, nil, err
