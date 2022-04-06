@@ -50,18 +50,18 @@ var (
 	emptyStorage                                               = make([]sdtypes.StorageNode, 0)
 
 	// block 1 data
-	block1CoinbaseAccount, _ = rlp.EncodeToBytes(types.StateAccount{
+	block1CoinbaseAccount, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(5000000000000000000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	block1CoinbaseLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	block1CoinbaseLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("38251692195afc818c92b485fcb8a4691af89cbe5a2ab557b83a4261be2a9a"),
 		block1CoinbaseAccount,
 	})
 	block1CoinbaseLeafNodeHash = crypto.Keccak256(block1CoinbaseLeafNode)
-	block1x040bBranchNode, _   = rlp.EncodeToBytes([]interface{}{
+	block1x040bBranchNode, _   = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("cc947d5ebb80600bad471f12c6ad5e4981e3525ecf8a2d982cc032536ae8b66d"),
 		common.Hex2Bytes("e80e52462e635a834e90e86ccf7673a6430384aac17004d626f4db831f0624bc"),
 		common.Hex2Bytes("59a8f11f60cb0a8488831f242da02944a26fd269d0608a44b8b873ded9e59e1b"),
@@ -81,7 +81,7 @@ var (
 		[]byte{},
 	})
 	block1x040bBranchNodeHash = crypto.Keccak256(block1x040bBranchNode)
-	block1x04BranchNode, _    = rlp.EncodeToBytes([]interface{}{
+	block1x04BranchNode, _    = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("a9317a59365ca09cefcd384018696590afffc432e35a97e8f85aa48907bf3247"),
 		common.Hex2Bytes("e0bc229254ce7a6a736c3953e570ab18b4a7f5f2a9aa3c3057b5f17d250a1cad"),
 		common.Hex2Bytes("a2484ec8884dbe0cf24ece99d67df0d1fe78992d67cc777636a817cb2ef205aa"),
@@ -101,7 +101,7 @@ var (
 		[]byte{},
 	})
 	block1x04BranchNodeHash = crypto.Keccak256(block1x04BranchNode)
-	block1RootBranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block1RootBranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("90dcaf88c40c7bbc95a912cbdde67c175767b31173df9ee4b0d733bfdd511c43"),
 		common.Hex2Bytes("babe369f6b12092f49181ae04ca173fb68d1a5456f18d20fa32cba73954052bd"),
 		common.Hex2Bytes("473ecf8a7e36a829e75039a3b055e51b8332cbf03324ab4af2066bbd6fbf0021"),
@@ -122,30 +122,30 @@ var (
 	})
 
 	// block 2 data
-	block2CoinbaseAccount, _ = rlp.EncodeToBytes(types.StateAccount{
+	block2CoinbaseAccount, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(5000000000000000000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	block2CoinbaseLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	block2CoinbaseLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("20679cbcf198c1741a6f4e4473845659a30caa8b26f8d37a0be2e2bc0d8892"),
 		block2CoinbaseAccount,
 	})
 	block2CoinbaseLeafNodeHash   = crypto.Keccak256(block2CoinbaseLeafNode)
 	block2MovedPremineBalance, _ = new(big.Int).SetString("4000000000000000000000", 10)
-	block2MovedPremineAccount, _ = rlp.EncodeToBytes(types.StateAccount{
+	block2MovedPremineAccount, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  block2MovedPremineBalance,
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	block2MovedPremineLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	block2MovedPremineLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("20f2e24db7943eab4415f99e109698863b0fecca1cf9ffc500f38cefbbe29e"),
 		block2MovedPremineAccount,
 	})
 	block2MovedPremineLeafNodeHash = crypto.Keccak256(block2MovedPremineLeafNode)
-	block2x00080dBranchNode, _     = rlp.EncodeToBytes([]interface{}{
+	block2x00080dBranchNode, _     = rlp.EncodeToBytes(&[]interface{}{
 		block2MovedPremineLeafNodeHash,
 		[]byte{},
 		[]byte{},
@@ -165,7 +165,7 @@ var (
 		[]byte{},
 	})
 	block2x00080dBranchNodeHash = crypto.Keccak256(block2x00080dBranchNode)
-	block2x0008BranchNode, _    = rlp.EncodeToBytes([]interface{}{
+	block2x0008BranchNode, _    = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("def97a26f824fc3911cf7f8c41dfc9bc93cc36ae2248de22ecae01d6950b2dc9"),
 		common.Hex2Bytes("234a575e2c5badab8de0f6515b6723195323a0562fbe1316255888637043f1c1"),
 		common.Hex2Bytes("29659740af1c23306ee8f8294c71a5632ace8c80b1eb61cfdf7022f47ff52305"),
@@ -185,7 +185,7 @@ var (
 		[]byte{},
 	})
 	block2x0008BranchNodeHash = crypto.Keccak256(block2x0008BranchNode)
-	block2x00BranchNode, _    = rlp.EncodeToBytes([]interface{}{
+	block2x00BranchNode, _    = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("e45a9e85cab1b6eb18b30df2c6acc448bbac6a30d81646823b31223e16e5063e"),
 		common.Hex2Bytes("33bd7171d556b981f6849064eb09412b24fedc0812127db936067043f53db1b9"),
 		common.Hex2Bytes("ca56945f074da4f15587404593faf3a50d17ea0e21a418ad6ec99bdf4bf3f914"),
@@ -205,7 +205,7 @@ var (
 		[]byte{},
 	})
 	block2x00BranchNodeHash = crypto.Keccak256(block2x00BranchNode)
-	block2RootBranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block2RootBranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		block2x00BranchNodeHash,
 		common.Hex2Bytes("babe369f6b12092f49181ae04ca173fb68d1a5456f18d20fa32cba73954052bd"),
 		common.Hex2Bytes("473ecf8a7e36a829e75039a3b055e51b8332cbf03324ab4af2066bbd6fbf0021"),
@@ -228,45 +228,45 @@ var (
 	// block3 data
 	// path 060e0f
 	blcok3CoinbaseBalance, _ = new(big.Int).SetString("5156250000000000000", 10)
-	block3CoinbaseAccount, _ = rlp.EncodeToBytes(types.StateAccount{
+	block3CoinbaseAccount, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  blcok3CoinbaseBalance,
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	block3CoinbaseLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3CoinbaseLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3a174f00e64521a535f35e67c1aa241951c791639b2f3d060f49c5d9fa8b9e"),
 		block3CoinbaseAccount,
 	})
 	block3CoinbaseLeafNodeHash = crypto.Keccak256(block3CoinbaseLeafNode)
 	// path 0c0e050703
 	block3MovedPremineBalance1, _ = new(big.Int).SetString("3750000000000000000", 10)
-	block3MovedPremineAccount1, _ = rlp.EncodeToBytes(types.StateAccount{
+	block3MovedPremineAccount1, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  block3MovedPremineBalance1,
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	block3MovedPremineLeafNode1, _ = rlp.EncodeToBytes([]interface{}{
+	block3MovedPremineLeafNode1, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3ced93917e658d10e2d9009470dad72b63c898d173721194a12f2ae5e190"), // ce573ced93917e658d10e2d9009470dad72b63c898d173721194a12f2ae5e190
 		block3MovedPremineAccount1,
 	})
 	block3MovedPremineLeafNodeHash1 = crypto.Keccak256(block3MovedPremineLeafNode1)
 	// path 0c0e050708
 	block3MovedPremineBalance2, _ = new(big.Int).SetString("1999944000000000000000", 10)
-	block3MovedPremineAccount2, _ = rlp.EncodeToBytes(types.StateAccount{
+	block3MovedPremineAccount2, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  block3MovedPremineBalance2,
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	block3MovedPremineLeafNode2, _ = rlp.EncodeToBytes([]interface{}{
+	block3MovedPremineLeafNode2, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("33bc1e69eedf90f402e11f6862da14ed8e50156635a04d6393bbae154012"), // ce5783bc1e69eedf90f402e11f6862da14ed8e50156635a04d6393bbae154012
 		block3MovedPremineAccount2,
 	})
 	block3MovedPremineLeafNodeHash2 = crypto.Keccak256(block3MovedPremineLeafNode2)
 
-	block3x0c0e0507BranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3x0c0e0507BranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		[]byte{},
 		[]byte{},
 		[]byte{},
@@ -287,7 +287,7 @@ var (
 	})
 	block3x0c0e0507BranchNodeHash = crypto.Keccak256(block3x0c0e0507BranchNode)
 
-	block3x0c0e05BranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3x0c0e05BranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("452e3beb503b1d87ae7c672b98a8e3fd043a671405502562ae1043dc97151a50"),
 		[]byte{},
 		common.Hex2Bytes("2f5bb16f77086f67ce8c4258cb9061cb299e597b2ad4ad6d7ccc474d6d88e85e"),
@@ -308,7 +308,7 @@ var (
 	})
 	block3x0c0e05BranchNodeHash = crypto.Keccak256(block3x0c0e05BranchNode)
 
-	block3x060eBranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3x060eBranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("94d77c7c30b88829c9989948b206cda5e532b38b49534261c517aebf4a3e6fdb"),
 		common.Hex2Bytes("a5cf57a50da8204964e834a12a53f9bed7afc9b700a4a81b440122d60c7603a7"),
 		[]byte{},
@@ -329,7 +329,7 @@ var (
 	})
 	block3x060eBranchNodeHash = crypto.Keccak256(block3x060eBranchNode)
 
-	block3x0c0eBranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3x0c0eBranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("70647f11b2b995d718f9e8aceb44c8839e0055641930d216fa6090280a9d63d5"),
 		common.Hex2Bytes("fdfb17cd2fba2a14219981cb7886a1977cd85dbef5c767c562f4a5f547febff0"),
 		common.Hex2Bytes("ff87313253ec6f860142b7bf62efb4cb07ea668c57aa90cbe9ef22b72fee15c7"),
@@ -350,7 +350,7 @@ var (
 	})
 	block3x0c0eBranchNodeHash = crypto.Keccak256(block3x0c0eBranchNode)
 
-	block3x06BranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3x06BranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("68f7ff8c074d6e4cccd55b5b1c2116a6dd7047d4332090e6db8839362991b0ae"),
 		common.Hex2Bytes("c446eb4377c750701374c56e50759e6ba68b7adf4d543e718c8b28a99ae3b6ad"),
 		common.Hex2Bytes("ef2c49ec64cb65eae0d99684e74c8af2bd0206c9a0214d9d3eddf0881dd8412a"),
@@ -371,7 +371,7 @@ var (
 	})
 	block3x06BranchNodeHash = crypto.Keccak256(block3x06BranchNode)
 
-	block3x0cBranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3x0cBranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("dae48f5b47930c28bb116fbd55e52cd47242c71bf55373b55eb2805ee2e4a929"),
 		common.Hex2Bytes("0f1f37f337ec800e2e5974e2e7355f10f1a4832b39b846d916c3597a460e0676"),
 		common.Hex2Bytes("da8f627bb8fbeead17b318e0a8e4f528db310f591bb6ab2deda4a9f7ca902ab5"),
@@ -392,7 +392,7 @@ var (
 	})
 	block3x0cBranchNodeHash = crypto.Keccak256(block3x0cBranchNode)
 
-	block3RootBranchNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3RootBranchNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("f646da473c426e79f1c796b00d4873f47de1dbe1c9d19d63993a05eeb8b4041d"),
 		common.Hex2Bytes("babe369f6b12092f49181ae04ca173fb68d1a5456f18d20fa32cba73954052bd"),
 		common.Hex2Bytes("473ecf8a7e36a829e75039a3b055e51b8332cbf03324ab4af2066bbd6fbf0021"),
@@ -675,7 +675,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
+		expectedStateDiffRlp, err := rlp.EncodeToBytes(&test.expected)
 		if err != nil {
 			t.Error(err)
 		}

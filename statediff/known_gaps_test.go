@@ -166,8 +166,8 @@ func testFindAndUpdateGaps(t *testing.T, wipeDbBeforeStart bool) {
 	startBlock := big.NewInt(0)
 	endBlock := big.NewInt(0)
 
-	startBlock.Add(latestBlockInDb, gapDifference)
-	endBlock.Sub(latestBlockOnChain, gapDifference)
+	startBlock.Add(latestBlockInDb, expectedDifference)
+	endBlock.Sub(latestBlockOnChain, expectedDifference)
 	validateUpsert(t, service, startBlock.Int64(), endBlock.Int64())
 
 }

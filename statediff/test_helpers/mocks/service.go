@@ -156,7 +156,7 @@ func (sds *MockStateDiffService) processStateDiff(currentBlock *types.Block, par
 	if err != nil {
 		return nil, err
 	}
-	stateDiffRlp, err := rlp.EncodeToBytes(stateDiff)
+	stateDiffRlp, err := rlp.EncodeToBytes(&stateDiff)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params statedif
 	if err != nil {
 		return nil, err
 	}
-	stateTrieRlp, err := rlp.EncodeToBytes(stateNodes)
+	stateTrieRlp, err := rlp.EncodeToBytes(&stateNodes)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params statedif
 // Subscribe is used by the API to subscribe to the service loop
 func (sds *MockStateDiffService) Subscribe(id rpc.ID, sub chan<- statediff.Payload, quitChan chan<- bool, params statediff.Params) {
 	// Subscription type is defined as the hash of the rlp-serialized subscription params
-	by, err := rlp.EncodeToBytes(params)
+	by, err := rlp.EncodeToBytes(&params)
 	if err != nil {
 		return
 	}

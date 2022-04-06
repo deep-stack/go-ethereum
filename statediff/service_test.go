@@ -130,11 +130,11 @@ func testErrorInChainEventLoop(t *testing.T) {
 		t.Logf("Actual number of payloads does not equal expected.\nactual: %+v\nexpected: 3", len(payloads))
 	}
 
-	testReceipts1Rlp, err := rlp.EncodeToBytes(testReceipts1)
+	testReceipts1Rlp, err := rlp.EncodeToBytes(&testReceipts1)
 	if err != nil {
 		t.Error(err)
 	}
-	testReceipts2Rlp, err := rlp.EncodeToBytes(testReceipts2)
+	testReceipts2Rlp, err := rlp.EncodeToBytes(&testReceipts2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -227,11 +227,11 @@ func testErrorInStateDiffAt(t *testing.T) {
 		BlockNumber: testBlock1.Number(),
 		BlockHash:   testBlock1.Hash(),
 	}
-	expectedStateDiffRlp, err := rlp.EncodeToBytes(mockStateDiff)
+	expectedStateDiffRlp, err := rlp.EncodeToBytes(&mockStateDiff)
 	if err != nil {
 		t.Error(err)
 	}
-	expectedReceiptsRlp, err := rlp.EncodeToBytes(testReceipts1)
+	expectedReceiptsRlp, err := rlp.EncodeToBytes(&testReceipts1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -244,7 +244,7 @@ func testErrorInStateDiffAt(t *testing.T) {
 		ReceiptsRlp:    expectedReceiptsRlp,
 		BlockRlp:       expectedBlockRlp,
 	}
-	expectedStateDiffPayloadRlp, err := rlp.EncodeToBytes(expectedStateDiffPayload)
+	expectedStateDiffPayloadRlp, err := rlp.EncodeToBytes(&expectedStateDiffPayload)
 	if err != nil {
 		t.Error(err)
 	}

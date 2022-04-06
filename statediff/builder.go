@@ -36,7 +36,7 @@ import (
 
 var (
 	nullHashBytes     = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-	emptyNode, _      = rlp.EncodeToBytes([]byte{})
+	emptyNode, _      = rlp.EncodeToBytes(&[]byte{})
 	emptyContractRoot = crypto.Keccak256Hash(emptyNode)
 	nullCodeHash      = crypto.Keccak256Hash([]byte{}).Bytes()
 )
