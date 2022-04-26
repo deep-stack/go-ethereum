@@ -3,10 +3,13 @@ version: "3.2"
 services:
   ipld-eth-db:
     restart: always
-    image: vulcanize/ipld-eth-db:v3.2.0
+    # image: vulcanize/ipld-eth-db:v3.2.0
+    build:
+      context: https://github.com/vulcanize/ipld-eth-db.git#sharding
+      dockerfile: Dockerfile
     environment:
       POSTGRES_USER: "vdbm"
-      POSTGRES_DB: "vulcanize_testing_v3"
+      POSTGRES_DB: "vulcanize_testing_v4"
       POSTGRES_PASSWORD: "password"
     volumes:
       - geth_node:/var/lib/postgresql/data
