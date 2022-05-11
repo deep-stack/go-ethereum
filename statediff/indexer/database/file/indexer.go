@@ -17,6 +17,7 @@
 package file
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -29,6 +30,8 @@ import (
 	"github.com/ipfs/go-cid"
 	node "github.com/ipfs/go-ipld-format"
 	"github.com/multiformats/go-multihash"
+	pg_query "github.com/pganalyze/pg_query_go/v2"
+	"github.com/thoas/go-funk"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -45,6 +48,9 @@ import (
 )
 
 const defaultFilePath = "./statediff.sql"
+const defaultWatchedAddressesFilePath = "./statediff-watched-addresses.sql"
+
+const watchedAddressesInsert = "INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ('%s', '%d', '%d') ON CONFLICT (address) DO NOTHING;"
 
 var _ interfaces.StateDiffIndexer = &StateDiffIndexer{}
 
@@ -60,6 +66,8 @@ type StateDiffIndexer struct {
 	wg               *sync.WaitGroup
 	blockNumber      string
 	removedCacheFlag *uint32
+
+	watchedAddressesFilePath string
 }
 
 // NewStateDiffIndexer creates a void implementation of interfaces.StateDiffIndexer
@@ -76,15 +84,23 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 		return nil, fmt.Errorf("unable to create file (%s), err: %v", filePath, err)
 	}
 	log.Info("Writing statediff SQL statements to file", "file", filePath)
+
+	watchedAddressesFilePath := config.WatchedAddressesFilePath
+	if watchedAddressesFilePath == "" {
+		watchedAddressesFilePath = defaultWatchedAddressesFilePath
+	}
+	log.Info("Writing watched addresses SQL statements to file", "file", watchedAddressesFilePath)
+
 	w := NewSQLWriter(file)
 	wg := new(sync.WaitGroup)
 	w.Loop()
 	w.upsertNode(config.NodeInfo)
 	return &StateDiffIndexer{
-		fileWriter:  w,
-		chainConfig: chainConfig,
-		nodeID:      config.NodeInfo.ID,
-		wg:          wg,
+		fileWriter:               w,
+		chainConfig:              chainConfig,
+		nodeID:                   config.NodeInfo.ID,
+		wg:                       wg,
+		watchedAddressesFilePath: watchedAddressesFilePath,
 	}, nil
 }
 
@@ -385,12 +401,13 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 // PushStateNode writes a state diff node object (including any child storage nodes) IPLD insert SQL stmt to a file
 func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode, headerID string) error {
 	// publish the state node
+	var stateModel models.StateNodeModel
 	if stateNode.NodeType == sdtypes.Removed {
 		if atomic.LoadUint32(sdi.removedCacheFlag) == 0 {
 			atomic.StoreUint32(sdi.removedCacheFlag, 1)
 			sdi.fileWriter.upsertIPLDDirect(sdi.blockNumber, shared.RemovedNodeMhKey, []byte{})
 		}
-		stateModel := models.StateNodeModel{
+		stateModel = models.StateNodeModel{
 			BlockNumber: sdi.blockNumber,
 			HeaderID:    headerID,
 			Path:        stateNode.Path,
@@ -399,24 +416,25 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			MhKey:       shared.RemovedNodeMhKey,
 			NodeType:    stateNode.NodeType.Int(),
 		}
-		sdi.fileWriter.upsertStateCID(stateModel)
-		return nil
+	} else {
+		stateCIDStr, stateMhKey, err := sdi.fileWriter.upsertIPLDRaw(sdi.blockNumber, ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
+		if err != nil {
+			return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
+		}
+		stateModel = models.StateNodeModel{
+			BlockNumber: sdi.blockNumber,
+			HeaderID:    headerID,
+			Path:        stateNode.Path,
+			StateKey:    common.BytesToHash(stateNode.LeafKey).String(),
+			CID:         stateCIDStr,
+			MhKey:       stateMhKey,
+			NodeType:    stateNode.NodeType.Int(),
+		}
 	}
-	stateCIDStr, stateMhKey, err := sdi.fileWriter.upsertIPLDRaw(sdi.blockNumber, ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
-	if err != nil {
-		return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
-	}
-	stateModel := models.StateNodeModel{
-		BlockNumber: sdi.blockNumber,
-		HeaderID:    headerID,
-		Path:        stateNode.Path,
-		StateKey:    common.BytesToHash(stateNode.LeafKey).String(),
-		CID:         stateCIDStr,
-		MhKey:       stateMhKey,
-		NodeType:    stateNode.NodeType.Int(),
-	}
+
 	// index the state node
 	sdi.fileWriter.upsertStateCID(stateModel)
+
 	// if we have a leaf, decode and index the account data
 	if stateNode.NodeType == sdtypes.Leaf {
 		var i []interface{}
@@ -441,6 +459,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		}
 		sdi.fileWriter.upsertStateAccount(accountModel)
 	}
+
 	// if there are any storage nodes associated with this node, publish and index them
 	for _, storageNode := range stateNode.StorageNodes {
 		if storageNode.NodeType == sdtypes.Removed {
@@ -495,4 +514,166 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(batch interfaces.Batch, codeAnd
 // Close satisfies io.Closer
 func (sdi *StateDiffIndexer) Close() error {
 	return sdi.fileWriter.Close()
+}
+
+// LoadWatchedAddresses loads watched addresses from a file
+func (sdi *StateDiffIndexer) LoadWatchedAddresses() ([]common.Address, error) {
+	// load sql statements from watched addresses file
+	stmts, err := loadWatchedAddressesStatements(sdi.watchedAddressesFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// extract addresses from the sql statements
+	watchedAddresses := []common.Address{}
+	for _, stmt := range stmts {
+		addressString, err := parseWatchedAddressStatement(stmt)
+		if err != nil {
+			return nil, err
+		}
+		watchedAddresses = append(watchedAddresses, common.HexToAddress(addressString))
+	}
+
+	return watchedAddresses, nil
+}
+
+// InsertWatchedAddresses inserts the given addresses in a file
+func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+	// load sql statements from watched addresses file
+	stmts, err := loadWatchedAddressesStatements(sdi.watchedAddressesFilePath)
+	if err != nil {
+		return err
+	}
+
+	// get already watched addresses
+	var watchedAddresses []string
+	for _, stmt := range stmts {
+		addressString, err := parseWatchedAddressStatement(stmt)
+		if err != nil {
+			return err
+		}
+
+		watchedAddresses = append(watchedAddresses, addressString)
+	}
+
+	// append statements for new addresses to existing statements
+	for _, arg := range args {
+		// ignore if already watched
+		if funk.Contains(watchedAddresses, arg.Address) {
+			continue
+		}
+
+		stmt := fmt.Sprintf(watchedAddressesInsert, arg.Address, arg.CreatedAt, currentBlockNumber.Uint64())
+		stmts = append(stmts, stmt)
+	}
+
+	return dumpWatchedAddressesStatements(sdi.watchedAddressesFilePath, stmts)
+}
+
+// RemoveWatchedAddresses removes the given watched addresses from a file
+func (sdi *StateDiffIndexer) RemoveWatchedAddresses(args []sdtypes.WatchAddressArg) error {
+	// load sql statements from watched addresses file
+	stmts, err := loadWatchedAddressesStatements(sdi.watchedAddressesFilePath)
+	if err != nil {
+		return err
+	}
+
+	// get rid of statements having addresses to be removed
+	var filteredStmts []string
+	for _, stmt := range stmts {
+		addressString, err := parseWatchedAddressStatement(stmt)
+		if err != nil {
+			return err
+		}
+
+		toRemove := funk.Contains(args, func(arg sdtypes.WatchAddressArg) bool {
+			return arg.Address == addressString
+		})
+
+		if !toRemove {
+			filteredStmts = append(filteredStmts, stmt)
+		}
+	}
+
+	return dumpWatchedAddressesStatements(sdi.watchedAddressesFilePath, filteredStmts)
+}
+
+// SetWatchedAddresses clears and inserts the given addresses in a file
+func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+	var stmts []string
+	for _, arg := range args {
+		stmt := fmt.Sprintf(watchedAddressesInsert, arg.Address, arg.CreatedAt, currentBlockNumber.Uint64())
+		stmts = append(stmts, stmt)
+	}
+
+	return dumpWatchedAddressesStatements(sdi.watchedAddressesFilePath, stmts)
+}
+
+// ClearWatchedAddresses clears all the watched addresses from a file
+func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
+	return sdi.SetWatchedAddresses([]sdtypes.WatchAddressArg{}, big.NewInt(0))
+}
+
+// loadWatchedAddressesStatements loads sql statements from the given file in a string slice
+func loadWatchedAddressesStatements(filePath string) ([]string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []string{}, nil
+		}
+
+		return nil, fmt.Errorf("error opening watched addresses file: %v", err)
+	}
+	defer file.Close()
+
+	stmts := []string{}
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		stmts = append(stmts, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error loading watched addresses: %v", err)
+	}
+
+	return stmts, nil
+}
+
+// dumpWatchedAddressesStatements dumps sql statements to the given file
+func dumpWatchedAddressesStatements(filePath string, stmts []string) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("error creating watched addresses file: %v", err)
+	}
+	defer file.Close()
+
+	for _, stmt := range stmts {
+		_, err := file.Write([]byte(stmt + "\n"))
+		if err != nil {
+			return fmt.Errorf("error inserting watched_addresses entry: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// parseWatchedAddressStatement parses given sql insert statement to extract the address argument
+func parseWatchedAddressStatement(stmt string) (string, error) {
+	parseResult, err := pg_query.Parse(stmt)
+	if err != nil {
+		return "", fmt.Errorf("error parsing sql stmt: %v", err)
+	}
+
+	// extract address argument from parse output for a SQL statement of form
+	// "INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at)
+	// VALUES ('0xabc', '123', '130') ON CONFLICT (address) DO NOTHING;"
+	addressString := parseResult.Stmts[0].Stmt.GetInsertStmt().
+		SelectStmt.GetSelectStmt().
+		ValuesLists[0].GetList().
+		Items[0].GetAConst().
+		GetVal().
+		GetString_().
+		Str
+
+	return addressString, nil
 }

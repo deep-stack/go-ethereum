@@ -448,9 +448,10 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		return fmt.Errorf("sql batch is expected to be of type %T, got %T", &BatchTx{}, batch)
 	}
 	// publish the state node
+	var stateModel models.StateNodeModel
 	if stateNode.NodeType == sdtypes.Removed {
 		tx.cacheRemoved(shared.RemovedNodeMhKey, []byte{})
-		stateModel := models.StateNodeModel{
+		stateModel = models.StateNodeModel{
 			BlockNumber: sdi.blockNumber,
 			HeaderID:    headerID,
 			Path:        stateNode.Path,
@@ -459,25 +460,27 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			MhKey:       shared.RemovedNodeMhKey,
 			NodeType:    stateNode.NodeType.Int(),
 		}
-		return sdi.dbWriter.upsertStateCID(tx.dbtx, stateModel)
+	} else {
+		stateCIDStr, stateMhKey, err := tx.cacheRaw(ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
+		if err != nil {
+			return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
+		}
+		stateModel = models.StateNodeModel{
+			BlockNumber: sdi.blockNumber,
+			HeaderID:    headerID,
+			Path:        stateNode.Path,
+			StateKey:    common.BytesToHash(stateNode.LeafKey).String(),
+			CID:         stateCIDStr,
+			MhKey:       stateMhKey,
+			NodeType:    stateNode.NodeType.Int(),
+		}
 	}
-	stateCIDStr, stateMhKey, err := tx.cacheRaw(ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
-	if err != nil {
-		return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
-	}
-	stateModel := models.StateNodeModel{
-		BlockNumber: sdi.blockNumber,
-		HeaderID:    headerID,
-		Path:        stateNode.Path,
-		StateKey:    common.BytesToHash(stateNode.LeafKey).String(),
-		CID:         stateCIDStr,
-		MhKey:       stateMhKey,
-		NodeType:    stateNode.NodeType.Int(),
-	}
+
 	// index the state node
 	if err := sdi.dbWriter.upsertStateCID(tx.dbtx, stateModel); err != nil {
 		return err
 	}
+
 	// if we have a leaf, decode and index the account data
 	if stateNode.NodeType == sdtypes.Leaf {
 		var i []interface{}
@@ -504,6 +507,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			return err
 		}
 	}
+
 	// if there are any storage nodes associated with this node, publish and index them
 	for _, storageNode := range stateNode.StorageNodes {
 		if storageNode.NodeType == sdtypes.Removed {
@@ -563,4 +567,121 @@ func (sdi *StateDiffIndexer) PushCodeAndCodeHash(batch interfaces.Batch, codeAnd
 // Close satisfies io.Closer
 func (sdi *StateDiffIndexer) Close() error {
 	return sdi.dbWriter.Close()
+}
+
+// Update the known gaps table with the gap information.
+
+// LoadWatchedAddresses reads watched addresses from the database
+func (sdi *StateDiffIndexer) LoadWatchedAddresses() ([]common.Address, error) {
+	addressStrings := make([]string, 0)
+	pgStr := "SELECT address FROM eth_meta.watched_addresses"
+	err := sdi.dbWriter.db.Select(sdi.ctx, &addressStrings, pgStr)
+	if err != nil {
+		return nil, fmt.Errorf("error loading watched addresses: %v", err)
+	}
+
+	watchedAddresses := []common.Address{}
+	for _, addressString := range addressStrings {
+		watchedAddresses = append(watchedAddresses, common.HexToAddress(addressString))
+	}
+
+	return watchedAddresses, nil
+}
+
+// InsertWatchedAddresses inserts the given addresses in the database
+func (sdi *StateDiffIndexer) InsertWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+	tx, err := sdi.dbWriter.db.Begin(sdi.ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			rollback(sdi.ctx, tx)
+			panic(p)
+		} else if err != nil {
+			rollback(sdi.ctx, tx)
+		} else {
+			err = tx.Commit(sdi.ctx)
+		}
+	}()
+
+	for _, arg := range args {
+		_, err = tx.Exec(sdi.ctx, `INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
+			arg.Address, arg.CreatedAt, currentBlockNumber.Uint64())
+		if err != nil {
+			return fmt.Errorf("error inserting watched_addresses entry: %v", err)
+		}
+	}
+
+	return err
+}
+
+// RemoveWatchedAddresses removes the given watched addresses from the database
+func (sdi *StateDiffIndexer) RemoveWatchedAddresses(args []sdtypes.WatchAddressArg) error {
+	tx, err := sdi.dbWriter.db.Begin(sdi.ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			rollback(sdi.ctx, tx)
+			panic(p)
+		} else if err != nil {
+			rollback(sdi.ctx, tx)
+		} else {
+			err = tx.Commit(sdi.ctx)
+		}
+	}()
+
+	for _, arg := range args {
+		_, err = tx.Exec(sdi.ctx, `DELETE FROM eth_meta.watched_addresses WHERE address = $1`, arg.Address)
+		if err != nil {
+			return fmt.Errorf("error removing watched_addresses entry: %v", err)
+		}
+	}
+
+	return err
+}
+
+// SetWatchedAddresses clears and inserts the given addresses in the database
+func (sdi *StateDiffIndexer) SetWatchedAddresses(args []sdtypes.WatchAddressArg, currentBlockNumber *big.Int) error {
+	tx, err := sdi.dbWriter.db.Begin(sdi.ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			rollback(sdi.ctx, tx)
+			panic(p)
+		} else if err != nil {
+			rollback(sdi.ctx, tx)
+		} else {
+			err = tx.Commit(sdi.ctx)
+		}
+	}()
+
+	_, err = tx.Exec(sdi.ctx, `DELETE FROM eth_meta.watched_addresses`)
+	if err != nil {
+		return fmt.Errorf("error setting watched_addresses table: %v", err)
+	}
+
+	for _, arg := range args {
+		_, err = tx.Exec(sdi.ctx, `INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ($1, $2, $3) ON CONFLICT (address) DO NOTHING`,
+			arg.Address, arg.CreatedAt, currentBlockNumber.Uint64())
+		if err != nil {
+			return fmt.Errorf("error setting watched_addresses table: %v", err)
+		}
+	}
+
+	return err
+}
+
+// ClearWatchedAddresses clears all the watched addresses from the database
+func (sdi *StateDiffIndexer) ClearWatchedAddresses() error {
+	_, err := sdi.dbWriter.db.Exec(sdi.ctx, `DELETE FROM eth_meta.watched_addresses`)
+	if err != nil {
+		return fmt.Errorf("error clearing watched_addresses table: %v", err)
+	}
+
+	return nil
 }

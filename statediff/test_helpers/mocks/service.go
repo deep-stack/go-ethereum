@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/thoas/go-funk"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,7 +33,13 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/statediff"
+	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
+)
+
+var (
+	typeAssertionFailed = "type assertion failed"
+	unexpectedOperation = "unexpected operation"
 )
 
 // MockStateDiffService is a mock state diff service
@@ -47,6 +54,8 @@ type MockStateDiffService struct {
 	QuitChan          chan bool
 	Subscriptions     map[common.Hash]map[rpc.ID]statediff.Subscription
 	SubscriptionTypes map[common.Hash]statediff.Params
+	Indexer           interfaces.StateDiffIndexer
+	writeLoopParams   statediff.ParamsWithMutex
 }
 
 // Protocols mock method
@@ -147,7 +156,7 @@ func (sds *MockStateDiffService) processStateDiff(currentBlock *types.Block, par
 	if err != nil {
 		return nil, err
 	}
-	stateDiffRlp, err := rlp.EncodeToBytes(stateDiff)
+	stateDiffRlp, err := rlp.EncodeToBytes(&stateDiff)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +237,7 @@ func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params statedif
 	if err != nil {
 		return nil, err
 	}
-	stateTrieRlp, err := rlp.EncodeToBytes(stateNodes)
+	stateTrieRlp, err := rlp.EncodeToBytes(&stateNodes)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +247,7 @@ func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params statedif
 // Subscribe is used by the API to subscribe to the service loop
 func (sds *MockStateDiffService) Subscribe(id rpc.ID, sub chan<- statediff.Payload, quitChan chan<- bool, params statediff.Params) {
 	// Subscription type is defined as the hash of the rlp-serialized subscription params
-	by, err := rlp.EncodeToBytes(params)
+	by, err := rlp.EncodeToBytes(&params)
 	if err != nil {
 		return
 	}
@@ -331,4 +340,99 @@ func sendNonBlockingQuit(id rpc.ID, sub statediff.Subscription) {
 	default:
 		log.Info("unable to close subscription %s; channel has no receiver", id)
 	}
+}
+
+// Performs one of following operations on the watched addresses in writeLoopParams and the db:
+// add | remove | set | clear
+func (sds *MockStateDiffService) WatchAddress(operation sdtypes.OperationType, args []sdtypes.WatchAddressArg) error {
+	// lock writeLoopParams for a write
+	sds.writeLoopParams.Lock()
+	defer sds.writeLoopParams.Unlock()
+
+	// get the current block number
+	currentBlockNumber := sds.BlockChain.CurrentBlock().Number()
+
+	switch operation {
+	case sdtypes.Add:
+		// filter out args having an already watched address with a warning
+		filteredArgs, ok := funk.Filter(args, func(arg sdtypes.WatchAddressArg) bool {
+			if funk.Contains(sds.writeLoopParams.WatchedAddresses, common.HexToAddress(arg.Address)) {
+				log.Warn("Address already being watched", "address", arg.Address)
+				return false
+			}
+			return true
+		}).([]sdtypes.WatchAddressArg)
+		if !ok {
+			return fmt.Errorf("add: filtered args %s", typeAssertionFailed)
+		}
+
+		// get addresses from the filtered args
+		filteredAddresses, err := statediff.MapWatchAddressArgsToAddresses(filteredArgs)
+		if err != nil {
+			return fmt.Errorf("add: filtered addresses %s", err.Error())
+		}
+
+		// update the db
+		err = sds.Indexer.InsertWatchedAddresses(filteredArgs, currentBlockNumber)
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		sds.writeLoopParams.WatchedAddresses = append(sds.writeLoopParams.WatchedAddresses, filteredAddresses...)
+		sds.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+	case sdtypes.Remove:
+		// get addresses from args
+		argAddresses, err := statediff.MapWatchAddressArgsToAddresses(args)
+		if err != nil {
+			return fmt.Errorf("remove: mapped addresses %s", err.Error())
+		}
+
+		// remove the provided addresses from currently watched addresses
+		addresses, ok := funk.Subtract(sds.writeLoopParams.WatchedAddresses, argAddresses).([]common.Address)
+		if !ok {
+			return fmt.Errorf("remove: filtered addresses %s", typeAssertionFailed)
+		}
+
+		// update the db
+		err = sds.Indexer.RemoveWatchedAddresses(args)
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		sds.writeLoopParams.WatchedAddresses = addresses
+		sds.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+	case sdtypes.Set:
+		// get addresses from args
+		argAddresses, err := statediff.MapWatchAddressArgsToAddresses(args)
+		if err != nil {
+			return fmt.Errorf("set: mapped addresses %s", err.Error())
+		}
+
+		// update the db
+		err = sds.Indexer.SetWatchedAddresses(args, currentBlockNumber)
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		sds.writeLoopParams.WatchedAddresses = argAddresses
+		sds.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+	case sdtypes.Clear:
+		// update the db
+		err := sds.Indexer.ClearWatchedAddresses()
+		if err != nil {
+			return err
+		}
+
+		// update in-memory params
+		sds.writeLoopParams.WatchedAddresses = []common.Address{}
+		sds.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+
+	default:
+		return fmt.Errorf("%s %s", unexpectedOperation, operation)
+	}
+
+	return nil
 }

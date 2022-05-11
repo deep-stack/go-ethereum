@@ -18,6 +18,7 @@ package sql_test
 
 import (
 	"context"
+	"math/big"
 	"testing"
 
 	"github.com/lib/pq"
@@ -37,15 +38,20 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
+	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
 
-func setupPGX(t *testing.T) {
+func setupPGXIndexer(t *testing.T) {
 	db, err = postgres.SetupPGXDB()
 	if err != nil {
 		t.Fatal(err)
 	}
 	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, db)
 	require.NoError(t, err)
+}
+
+func setupPGX(t *testing.T) {
+	setupPGXIndexer(t)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
 		mockBlock,
@@ -294,12 +300,12 @@ func TestPGXIndexer(t *testing.T) {
 				err = rlp.DecodeBytes(r.Data, &nodeElements)
 				require.NoError(t, err)
 				if len(nodeElements) == 2 {
-					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
+					logRaw, err := rlp.EncodeToBytes(&expectedLogs[idx])
 					require.NoError(t, err)
 					// 2nd element of the leaf node contains the encoded log data.
 					require.Equal(t, nodeElements[1].([]byte), logRaw)
 				} else {
-					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
+					logRaw, err := rlp.EncodeToBytes(&expectedLogs[idx])
 					require.NoError(t, err)
 					// raw log was IPLDized
 					require.Equal(t, r.Data, logRaw)
@@ -483,23 +489,34 @@ func TestPGXIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		require.Equal(t, 1, len(stateNodes))
-		stateNode := stateNodes[0]
-		var data []byte
-		dc, err := cid.Decode(stateNode.CID)
-		if err != nil {
-			t.Fatal(err)
+		require.Equal(t, 2, len(stateNodes))
+		for idx, stateNode := range stateNodes {
+			var data []byte
+			dc, err := cid.Decode(stateNode.CID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mhKey := dshelp.MultihashToDsKey(dc.Hash())
+			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
+			require.Equal(t, shared.RemovedNodeMhKey, prefixedKey)
+			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if idx == 0 {
+				require.Equal(t, shared.RemovedNodeStateCID, stateNode.CID)
+				require.Equal(t, common.BytesToHash(mocks.RemovedLeafKey).Hex(), stateNode.StateKey)
+				require.Equal(t, []byte{'\x02'}, stateNode.Path)
+				require.Equal(t, []byte{}, data)
+			}
+			if idx == 1 {
+				require.Equal(t, shared.RemovedNodeStateCID, stateNode.CID)
+				require.Equal(t, common.BytesToHash(mocks.Contract2LeafKey).Hex(), stateNode.StateKey)
+				require.Equal(t, []byte{'\x07'}, stateNode.Path)
+				require.Equal(t, []byte{}, data)
+			}
 		}
-		mhKey := dshelp.MultihashToDsKey(dc.Hash())
-		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
-		require.Equal(t, shared.RemovedNodeMhKey, prefixedKey)
-		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
-		if err != nil {
-			t.Fatal(err)
-		}
-		require.Equal(t, shared.RemovedNodeStateCID, stateNode.CID)
-		require.Equal(t, []byte{'\x02'}, stateNode.Path)
-		require.Equal(t, []byte{}, data)
 	})
 
 	t.Run("Publish and index storage IPLDs in a single tx", func(t *testing.T) {
@@ -552,26 +569,378 @@ func TestPGXIndexer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		require.Equal(t, 1, len(storageNodes))
-		require.Equal(t, models.StorageNodeWithStateKeyModel{
-			BlockNumber: mocks.BlockNumber.String(),
-			CID:         shared.RemovedNodeStorageCID,
-			NodeType:    3,
-			StorageKey:  common.BytesToHash(mocks.RemovedLeafKey).Hex(),
-			StateKey:    common.BytesToHash(mocks.ContractLeafKey).Hex(),
-			Path:        []byte{'\x03'},
-		}, storageNodes[0])
-		dc, err = cid.Decode(storageNodes[0].CID)
+		require.Equal(t, 3, len(storageNodes))
+		expectedStorageNodes := []models.StorageNodeWithStateKeyModel{
+			{
+				BlockNumber: mocks.BlockNumber.String(),
+				CID:         shared.RemovedNodeStorageCID,
+				NodeType:    3,
+				StorageKey:  common.BytesToHash(mocks.RemovedLeafKey).Hex(),
+				StateKey:    common.BytesToHash(mocks.ContractLeafKey).Hex(),
+				Path:        []byte{'\x03'},
+			},
+			{
+				BlockNumber: mocks.BlockNumber.String(),
+				CID:         shared.RemovedNodeStorageCID,
+				NodeType:    3,
+				StorageKey:  common.BytesToHash(mocks.Storage2LeafKey).Hex(),
+				StateKey:    common.BytesToHash(mocks.Contract2LeafKey).Hex(),
+				Path:        []byte{'\x0e'},
+			},
+			{
+				BlockNumber: mocks.BlockNumber.String(),
+				CID:         shared.RemovedNodeStorageCID,
+				NodeType:    3,
+				StorageKey:  common.BytesToHash(mocks.Storage3LeafKey).Hex(),
+				StateKey:    common.BytesToHash(mocks.Contract2LeafKey).Hex(),
+				Path:        []byte{'\x0f'},
+			},
+		}
+		for idx, storageNode := range storageNodes {
+			require.Equal(t, expectedStorageNodes[idx], storageNode)
+			dc, err = cid.Decode(storageNode.CID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mhKey = dshelp.MultihashToDsKey(dc.Hash())
+			prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
+			require.Equal(t, shared.RemovedNodeMhKey, prefixedKey)
+			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.Equal(t, []byte{}, data)
+		}
+	})
+}
+
+func TestPGXWatchAddressMethods(t *testing.T) {
+	setupPGXIndexer(t)
+	defer tearDown(t)
+	defer checkTxClosure(t, 1, 0, 1)
+
+	type res struct {
+		Address      string `db:"address"`
+		CreatedAt    uint64 `db:"created_at"`
+		WatchedAt    uint64 `db:"watched_at"`
+		LastFilledAt uint64 `db:"last_filled_at"`
+	}
+	pgStr := "SELECT * FROM eth_meta.watched_addresses"
+
+	t.Run("Load watched addresses (empty table)", func(t *testing.T) {
+		expectedData := []common.Address{}
+
+		rows, err := ind.LoadWatchedAddresses()
+		require.NoError(t, err)
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Insert watched addresses", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract1Address,
+				CreatedAt: contract1CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract1Address,
+				CreatedAt:    contract1CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract2Address,
+				CreatedAt:    contract2CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		err = ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt1)))
+		require.NoError(t, err)
+
+		rows := []res{}
+		err = db.Select(context.Background(), &rows, pgStr)
 		if err != nil {
 			t.Fatal(err)
 		}
-		mhKey = dshelp.MultihashToDsKey(dc.Hash())
-		prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
-		require.Equal(t, shared.RemovedNodeMhKey, prefixedKey)
-		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Insert watched addresses (some already watched)", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract3Address,
+				CreatedAt: contract3CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract1Address,
+				CreatedAt:    contract1CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract2Address,
+				CreatedAt:    contract2CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract3Address,
+				CreatedAt:    contract3CreatedAt,
+				WatchedAt:    watchedAt2,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		err = ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
+		require.NoError(t, err)
+
+		rows := []res{}
+		err = db.Select(context.Background(), &rows, pgStr)
 		if err != nil {
 			t.Fatal(err)
 		}
-		require.Equal(t, []byte{}, data)
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Remove watched addresses", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract3Address,
+				CreatedAt: contract3CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract1Address,
+				CreatedAt:    contract1CreatedAt,
+				WatchedAt:    watchedAt1,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		err = ind.RemoveWatchedAddresses(args)
+		require.NoError(t, err)
+
+		rows := []res{}
+		err = db.Select(context.Background(), &rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Remove watched addresses (some non-watched)", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract1Address,
+				CreatedAt: contract1CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+		}
+		expectedData := []res{}
+
+		err = ind.RemoveWatchedAddresses(args)
+		require.NoError(t, err)
+
+		rows := []res{}
+		err = db.Select(context.Background(), &rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Set watched addresses", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract1Address,
+				CreatedAt: contract1CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+			{
+				Address:   contract3Address,
+				CreatedAt: contract3CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract1Address,
+				CreatedAt:    contract1CreatedAt,
+				WatchedAt:    watchedAt2,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract2Address,
+				CreatedAt:    contract2CreatedAt,
+				WatchedAt:    watchedAt2,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract3Address,
+				CreatedAt:    contract3CreatedAt,
+				WatchedAt:    watchedAt2,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		err = ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
+		require.NoError(t, err)
+
+		rows := []res{}
+		err = db.Select(context.Background(), &rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Set watched addresses (some already watched)", func(t *testing.T) {
+		args := []sdtypes.WatchAddressArg{
+			{
+				Address:   contract4Address,
+				CreatedAt: contract4CreatedAt,
+			},
+			{
+				Address:   contract2Address,
+				CreatedAt: contract2CreatedAt,
+			},
+			{
+				Address:   contract3Address,
+				CreatedAt: contract3CreatedAt,
+			},
+		}
+		expectedData := []res{
+			{
+				Address:      contract4Address,
+				CreatedAt:    contract4CreatedAt,
+				WatchedAt:    watchedAt3,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract2Address,
+				CreatedAt:    contract2CreatedAt,
+				WatchedAt:    watchedAt3,
+				LastFilledAt: lastFilledAt,
+			},
+			{
+				Address:      contract3Address,
+				CreatedAt:    contract3CreatedAt,
+				WatchedAt:    watchedAt3,
+				LastFilledAt: lastFilledAt,
+			},
+		}
+
+		err = ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt3)))
+		require.NoError(t, err)
+
+		rows := []res{}
+		err = db.Select(context.Background(), &rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Load watched addresses", func(t *testing.T) {
+		expectedData := []common.Address{
+			common.HexToAddress(contract4Address),
+			common.HexToAddress(contract2Address),
+			common.HexToAddress(contract3Address),
+		}
+
+		rows, err := ind.LoadWatchedAddresses()
+		require.NoError(t, err)
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Clear watched addresses", func(t *testing.T) {
+		expectedData := []res{}
+
+		err = ind.ClearWatchedAddresses()
+		require.NoError(t, err)
+
+		rows := []res{}
+		err = db.Select(context.Background(), &rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
+	})
+
+	t.Run("Clear watched addresses (empty table)", func(t *testing.T) {
+		expectedData := []res{}
+
+		err = ind.ClearWatchedAddresses()
+		require.NoError(t, err)
+
+		rows := []res{}
+		err = db.Select(context.Background(), &rows, pgStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectTrue(t, len(rows) == len(expectedData))
+		for idx, row := range rows {
+			require.Equal(t, expectedData[idx], row)
+		}
 	})
 }

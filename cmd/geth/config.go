@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -174,6 +175,22 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	}
 
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
+	// Warn users to migrate if they have a legacy freezer format.
+	if eth != nil {
+		firstIdx := uint64(0)
+		// Hack to speed up check for mainnet because we know
+		// the first non-empty block.
+		ghash := rawdb.ReadCanonicalHash(eth.ChainDb(), 0)
+		if cfg.Eth.NetworkId == 1 && ghash == params.MainnetGenesisHash {
+			firstIdx = 46147
+		}
+		isLegacy, _, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
+		if err != nil {
+			log.Error("Failed to check db for legacy receipts", "err", err)
+		} else if isLegacy {
+			log.Warn("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
+		}
+	}
 
 	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
 		var indexerConfig interfaces.Config
@@ -194,7 +211,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			switch dbType {
 			case shared.FILE:
 				indexerConfig = file.Config{
-					FilePath: ctx.GlobalString(utils.StateDiffFilePath.Name),
+					FilePath:                 ctx.GlobalString(utils.StateDiffFilePath.Name),
+					WatchedAddressesFilePath: ctx.GlobalString(utils.StateDiffWatchedAddressesFilePath.Name),
 				}
 			case shared.POSTGRES:
 				driverTypeStr := ctx.GlobalString(utils.StateDiffDBDriverTypeFlag.Name)
@@ -252,14 +270,16 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			}
 		}
 		p := statediff.Config{
-			IndexerConfig:   indexerConfig,
-			ID:              nodeID,
-			ClientName:      clientName,
-			Context:         context.Background(),
-			EnableWriteLoop: ctx.GlobalBool(utils.StateDiffWritingFlag.Name),
-			NumWorkers:      ctx.GlobalUint(utils.StateDiffWorkersFlag.Name),
+			IndexerConfig:     indexerConfig,
+			KnownGapsFilePath: ctx.GlobalString(utils.StateDiffKnownGapsFilePath.Name),
+			ID:                nodeID,
+			ClientName:        clientName,
+			Context:           context.Background(),
+			EnableWriteLoop:   ctx.GlobalBool(utils.StateDiffWritingFlag.Name),
+			NumWorkers:        ctx.GlobalUint(utils.StateDiffWorkersFlag.Name),
+			WaitForSync:       ctx.GlobalBool(utils.StateDiffWaitForSync.Name),
 		}
-		utils.RegisterStateDiffService(stack, eth, &cfg.Eth, p)
+		utils.RegisterStateDiffService(stack, eth, &cfg.Eth, p, backend)
 	}
 
 	// Configure GraphQL if requested

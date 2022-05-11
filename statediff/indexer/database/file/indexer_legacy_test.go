@@ -80,7 +80,7 @@ func setupLegacy(t *testing.T) {
 	}
 }
 
-func dumpData(t *testing.T) {
+func dumpFileData(t *testing.T) {
 	sqlFileBytes, err := os.ReadFile(file.TestConfig.FilePath)
 	require.NoError(t, err)
 
@@ -88,10 +88,36 @@ func dumpData(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func resetAndDumpWatchedAddressesFileData(t *testing.T) {
+	resetDB(t)
+
+	sqlFileBytes, err := os.ReadFile(file.TestConfig.WatchedAddressesFilePath)
+	require.NoError(t, err)
+
+	_, err = sqlxdb.Exec(string(sqlFileBytes))
+	require.NoError(t, err)
+}
+
+func resetDB(t *testing.T) {
+	file.TearDownDB(t, sqlxdb)
+
+	connStr := postgres.DefaultConfig.DbConnectionString()
+	sqlxdb, err = sqlx.Connect("postgres", connStr)
+	if err != nil {
+		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
+	}
+}
+
 func tearDown(t *testing.T) {
 	file.TearDownDB(t, sqlxdb)
+
 	err := os.Remove(file.TestConfig.FilePath)
 	require.NoError(t, err)
+
+	if err := os.Remove(file.TestConfig.WatchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {
+		require.NoError(t, err)
+	}
+
 	err = sqlxdb.Close()
 	require.NoError(t, err)
 }
@@ -105,7 +131,7 @@ func expectTrue(t *testing.T, value bool) {
 func TestFileIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs", func(t *testing.T) {
 		setupLegacy(t)
-		dumpData(t)
+		dumpFileData(t)
 		defer tearDown(t)
 		pgStr := `SELECT cid, td, reward, block_hash, coinbase
 				FROM eth.header_cids

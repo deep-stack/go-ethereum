@@ -101,3 +101,20 @@ type CodeAndCodeHash struct {
 type StateNodeSink func(StateNode) error
 type StorageNodeSink func(StorageNode) error
 type CodeSink func(CodeAndCodeHash) error
+
+// OperationType for type of WatchAddress operation
+type OperationType string
+
+const (
+	Add    OperationType = "add"
+	Remove OperationType = "remove"
+	Set    OperationType = "set"
+	Clear  OperationType = "clear"
+)
+
+// WatchAddressArg is a arg type for WatchAddress API
+type WatchAddressArg struct {
+	// Address represents common.Address
+	Address   string
+	CreatedAt uint64
+}

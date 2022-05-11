@@ -1,11 +1,13 @@
 name: Docker Build and publish to Github
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - statediff
       - statediff-v2
       - statediff-v3
+      - v1.10.17-statediff-v3
       - v1.10.16-statediff-v3
       - v1.10.15-statediff-v3
       - v1.10.15-statediff-v2

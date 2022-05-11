@@ -58,237 +58,233 @@ var (
 	slot2StorageValue = common.Hex2Bytes("09")
 	slot3StorageValue = common.Hex2Bytes("03")
 
-	slot0StorageLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	slot0StorageLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("390decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"),
 		slot0StorageValue,
 	})
-	slot1StorageLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	slot1StorageLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("310e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6"),
 		slot1StorageValue,
 	})
-	slot2StorageLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	slot2StorageLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("305787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace"),
 		slot2StorageValue,
 	})
-	slot3StorageLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	slot3StorageLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("32575a0e9e593c00f959f8c92f12db2869c3395a3b0502d05e2516446f71f85b"),
 		slot3StorageValue,
 	})
-	slot0StorageLeafRootNode, _ = rlp.EncodeToBytes([]interface{}{
-		common.Hex2Bytes("20290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"),
-		slot0StorageValue,
-	})
 
-	contractAccountAtBlock2, _ = rlp.EncodeToBytes(types.StateAccount{
+	contractAccountAtBlock2, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    1,
 		Balance:  big.NewInt(0),
 		CodeHash: common.HexToHash("0xaaea5efba4fd7b45d7ec03918ac5d8b31aa93b48986af0e6b591f0f087c80127").Bytes(),
 		Root:     crypto.Keccak256Hash(block2StorageBranchRootNode),
 	})
-	contractAccountAtBlock2LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	contractAccountAtBlock2LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3114658a74d9cc9f7acf2c5cd696c3494d7c344d78bfec3add0d91ec4e8d1c45"),
 		contractAccountAtBlock2,
 	})
-	contractAccountAtBlock3, _ = rlp.EncodeToBytes(types.StateAccount{
+	contractAccountAtBlock3, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    1,
 		Balance:  big.NewInt(0),
 		CodeHash: common.HexToHash("0xaaea5efba4fd7b45d7ec03918ac5d8b31aa93b48986af0e6b591f0f087c80127").Bytes(),
 		Root:     crypto.Keccak256Hash(block3StorageBranchRootNode),
 	})
-	contractAccountAtBlock3LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	contractAccountAtBlock3LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3114658a74d9cc9f7acf2c5cd696c3494d7c344d78bfec3add0d91ec4e8d1c45"),
 		contractAccountAtBlock3,
 	})
-	contractAccountAtBlock4, _ = rlp.EncodeToBytes(types.StateAccount{
+	contractAccountAtBlock4, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    1,
 		Balance:  big.NewInt(0),
 		CodeHash: common.HexToHash("0xaaea5efba4fd7b45d7ec03918ac5d8b31aa93b48986af0e6b591f0f087c80127").Bytes(),
 		Root:     crypto.Keccak256Hash(block4StorageBranchRootNode),
 	})
-	contractAccountAtBlock4LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	contractAccountAtBlock4LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3114658a74d9cc9f7acf2c5cd696c3494d7c344d78bfec3add0d91ec4e8d1c45"),
 		contractAccountAtBlock4,
 	})
-	contractAccountAtBlock5, _ = rlp.EncodeToBytes(types.StateAccount{
+	contractAccountAtBlock5, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    1,
 		Balance:  big.NewInt(0),
 		CodeHash: common.HexToHash("0xaaea5efba4fd7b45d7ec03918ac5d8b31aa93b48986af0e6b591f0f087c80127").Bytes(),
-		Root:     crypto.Keccak256Hash(slot0StorageLeafRootNode),
+		Root:     crypto.Keccak256Hash(block5StorageBranchRootNode),
 	})
-	contractAccountAtBlock5LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	contractAccountAtBlock5LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3114658a74d9cc9f7acf2c5cd696c3494d7c344d78bfec3add0d91ec4e8d1c45"),
 		contractAccountAtBlock5,
 	})
 
-	minerAccountAtBlock1, _ = rlp.EncodeToBytes(types.StateAccount{
+	minerAccountAtBlock1, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(2000002625000000000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	minerAccountAtBlock1LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	minerAccountAtBlock1LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3380c7b7ae81a58eb98d9c78de4a1fd7fd9535fc953ed2be602daaa41767312a"),
 		minerAccountAtBlock1,
 	})
-	minerAccountAtBlock2, _ = rlp.EncodeToBytes(types.StateAccount{
+	minerAccountAtBlock2, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(4000111203461610525),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	minerAccountAtBlock2LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	minerAccountAtBlock2LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3380c7b7ae81a58eb98d9c78de4a1fd7fd9535fc953ed2be602daaa41767312a"),
 		minerAccountAtBlock2,
 	})
 
-	account1AtBlock1, _ = rlp.EncodeToBytes(types.StateAccount{
+	account1AtBlock1, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  test_helpers.Block1Account1Balance,
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	account1AtBlock1LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account1AtBlock1LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3926db69aaced518e9b9f0f434a473e7174109c943548bb8f23be41ca76d9ad2"),
 		account1AtBlock1,
 	})
-	account1AtBlock2, _ = rlp.EncodeToBytes(types.StateAccount{
+	account1AtBlock2, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    2,
 		Balance:  big.NewInt(999555797000009000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	account1AtBlock2LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account1AtBlock2LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3926db69aaced518e9b9f0f434a473e7174109c943548bb8f23be41ca76d9ad2"),
 		account1AtBlock2,
 	})
-	account1AtBlock5, _ = rlp.EncodeToBytes(types.StateAccount{
+	account1AtBlock5, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    2,
-		Balance:  big.NewInt(2999566008847709960),
+		Balance:  big.NewInt(2999586469962854280),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	account1AtBlock5LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account1AtBlock5LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3926db69aaced518e9b9f0f434a473e7174109c943548bb8f23be41ca76d9ad2"),
 		account1AtBlock5,
 	})
-	account1AtBlock6, _ = rlp.EncodeToBytes(types.StateAccount{
+	account1AtBlock6, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    3,
-		Balance:  big.NewInt(2999537516847709960),
+		Balance:  big.NewInt(2999557977962854280),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	account1AtBlock6LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account1AtBlock6LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3926db69aaced518e9b9f0f434a473e7174109c943548bb8f23be41ca76d9ad2"),
 		account1AtBlock6,
 	})
 
-	account2AtBlock2, _ = rlp.EncodeToBytes(types.StateAccount{
+	account2AtBlock2, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(1000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	account2AtBlock2LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account2AtBlock2LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3957f3e2f04a0764c3a0491b175f69926da61efbcc8f61fa1455fd2d2b4cdd45"),
 		account2AtBlock2,
 	})
-	account2AtBlock3, _ = rlp.EncodeToBytes(types.StateAccount{
+	account2AtBlock3, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(2000013574009435976),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	account2AtBlock3LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account2AtBlock3LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3957f3e2f04a0764c3a0491b175f69926da61efbcc8f61fa1455fd2d2b4cdd45"),
 		account2AtBlock3,
 	})
-	account2AtBlock4, _ = rlp.EncodeToBytes(types.StateAccount{
+	account2AtBlock4, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(4000048088163070348),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	account2AtBlock4LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account2AtBlock4LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3957f3e2f04a0764c3a0491b175f69926da61efbcc8f61fa1455fd2d2b4cdd45"),
 		account2AtBlock4,
 	})
-	account2AtBlock6, _ = rlp.EncodeToBytes(types.StateAccount{
+	account2AtBlock6, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
-		Balance:  big.NewInt(6000063293259748636),
+		Balance:  big.NewInt(6000063258066544204),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	account2AtBlock6LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	account2AtBlock6LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3957f3e2f04a0764c3a0491b175f69926da61efbcc8f61fa1455fd2d2b4cdd45"),
 		account2AtBlock6,
 	})
 
-	bankAccountAtBlock0, _ = rlp.EncodeToBytes(types.StateAccount{
+	bankAccountAtBlock0, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    0,
 		Balance:  big.NewInt(test_helpers.TestBankFunds.Int64()),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	bankAccountAtBlock0LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountAtBlock0LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("2000bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock0,
 	})
 
 	block1BankBalance      = big.NewInt(test_helpers.TestBankFunds.Int64() - test_helpers.BalanceChange10000 - test_helpers.GasFees)
-	bankAccountAtBlock1, _ = rlp.EncodeToBytes(types.StateAccount{
+	bankAccountAtBlock1, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    1,
 		Balance:  block1BankBalance,
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	bankAccountAtBlock1LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountAtBlock1LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock1,
 	})
 
 	block2BankBalance      = block1BankBalance.Int64() - test_helpers.BalanceChange1Ether - test_helpers.GasFees
-	bankAccountAtBlock2, _ = rlp.EncodeToBytes(types.StateAccount{
+	bankAccountAtBlock2, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    2,
 		Balance:  big.NewInt(block2BankBalance),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	bankAccountAtBlock2LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountAtBlock2LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock2,
 	})
-	bankAccountAtBlock3, _ = rlp.EncodeToBytes(types.StateAccount{
+	bankAccountAtBlock3, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    3,
 		Balance:  big.NewInt(999914255999990000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	bankAccountAtBlock3LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountAtBlock3LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock3,
 	})
-	bankAccountAtBlock4, _ = rlp.EncodeToBytes(types.StateAccount{
+	bankAccountAtBlock4, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    6,
 		Balance:  big.NewInt(999826859999990000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	bankAccountAtBlock4LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountAtBlock4LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock4,
 	})
-	bankAccountAtBlock5, _ = rlp.EncodeToBytes(types.StateAccount{
-		Nonce:    7,
-		Balance:  big.NewInt(999805027999990000),
+	bankAccountAtBlock5, _ = rlp.EncodeToBytes(&types.StateAccount{
+		Nonce:    8,
+		Balance:  big.NewInt(999761283999990000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	bankAccountAtBlock5LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountAtBlock5LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock5,
 	})
 
-	block1BranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block1BranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		crypto.Keccak256(bankAccountAtBlock1LeafNode),
 		[]byte{},
 		[]byte{},
@@ -307,7 +303,7 @@ var (
 		[]byte{},
 		[]byte{},
 	})
-	block2BranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block2BranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		crypto.Keccak256(bankAccountAtBlock2LeafNode),
 		[]byte{},
 		[]byte{},
@@ -326,7 +322,7 @@ var (
 		[]byte{},
 		[]byte{},
 	})
-	block3BranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3BranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		crypto.Keccak256(bankAccountAtBlock3LeafNode),
 		[]byte{},
 		[]byte{},
@@ -345,7 +341,7 @@ var (
 		[]byte{},
 		[]byte{},
 	})
-	block4BranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block4BranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		crypto.Keccak256(bankAccountAtBlock4LeafNode),
 		[]byte{},
 		[]byte{},
@@ -364,7 +360,7 @@ var (
 		[]byte{},
 		[]byte{},
 	})
-	block5BranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block5BranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		crypto.Keccak256(bankAccountAtBlock5LeafNode),
 		[]byte{},
 		[]byte{},
@@ -383,7 +379,7 @@ var (
 		[]byte{},
 		[]byte{},
 	})
-	block6BranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block6BranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		crypto.Keccak256(bankAccountAtBlock5LeafNode),
 		[]byte{},
 		[]byte{},
@@ -403,7 +399,7 @@ var (
 		[]byte{},
 	})
 
-	block2StorageBranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block2StorageBranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		[]byte{},
 		[]byte{},
 		crypto.Keccak256(slot0StorageLeafNode),
@@ -422,7 +418,7 @@ var (
 		[]byte{},
 		[]byte{},
 	})
-	block3StorageBranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block3StorageBranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		[]byte{},
 		[]byte{},
 		crypto.Keccak256(slot0StorageLeafNode),
@@ -441,7 +437,7 @@ var (
 		[]byte{},
 		[]byte{},
 	})
-	block4StorageBranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block4StorageBranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		[]byte{},
 		[]byte{},
 		crypto.Keccak256(slot0StorageLeafNode),
@@ -455,6 +451,25 @@ var (
 		[]byte{},
 		[]byte{},
 		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+	})
+	block5StorageBranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
+		[]byte{},
+		[]byte{},
+		crypto.Keccak256(slot0StorageLeafNode),
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		[]byte{},
+		crypto.Keccak256(slot3StorageLeafNode),
 		[]byte{},
 		[]byte{},
 		[]byte{},
@@ -683,7 +698,7 @@ func TestBuilder(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
 		if err != nil {
 			t.Error(err)
 		}
@@ -946,7 +961,7 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
 		if err != nil {
 			t.Error(err)
 		}
@@ -988,6 +1003,7 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 	params := statediff.Params{
 		WatchedAddresses: []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
 	}
+	params.ComputeWatchedAddressesLeafKeys()
 	builder = statediff.NewBuilder(chain.StateCache())
 
 	var tests = []struct {
@@ -1135,170 +1151,7 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
-		if err != nil {
-			t.Error(err)
-		}
-		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
-		if err != nil {
-			t.Error(err)
-		}
-		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
-		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
-		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
-			t.Logf("Test failed: %s", test.name)
-			t.Errorf("actual state diff: %+v\nexpected state diff: %+v", diff, test.expected)
-		}
-	}
-}
-
-func TestBuilderWithWatchedAddressAndStorageKeyList(t *testing.T) {
-	blocks, chain := test_helpers.MakeChain(3, test_helpers.Genesis, test_helpers.TestChainGen)
-	contractLeafKey = test_helpers.AddressToLeafKey(test_helpers.ContractAddr)
-	defer chain.Stop()
-	block0 = test_helpers.Genesis
-	block1 = blocks[0]
-	block2 = blocks[1]
-	block3 = blocks[2]
-	params := statediff.Params{
-		WatchedAddresses:    []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
-		WatchedStorageSlots: []common.Hash{slot1StorageKey},
-	}
-	builder = statediff.NewBuilder(chain.StateCache())
-
-	var tests = []struct {
-		name              string
-		startingArguments statediff.Args
-		expected          *types2.StateObject
-	}{
-		{
-			"testEmptyDiff",
-			statediff.Args{
-				OldStateRoot: block0.Root(),
-				NewStateRoot: block0.Root(),
-				BlockNumber:  block0.Number(),
-				BlockHash:    block0.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block0.Number(),
-				BlockHash:   block0.Hash(),
-				Nodes:       emptyDiffs,
-			},
-		},
-		{
-			"testBlock0",
-			//10000 transferred from testBankAddress to account1Addr
-			statediff.Args{
-				OldStateRoot: test_helpers.NullHash,
-				NewStateRoot: block0.Root(),
-				BlockNumber:  block0.Number(),
-				BlockHash:    block0.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block0.Number(),
-				BlockHash:   block0.Hash(),
-				Nodes:       emptyDiffs,
-			},
-		},
-		{
-			"testBlock1",
-			//10000 transferred from testBankAddress to account1Addr
-			statediff.Args{
-				OldStateRoot: block0.Root(),
-				NewStateRoot: block1.Root(),
-				BlockNumber:  block1.Number(),
-				BlockHash:    block1.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block1.Number(),
-				BlockHash:   block1.Hash(),
-				Nodes: []types2.StateNode{
-					{
-						Path:         []byte{'\x0e'},
-						NodeType:     types2.Leaf,
-						LeafKey:      test_helpers.Account1LeafKey,
-						NodeValue:    account1AtBlock1LeafNode,
-						StorageNodes: emptyStorage,
-					},
-				},
-			},
-		},
-		{
-			"testBlock2",
-			//1000 transferred from testBankAddress to account1Addr
-			//1000 transferred from account1Addr to account2Addr
-			statediff.Args{
-				OldStateRoot: block1.Root(),
-				NewStateRoot: block2.Root(),
-				BlockNumber:  block2.Number(),
-				BlockHash:    block2.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block2.Number(),
-				BlockHash:   block2.Hash(),
-				Nodes: []types2.StateNode{
-					{
-						Path:      []byte{'\x06'},
-						NodeType:  types2.Leaf,
-						LeafKey:   contractLeafKey,
-						NodeValue: contractAccountAtBlock2LeafNode,
-						StorageNodes: []types2.StorageNode{
-							{
-								Path:      []byte{'\x0b'},
-								NodeType:  types2.Leaf,
-								LeafKey:   slot1StorageKey.Bytes(),
-								NodeValue: slot1StorageLeafNode,
-							},
-						},
-					},
-					{
-						Path:         []byte{'\x0e'},
-						NodeType:     types2.Leaf,
-						LeafKey:      test_helpers.Account1LeafKey,
-						NodeValue:    account1AtBlock2LeafNode,
-						StorageNodes: emptyStorage,
-					},
-				},
-				CodeAndCodeHashes: []types2.CodeAndCodeHash{
-					{
-						Hash: test_helpers.CodeHash,
-						Code: test_helpers.ByteCodeAfterDeployment,
-					},
-				},
-			},
-		},
-		{
-			"testBlock3",
-			//the contract's storage is changed
-			//and the block is mined by account 2
-			statediff.Args{
-				OldStateRoot: block2.Root(),
-				NewStateRoot: block3.Root(),
-				BlockNumber:  block3.Number(),
-				BlockHash:    block3.Hash(),
-			},
-			&types2.StateObject{
-				BlockNumber: block3.Number(),
-				BlockHash:   block3.Hash(),
-				Nodes: []types2.StateNode{
-					{
-						Path:         []byte{'\x06'},
-						NodeType:     types2.Leaf,
-						LeafKey:      contractLeafKey,
-						NodeValue:    contractAccountAtBlock3LeafNode,
-						StorageNodes: emptyStorage,
-					},
-				},
-			},
-		},
-	}
-
-	for _, test := range tests {
-		diff, err := builder.BuildStateDiffObject(test.startingArguments, params)
-		if err != nil {
-			t.Error(err)
-		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1434,15 +1287,14 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 						StorageNodes: []types2.StorageNode{
 							{
 								Path:      []byte{},
-								NodeType:  types2.Leaf,
-								NodeValue: slot0StorageLeafRootNode,
-								LeafKey:   slot0StorageKey.Bytes(),
+								NodeType:  types2.Branch,
+								NodeValue: block5StorageBranchRootNode,
 							},
 							{
-								Path:      []byte{'\x02'},
-								NodeType:  types2.Removed,
-								LeafKey:   slot0StorageKey.Bytes(),
-								NodeValue: []byte{},
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Leaf,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: slot3StorageLeafNode,
 							},
 							{
 								Path:      []byte{'\x04'},
@@ -1481,11 +1333,29 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 						StorageNodes: emptyStorage,
 					},
 					{
-						Path:         []byte{'\x06'},
-						NodeType:     types2.Removed,
-						LeafKey:      contractLeafKey,
-						NodeValue:    []byte{},
-						StorageNodes: emptyStorage,
+						Path:      []byte{'\x06'},
+						NodeType:  types2.Removed,
+						LeafKey:   contractLeafKey,
+						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{},
+								NodeType:  types2.Removed,
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x02'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot0StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+						},
 					},
 					{
 						Path:         []byte{'\x0c'},
@@ -1511,7 +1381,7 @@ func TestBuilderWithRemovedAccountAndStorage(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1629,16 +1499,10 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 						NodeValue: contractAccountAtBlock5LeafNode,
 						StorageNodes: []types2.StorageNode{
 							{
-								Path:      []byte{},
+								Path:      []byte{'\x0c'},
 								NodeType:  types2.Leaf,
-								LeafKey:   slot0StorageKey.Bytes(),
-								NodeValue: slot0StorageLeafRootNode,
-							},
-							{
-								Path:      []byte{'\x02'},
-								NodeType:  types2.Removed,
-								LeafKey:   slot0StorageKey.Bytes(),
-								NodeValue: []byte{},
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: slot3StorageLeafNode,
 							},
 							{
 								Path:      []byte{'\x04'},
@@ -1675,6 +1539,20 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 						NodeType:  types2.Removed,
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{'\x02'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot0StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+						},
 					},
 					{
 						Path:         []byte{'\x0c'},
@@ -1700,7 +1578,295 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 		if err != nil {
 			t.Error(err)
 		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
+		if err != nil {
+			t.Error(err)
+		}
+
+		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
+		if err != nil {
+			t.Error(err)
+		}
+
+		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
+		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
+		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
+			t.Logf("Test failed: %s", test.name)
+			t.Errorf("actual state diff: %+v\r\n\r\n\r\nexpected state diff: %+v", diff, test.expected)
+		}
+	}
+}
+
+func TestBuilderWithRemovedNonWatchedAccount(t *testing.T) {
+	blocks, chain := test_helpers.MakeChain(6, test_helpers.Genesis, test_helpers.TestChainGen)
+	contractLeafKey = test_helpers.AddressToLeafKey(test_helpers.ContractAddr)
+	defer chain.Stop()
+	block3 = blocks[2]
+	block4 = blocks[3]
+	block5 = blocks[4]
+	block6 = blocks[5]
+	params := statediff.Params{
+		WatchedAddresses: []common.Address{test_helpers.Account1Addr, test_helpers.Account2Addr},
+	}
+	params.ComputeWatchedAddressesLeafKeys()
+	builder = statediff.NewBuilder(chain.StateCache())
+
+	var tests = []struct {
+		name              string
+		startingArguments statediff.Args
+		expected          *types2.StateObject
+	}{
+		{
+			"testBlock4",
+			statediff.Args{
+				OldStateRoot: block3.Root(),
+				NewStateRoot: block4.Root(),
+				BlockNumber:  block4.Number(),
+				BlockHash:    block4.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block4.Number(),
+				BlockHash:   block4.Hash(),
+				Nodes: []types2.StateNode{
+					{
+						Path:         []byte{'\x0c'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account2LeafKey,
+						NodeValue:    account2AtBlock4LeafNode,
+						StorageNodes: emptyStorage,
+					},
+				},
+			},
+		},
+		{
+			"testBlock5",
+			statediff.Args{
+				OldStateRoot: block4.Root(),
+				NewStateRoot: block5.Root(),
+				BlockNumber:  block5.Number(),
+				BlockHash:    block5.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block5.Number(),
+				BlockHash:   block5.Hash(),
+				Nodes: []types2.StateNode{
+					{
+						Path:         []byte{'\x0e'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account1LeafKey,
+						NodeValue:    account1AtBlock5LeafNode,
+						StorageNodes: emptyStorage,
+					},
+				},
+			},
+		},
+		{
+			"testBlock6",
+			statediff.Args{
+				OldStateRoot: block5.Root(),
+				NewStateRoot: block6.Root(),
+				BlockNumber:  block6.Number(),
+				BlockHash:    block6.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block6.Number(),
+				BlockHash:   block6.Hash(),
+				Nodes: []types2.StateNode{
+					{
+						Path:         []byte{'\x0c'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account2LeafKey,
+						NodeValue:    account2AtBlock6LeafNode,
+						StorageNodes: emptyStorage,
+					},
+					{
+						Path:         []byte{'\x0e'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account1LeafKey,
+						NodeValue:    account1AtBlock6LeafNode,
+						StorageNodes: emptyStorage,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		diff, err := builder.BuildStateDiffObject(test.startingArguments, params)
+		if err != nil {
+			t.Error(err)
+		}
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
+		if err != nil {
+			t.Error(err)
+		}
+
+		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
+		if err != nil {
+			t.Error(err)
+		}
+
+		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
+		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
+		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
+			t.Logf("Test failed: %s", test.name)
+			t.Errorf("actual state diff: %+v\r\n\r\n\r\nexpected state diff: %+v", diff, test.expected)
+		}
+	}
+}
+
+func TestBuilderWithRemovedWatchedAccount(t *testing.T) {
+	blocks, chain := test_helpers.MakeChain(6, test_helpers.Genesis, test_helpers.TestChainGen)
+	contractLeafKey = test_helpers.AddressToLeafKey(test_helpers.ContractAddr)
+	defer chain.Stop()
+	block3 = blocks[2]
+	block4 = blocks[3]
+	block5 = blocks[4]
+	block6 = blocks[5]
+	params := statediff.Params{
+		WatchedAddresses: []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
+	}
+	params.ComputeWatchedAddressesLeafKeys()
+	builder = statediff.NewBuilder(chain.StateCache())
+
+	var tests = []struct {
+		name              string
+		startingArguments statediff.Args
+		expected          *types2.StateObject
+	}{
+		{
+			"testBlock4",
+			statediff.Args{
+				OldStateRoot: block3.Root(),
+				NewStateRoot: block4.Root(),
+				BlockNumber:  block4.Number(),
+				BlockHash:    block4.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block4.Number(),
+				BlockHash:   block4.Hash(),
+				Nodes: []types2.StateNode{
+					{
+						Path:      []byte{'\x06'},
+						NodeType:  types2.Leaf,
+						LeafKey:   contractLeafKey,
+						NodeValue: contractAccountAtBlock4LeafNode,
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{'\x04'},
+								NodeType:  types2.Leaf,
+								LeafKey:   slot2StorageKey.Bytes(),
+								NodeValue: slot2StorageLeafNode,
+							},
+							{
+								Path:      []byte{'\x0b'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot1StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			"testBlock5",
+			statediff.Args{
+				OldStateRoot: block4.Root(),
+				NewStateRoot: block5.Root(),
+				BlockNumber:  block5.Number(),
+				BlockHash:    block5.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block5.Number(),
+				BlockHash:   block5.Hash(),
+				Nodes: []types2.StateNode{
+					{
+						Path:      []byte{'\x06'},
+						NodeType:  types2.Leaf,
+						LeafKey:   contractLeafKey,
+						NodeValue: contractAccountAtBlock5LeafNode,
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Leaf,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: slot3StorageLeafNode,
+							},
+							{
+								Path:      []byte{'\x04'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot2StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+						},
+					},
+					{
+						Path:         []byte{'\x0e'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account1LeafKey,
+						NodeValue:    account1AtBlock5LeafNode,
+						StorageNodes: emptyStorage,
+					},
+				},
+			},
+		},
+		{
+			"testBlock6",
+			statediff.Args{
+				OldStateRoot: block5.Root(),
+				NewStateRoot: block6.Root(),
+				BlockNumber:  block6.Number(),
+				BlockHash:    block6.Hash(),
+			},
+			&types2.StateObject{
+				BlockNumber: block6.Number(),
+				BlockHash:   block6.Hash(),
+				Nodes: []types2.StateNode{
+					{
+						Path:      []byte{'\x06'},
+						NodeType:  types2.Removed,
+						LeafKey:   contractLeafKey,
+						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{'\x02'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot0StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+							{
+								Path:      []byte{'\x0c'},
+								NodeType:  types2.Removed,
+								LeafKey:   slot3StorageKey.Bytes(),
+								NodeValue: []byte{},
+							},
+						},
+					},
+					{
+						Path:         []byte{'\x0e'},
+						NodeType:     types2.Leaf,
+						LeafKey:      test_helpers.Account1LeafKey,
+						NodeValue:    account1AtBlock6LeafNode,
+						StorageNodes: emptyStorage,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		diff, err := builder.BuildStateDiffObject(test.startingArguments, params)
+		if err != nil {
+			t.Error(err)
+		}
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1722,44 +1888,44 @@ func TestBuilderWithRemovedAccountAndStorageWithoutIntermediateNodes(t *testing.
 var (
 	slot00StorageValue = common.Hex2Bytes("9471562b71999873db5b286df957af199ec94617f7") // prefixed TestBankAddress
 
-	slot00StorageLeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	slot00StorageLeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("390decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"),
 		slot00StorageValue,
 	})
 
-	contractAccountAtBlock01, _ = rlp.EncodeToBytes(types.StateAccount{
+	contractAccountAtBlock01, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    1,
 		Balance:  big.NewInt(0),
 		CodeHash: common.HexToHash("0xaaea5efba4fd7b45d7ec03918ac5d8b31aa93b48986af0e6b591f0f087c80127").Bytes(),
 		Root:     crypto.Keccak256Hash(block01StorageBranchRootNode),
 	})
-	contractAccountAtBlock01LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	contractAccountAtBlock01LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("3cb2583748c26e89ef19c2a8529b05a270f735553b4d44b6f2a1894987a71c8b"),
 		contractAccountAtBlock01,
 	})
 
-	bankAccountAtBlock01, _ = rlp.EncodeToBytes(types.StateAccount{
+	bankAccountAtBlock01, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    1,
 		Balance:  big.NewInt(3999629697375000000),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	bankAccountAtBlock01LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountAtBlock01LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock01,
 	})
-	bankAccountAtBlock02, _ = rlp.EncodeToBytes(types.StateAccount{
+	bankAccountAtBlock02, _ = rlp.EncodeToBytes(&types.StateAccount{
 		Nonce:    2,
 		Balance:  big.NewInt(5999607323457344852),
 		CodeHash: test_helpers.NullCodeHash.Bytes(),
 		Root:     test_helpers.EmptyContractRoot,
 	})
-	bankAccountAtBlock02LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountAtBlock02LeafNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		common.Hex2Bytes("2000bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock02,
 	})
 
-	block01BranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block01BranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		crypto.Keccak256Hash(bankAccountAtBlock01LeafNode),
 		crypto.Keccak256Hash(contractAccountAtBlock01LeafNode),
 		[]byte{},
@@ -1779,7 +1945,7 @@ var (
 		[]byte{},
 	})
 
-	block01StorageBranchRootNode, _ = rlp.EncodeToBytes([]interface{}{
+	block01StorageBranchRootNode, _ = rlp.EncodeToBytes(&[]interface{}{
 		[]byte{},
 		[]byte{},
 		crypto.Keccak256(slot00StorageLeafNode),
@@ -1901,11 +2067,26 @@ func TestBuilderWithMovedAccount(t *testing.T) {
 						NodeType:  types2.Removed,
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:     []byte{},
+								NodeType: types2.Removed,
+							},
+							{
+								Path:     []byte{'\x02'},
+								NodeType: types2.Removed,
+								LeafKey:  slot0StorageKey.Bytes(),
+							},
+							{
+								Path:     []byte{'\x0b'},
+								NodeType: types2.Removed,
+								LeafKey:  slot1StorageKey.Bytes(),
+							},
+						},
 					},
 					{
 						Path:      []byte{'\x00'},
 						NodeType:  types2.Removed,
-						LeafKey:   test_helpers.BankLeafKey,
 						NodeValue: []byte{},
 					},
 				},
@@ -1918,7 +2099,7 @@ func TestBuilderWithMovedAccount(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
 		if err != nil {
 			t.Error(err)
 		}
@@ -2026,11 +2207,22 @@ func TestBuilderWithMovedAccountOnlyLeafs(t *testing.T) {
 						NodeType:  types2.Removed,
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
+						StorageNodes: []types2.StorageNode{
+							{
+								Path:     []byte{'\x02'},
+								NodeType: types2.Removed,
+								LeafKey:  slot0StorageKey.Bytes(),
+							},
+							{
+								Path:     []byte{'\x0b'},
+								NodeType: types2.Removed,
+								LeafKey:  slot1StorageKey.Bytes(),
+							},
+						},
 					},
 					{
 						Path:      []byte{'\x00'},
 						NodeType:  types2.Removed,
-						LeafKey:   test_helpers.BankLeafKey,
 						NodeValue: []byte{},
 					},
 				},
@@ -2043,7 +2235,7 @@ func TestBuilderWithMovedAccountOnlyLeafs(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(&diff)
 		if err != nil {
 			t.Error(err)
 		}
@@ -2274,7 +2466,7 @@ func TestBuildStateTrie(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		receivedStateTrieRlp, err := rlp.EncodeToBytes(diff)
+		receivedStateTrieRlp, err := rlp.EncodeToBytes(&diff)
 		if err != nil {
 			t.Error(err)
 		}

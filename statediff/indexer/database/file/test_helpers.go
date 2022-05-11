@@ -57,6 +57,10 @@ func TearDownDB(t *testing.T, db *sqlx.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = tx.Exec(`DELETE FROM eth_meta.watched_addresses`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = tx.Commit()
 	if err != nil {
 		t.Fatal(err)
