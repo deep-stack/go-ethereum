@@ -202,7 +202,7 @@ func (sdb *builder) buildStateDiffWithIntermediateStateNodes(args types2.StateRo
 	// a map of their leafkey to all the accounts that were touched and exist at A
 	diffAccountsAtA, err := sdb.deletedOrUpdatedState(
 		oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}),
-		diffAccountsAtB, diffPathsAtB, params.watchedAddressesLeafKeys,
+		diffAccountsAtB, diffPathsAtB, params.WatchedAddressesLeafKeys,
 		params.IntermediateStorageNodes, output)
 	if err != nil {
 		return fmt.Errorf("error collecting deletedOrUpdatedNodes: %v", err)
@@ -248,7 +248,7 @@ func (sdb *builder) buildStateDiffWithoutIntermediateStateNodes(args types2.Stat
 	// and a slice of all the paths for the nodes in both of the above sets
 	diffAccountsAtB, diffPathsAtB, err := sdb.createdAndUpdatedState(
 		oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}),
-		params.watchedAddressesLeafKeys)
+		params.WatchedAddressesLeafKeys)
 	if err != nil {
 		return fmt.Errorf("error collecting createdAndUpdatedNodes: %v", err)
 	}
@@ -257,7 +257,7 @@ func (sdb *builder) buildStateDiffWithoutIntermediateStateNodes(args types2.Stat
 	// a map of their leafkey to all the accounts that were touched and exist at A
 	diffAccountsAtA, err := sdb.deletedOrUpdatedState(
 		oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}),
-		diffAccountsAtB, diffPathsAtB, params.watchedAddressesLeafKeys,
+		diffAccountsAtB, diffPathsAtB, params.WatchedAddressesLeafKeys,
 		params.IntermediateStorageNodes, output)
 	if err != nil {
 		return fmt.Errorf("error collecting deletedOrUpdatedNodes: %v", err)
