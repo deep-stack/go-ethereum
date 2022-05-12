@@ -99,7 +99,7 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*sql.BatchTx).BlockNumber, testBlock.Number().Uint64())
+	require.Equal(t, testBlock.Number().String(), tx.(*sql.BatchTx).BlockNumber)
 }
 
 func tearDown(t *testing.T) {

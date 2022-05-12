@@ -24,10 +24,10 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/node"
-	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
 )
 
 var (
@@ -69,7 +69,7 @@ func TestPostgresPGX(t *testing.T) {
 
 		bi := new(big.Int)
 		bi.SetString("34940183920000000000", 10)
-		test_helpers.ExpectEqual(t, bi.String(), "34940183920000000000")
+		require.Equal(t, "34940183920000000000", bi.String())
 
 		defer dbPool.Exec(ctx, `DROP TABLE IF EXISTS example`)
 		_, err = dbPool.Exec(ctx, "CREATE TABLE example ( id INTEGER, data NUMERIC )")
@@ -77,7 +77,7 @@ func TestPostgresPGX(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		sqlStatement := `  
+		sqlStatement := `
 			INSERT INTO example (id, data)
 			VALUES (1, cast($1 AS NUMERIC))`
 		_, err = dbPool.Exec(ctx, sqlStatement, bi.String())
@@ -91,10 +91,10 @@ func TestPostgresPGX(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		test_helpers.ExpectEqual(t, data, bi.String())
+		require.Equal(t, data, bi.String())
 		actual := new(big.Int)
 		actual.SetString(data, 10)
-		test_helpers.ExpectEqual(t, actual, bi)
+		require.Equal(t, bi, actual)
 	})
 
 	t.Run("throws error when can't connect to the database", func(t *testing.T) {

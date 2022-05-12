@@ -48,10 +48,10 @@ func ResolveDriverType(str string) (DriverType, error) {
 // DefaultConfig are default parameters for connecting to a Postgres sql
 var DefaultConfig = Config{
 	Hostname:     "localhost",
-	Port:         5432,
+	Port:         8066,
 	DatabaseName: "vulcanize_testing_v4",
 	Username:     "postgres",
-	Password:     "",
+	Password:     "password",
 }
 
 // Config holds params for a Postgres db

@@ -2,16 +2,13 @@ version: "3.2"
 
 services:
   ipld-eth-db:
-    restart: always
-    image: vulcanize/ipld-eth-db:v3.2.0
+    restart: on-failure
+    depends_on:
+      - access-node
+    image: migrations-test
     environment:
-      POSTGRES_USER: "vdbm"
-      POSTGRES_DB: "vulcanize_testing_v3"
-      POSTGRES_PASSWORD: "password"
-    volumes:
-      - geth_node:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
-
-volumes:
-  geth_node:
+      DATABASE_USER: "postgres"
+      DATABASE_NAME: "vulcanize_testing_v4"
+      DATABASE_PASSWORD: "password"
+      DATABASE_HOSTNAME: "access-node"
+      DATABASE_PORT: 5432

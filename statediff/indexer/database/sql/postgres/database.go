@@ -40,65 +40,65 @@ type DB struct {
 func (db *DB) InsertHeaderStm() string {
 	return `INSERT INTO eth.header_cids (block_number, block_hash, parent_hash, cid, td, node_id, reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, coinbase)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-			ON CONFLICT (block_hash) DO UPDATE SET (parent_hash, cid, td, node_id, reward, state_root, tx_root, receipt_root, uncle_root, bloom, timestamp, mh_key, times_validated, coinbase) = ($3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, eth.header_cids.times_validated + 1, $16)`
+			ON CONFLICT DO NOTHING`
 }
 
 // InsertUncleStm satisfies the sql.Statements interface
 func (db *DB) InsertUncleStm() string {
 	return `INSERT INTO eth.uncle_cids (block_number, block_hash, header_id, parent_hash, cid, reward, mh_key) VALUES ($1, $2, $3, $4, $5, $6, $7)
-			ON CONFLICT (block_hash) DO NOTHING`
+			ON CONFLICT DO NOTHING`
 }
 
 // InsertTxStm satisfies the sql.Statements interface
 func (db *DB) InsertTxStm() string {
 	return `INSERT INTO eth.transaction_cids (block_number, header_id, tx_hash, cid, dst, src, index, mh_key, tx_data, tx_type, value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-			ON CONFLICT (tx_hash) DO NOTHING`
+			ON CONFLICT DO NOTHING`
 }
 
 // InsertAccessListElementStm satisfies the sql.Statements interface
 func (db *DB) InsertAccessListElementStm() string {
 	return `INSERT INTO eth.access_list_elements (block_number, tx_id, index, address, storage_keys) VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (tx_id, index) DO NOTHING`
+			ON CONFLICT DO NOTHING`
 }
 
 // InsertRctStm satisfies the sql.Statements interface
 func (db *DB) InsertRctStm() string {
 	return `INSERT INTO eth.receipt_cids (block_number, tx_id, leaf_cid, contract, contract_hash, leaf_mh_key, post_state, post_status, log_root) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		  	ON CONFLICT (tx_id) DO NOTHING`
+		  	ON CONFLICT DO NOTHING`
 }
 
 // InsertLogStm satisfies the sql.Statements interface
 func (db *DB) InsertLogStm() string {
 	return `INSERT INTO eth.log_cids (block_number, leaf_cid, leaf_mh_key, rct_id, address, index, topic0, topic1, topic2, topic3, log_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-			ON CONFLICT (rct_id, index) DO NOTHING`
+			ON CONFLICT DO NOTHING`
 }
 
 // InsertStateStm satisfies the sql.Statements interface
 func (db *DB) InsertStateStm() string {
 	return `INSERT INTO eth.state_cids (block_number, header_id, state_leaf_key, cid, state_path, node_type, diff, mh_key) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			ON CONFLICT (header_id, state_path) DO UPDATE SET (block_number, state_leaf_key, cid, node_type, diff, mh_key) = ($1, $3, $4, $6, $7, $8)`
+			ON CONFLICT DO NOTHING`
 }
 
 // InsertAccountStm satisfies the sql.Statements interface
 func (db *DB) InsertAccountStm() string {
 	return `INSERT INTO eth.state_accounts (block_number, header_id, state_path, balance, nonce, code_hash, storage_root) VALUES ($1, $2, $3, $4, $5, $6, $7)
-		  	ON CONFLICT (header_id, state_path) DO NOTHING`
+		  	ON CONFLICT DO NOTHING`
 }
 
 // InsertStorageStm satisfies the sql.Statements interface
 func (db *DB) InsertStorageStm() string {
 	return `INSERT INTO eth.storage_cids (block_number, header_id, state_path, storage_leaf_key, cid, storage_path, node_type, diff, mh_key) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		  	ON CONFLICT (header_id, state_path, storage_path) DO UPDATE SET (block_number, storage_leaf_key, cid, node_type, diff, mh_key) = ($1, $4, $5, $7, $8, $9)`
+		  	ON CONFLICT DO NOTHING`
 }
 
 // InsertIPLDStm satisfies the sql.Statements interface
 func (db *DB) InsertIPLDStm() string {
-	return `INSERT INTO public.blocks (block_number, key, data) VALUES ($1, $2, $3) ON CONFLICT (block_number, key) DO NOTHING`
+	return `INSERT INTO public.blocks (block_number, key, data) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`
 }
 
 // InsertIPLDsStm satisfies the sql.Statements interface
 func (db *DB) InsertIPLDsStm() string {
-	return `INSERT INTO public.blocks (block_number, key, data) VALUES (unnest($1::BIGINT[]), unnest($2::TEXT[]), unnest($3::BYTEA[])) ON CONFLICT (block_number, key) DO NOTHING`
+	return `INSERT INTO public.blocks (block_number, key, data) VALUES (unnest($1::BIGINT[]), unnest($2::TEXT[]), unnest($3::BYTEA[])) ON CONFLICT DO NOTHING`
 }
 
 // InsertKnownGapsStm satisfies the sql.Statements interface

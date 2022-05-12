@@ -107,7 +107,7 @@ func setup(t *testing.T, testBlock *types.Block, testReceipts types.Receipts) {
 		require.NoError(t, err)
 	}
 
-	test_helpers.ExpectEqual(t, tx.(*file.BatchTx).BlockNumber, testBlock.Number().Uint64())
+	require.Equal(t, testBlock.Number().String(), tx.(*file.BatchTx).BlockNumber)
 
 	connStr := postgres.DefaultConfig.DbConnectionString()
 
