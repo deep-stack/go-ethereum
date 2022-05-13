@@ -66,6 +66,10 @@ func (p *Params) ComputeWatchedAddressesLeafKeys() {
 	}
 }
 
+func (p *Params) WatchedAddressesLeafKeys() map[common.Hash]struct{} {
+	return p.watchedAddressesLeafKeys
+}
+
 // ParamsWithMutex allows to lock the parameters while they are being updated | read from
 type ParamsWithMutex struct {
 	Params
