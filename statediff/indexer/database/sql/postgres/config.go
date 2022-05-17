@@ -50,7 +50,7 @@ var DefaultConfig = Config{
 	Hostname:     "localhost",
 	Port:         8066,
 	DatabaseName: "vulcanize_testing_v4",
-	Username:     "postgres",
+	Username:     "vdbm",
 	Password:     "password",
 }
 
