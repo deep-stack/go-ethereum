@@ -56,7 +56,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(nodeFlags, rpcFlags...),
+		Flags:       utils.GroupFlags(nodeFlags, rpcFlags),
 		Category:    "MISCELLANEOUS COMMANDS",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
@@ -171,7 +171,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		cfg.Eth.OverrideArrowGlacier = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideArrowGlacierFlag.Name))
 	}
 	if ctx.GlobalIsSet(utils.OverrideTerminalTotalDifficulty.Name) {
-		cfg.Eth.OverrideTerminalTotalDifficulty = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideTerminalTotalDifficulty.Name))
+		cfg.Eth.OverrideTerminalTotalDifficulty = utils.GlobalBig(ctx, utils.OverrideTerminalTotalDifficulty.Name)
 	}
 
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
