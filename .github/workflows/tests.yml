@@ -161,6 +161,6 @@ jobs:
         shell: bash
         run: |
           rows=$(docker compose -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-go-ethereum.yml" exec access-node psql -U vdbm -d vulcanize_testing_v4  -AXqtc "SELECT COUNT(*) FROM eth.header_cids")
-          [[ "$rows" -lt "0" ]] && echo "We could not find any rows in postgres table." && (exit 1)
+          [[ "$rows" -lt "1" ]] && echo "We could not find any rows in postgres table." && (exit 1)
           echo $rows
           docker compose -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-go-ethereum.yml" exec access-node psql -U vdbm -d vulcanize_testing_v4  -AXqtc "SELECT * FROM eth.header_cids"
