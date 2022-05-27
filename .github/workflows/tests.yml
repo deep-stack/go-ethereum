@@ -4,7 +4,7 @@ on:
   workflow_call:
 
 env:
-  stack-orchestrator-ref: ${{ github.event.inputs.stack-orchestrator-ref  || 'feature/testing-geth'}}
+  stack-orchestrator-ref: ${{ github.event.inputs.stack-orchestrator-ref  || 'feature/geth-testing'}}
   ipld-eth-db-ref: ${{ github.event.inputs.ipld-ethcl-db-ref  || 'main' }}
   GOPATH: /tmp/go
 
@@ -106,8 +106,9 @@ jobs:
       - name: Run docker compose
         run: |
           docker-compose  \
-          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-db.yml" \
-          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-go-ethereum.yml" \
+          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-db-migration.yml \
+          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-go-ethereum4.yml \
+          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/latest/docker-compose-timescale-db.yml \
           --env-file $GITHUB_WORKSPACE/config.sh \
           up -d --build
 
