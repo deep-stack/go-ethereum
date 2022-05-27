@@ -53,8 +53,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Start database
-        run: docker-compose -f docker-compose.yml up -d ipld-eth-db
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ env.stack-orchestrator-ref }}
+          path: "./stack-orchestrator/"
+          repository: vulcanize/stack-orchestrator
+          fetch-depth: 0
+
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ env.ipld-eth-db-ref }}
+          repository: vulcanize/ipld-eth-db
+          path: "./ipld-eth-db/"
+          fetch-depth: 0
+
+      - name: Create config file
+        run: |
+          echo vulcanize_ipld_eth_db=$GITHUB_WORKSPACE/ipld-eth-db/ > $GITHUB_WORKSPACE/config.sh
+          echo vulcanize_go_ethereum=$GITHUB_WORKSPACE/go-ethereum/ >> $GITHUB_WORKSPACE/config.sh
+          echo db_write=true >> $GITHUB_WORKSPACE/config.sh
+          cat $GITHUB_WORKSPACE/config.sh
+
+      - name: Run docker compose
+        run: |
+          docker-compose  \
+          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-db-migration.yml" \
+          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/latest/docker-compose-timescale-db.yml" \
+          --env-file $GITHUB_WORKSPACE/config.sh \
+          up -d --build
+
+      - name: Give the migration a few seconds
+        run: sleep 30;
 
       - name: Run unit tests
         run: make statedifftest
@@ -106,9 +135,9 @@ jobs:
       - name: Run docker compose
         run: |
           docker-compose  \
-          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-db-migration.yml \
-          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-go-ethereum4.yml \
-          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/latest/docker-compose-timescale-db.yml \
+          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-db-migration.yml" \
+          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/local/docker-compose-go-ethereum4.yml" \
+          -f "$GITHUB_WORKSPACE/stack-orchestrator/docker/latest/docker-compose-timescale-db.yml" \
           --env-file $GITHUB_WORKSPACE/config.sh \
           up -d --build
 
