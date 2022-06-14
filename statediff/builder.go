@@ -272,6 +272,7 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
 			if isWatchedAddress(watchedAddressesLeafKeys, leafKey) {
+				// if the address at a leaf node is being watched, the intermediate nodes along it's path should be indexed
 				// set shouldIndex of top (if available) of intermediateNodeStack to true
 				if shouldIndexIntermediateStateNodes && intermediateNodeStack.Size() > 0 {
 					topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
@@ -303,6 +304,7 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 		diffPathsAtB[common.Bytes2Hex(node.Path)] = true
 	}
 
+	// after iterating over the diff of state tries, some intermediate nodes might be left to be processed in the stack
 	// process outstanding intermediate nodes
 	for intermediateNodeStack.Size() > 0 {
 		var err error
@@ -315,12 +317,16 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 	return diffAcountsAtB, diffPathsAtB, it.Error()
 }
 
+// processCreatedOrUpdatedIntermediateNodes handles created or updated intermediate diff nodes
 func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, currNode types2.StateNode, currHash, currParentHash common.Hash, output types2.StateNodeSink) (*lane.Stack, error) {
-	// compare parent hash of current intermediate node with that of top of the intermediateNodeStack
-	// if equal, push the current node on the stack
-	// if unequal, pop the top
-	// 		if shouldIndex, index the node and set shouldIndex of top to true
-	// 		repeat
+	// 1. compare parenthash of current intermediate node with hash of node at top of the intermediateNodeStack
+	//    if unequal, that means the intermediate node at top of the stack is not a parent of the current node
+	//   		the current node is on a branch different than that of node at the top of the stack
+	//   		pop the top node and index if required
+	//    repeat until the stack gets emptied or the hashes turn out to be equal
+	// 2. if equal, that means the intermediate node at top of the stack is parent of the current node
+	//    or if the intermediateNodeStack is empty
+	//    	push the current node to the stack
 
 	for intermediateNodeStack.Size() > 0 && intermediateNodeStack.First().(intermediateStateDiffNode).hash != currParentHash {
 		var err error
@@ -330,7 +336,6 @@ func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack,
 		}
 	}
 
-	// push to the stack
 	intermediateNodeStack.Push(intermediateStateDiffNode{
 		node: types2.StateNode{
 			NodeType:  currNode.NodeType,
@@ -343,17 +348,16 @@ func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack,
 	return intermediateNodeStack, nil
 }
 
+// popAndIndexCreatedOrUpdatedIntermediateNodes pops and indexes (if required) the node at top of given intermediateNodeStack
 func popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, output types2.StateNodeSink) (*lane.Stack, error) {
-	// pop from the stack
 	intermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
 
-	// index
 	if intermediateNode.shouldIndex {
 		if err := output(intermediateNode.node); err != nil {
 			return nil, err
 		}
 
-		// when a child gets indexed, it's parent should get indexed too
+		// if a child gets indexed, it's parent should get indexed too
 		if intermediateNodeStack.Size() > 0 {
 			topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
 			topIntermediateNode.shouldIndex = true
@@ -395,8 +399,9 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAt
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
 			if isWatchedAddress(watchedAddressesLeafKeys, leafKey) {
+				// if the address at a leaf node is being watched, the intermediate nodes along it's path should be indexed
+				// set shouldIndex of top (if available) of intermediateNodeStack to true
 				if shouldIndexIntermediateStateNodes && intermediateNodeStack.Size() > 0 {
-					// set shouldIndex of top (if available) of intermediateNodeStack to true
 					topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
 					topIntermediateNode.shouldIndex = true
 					intermediateNodeStack.Push(topIntermediateNode)
@@ -455,6 +460,7 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAt
 		}
 	}
 
+	// after iterating over the diff of state tries, some intermediate nodes might be left to be processed in the stack
 	// process outstanding intermediate nodes
 	for intermediateNodeStack.Size() > 0 {
 		var err error
@@ -467,6 +473,7 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAt
 	return diffAccountAtA, it.Error()
 }
 
+// processDeletedOrUpdatedIntermediateNodes handles deleted or updated intermediate diff nodes
 func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, currNode types2.StateNode, currHash, currParentHash common.Hash, diffPathsAtB map[string]bool, output types2.StateNodeSink) (*lane.Stack, error) {
 	for intermediateNodeStack.Size() > 0 && intermediateNodeStack.First().(intermediateStateDiffNode).hash != currParentHash {
 		var err error
@@ -476,7 +483,6 @@ func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack,
 		}
 	}
 
-	// push to the stack
 	intermediateNodeStack.Push(intermediateStateDiffNode{
 		node: types2.StateNode{
 			NodeType:  currNode.NodeType,
@@ -489,11 +495,11 @@ func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack,
 	return intermediateNodeStack, nil
 }
 
+// popAndIndexDeletedOrUpdatedIntermediateNodes pops and indexes (if required) the node at top of given intermediateNodeStack
 func popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, diffPathsAtB map[string]bool, output types2.StateNodeSink) (*lane.Stack, error) {
 	// pop from the stack
 	intermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
 
-	// index
 	if intermediateNode.shouldIndex {
 		// if this node's path did not show up in diffPathsAtB
 		// that means the node at this path was deleted (or moved) in B
@@ -504,7 +510,7 @@ func popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.St
 			}
 		}
 
-		// if a child gets indexed, it's parent will get indexed too
+		// if a child gets indexed, it's parent should get indexed too
 		if intermediateNodeStack.Size() > 0 {
 			topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
 			topIntermediateNode.shouldIndex = true
