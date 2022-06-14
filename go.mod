@@ -61,6 +61,7 @@ require (
 	github.com/multiformats/go-multihash v0.0.14
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
+	github.com/oleiade/lane v1.0.1
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/pganalyze/pg_query_go/v2 v2.1.0

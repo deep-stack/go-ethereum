@@ -23,6 +23,8 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/oleiade/lane"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -245,7 +247,7 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 	it, _ := trie.NewDifferenceIterator(a, b)
 
 	// stack to hold intermediate nodes into during difference iteration
-	var intermediateNodeStack []intermediateStateDiffNode
+	var intermediateNodeStack *lane.Stack = lane.NewStack()
 
 	for it.Next(true) {
 		// skip value nodes
@@ -271,8 +273,10 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 			leafKey := encodedPath[1:]
 			if isWatchedAddress(watchedAddressesLeafKeys, leafKey) {
 				// set shouldIndex of top (if available) of intermediateNodeStack to true
-				if shouldIndexIntermediateStateNodes && len(intermediateNodeStack) > 0 {
-					intermediateNodeStack[len(intermediateNodeStack)-1].shouldIndex = true
+				if shouldIndexIntermediateStateNodes && intermediateNodeStack.Size() > 0 {
+					topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
+					topIntermediateNode.shouldIndex = true
+					intermediateNodeStack.Push(topIntermediateNode)
 				}
 
 				diffAcountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
@@ -300,7 +304,7 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 	}
 
 	// process outstanding intermediate nodes
-	for len(intermediateNodeStack) > 0 {
+	for intermediateNodeStack.Size() > 0 {
 		var err error
 		intermediateNodeStack, err = popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack, output)
 		if err != nil {
@@ -311,14 +315,14 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 	return diffAcountsAtB, diffPathsAtB, it.Error()
 }
 
-func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack []intermediateStateDiffNode, currNode types2.StateNode, currHash, currParentHash common.Hash, output types2.StateNodeSink) ([]intermediateStateDiffNode, error) {
+func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, currNode types2.StateNode, currHash, currParentHash common.Hash, output types2.StateNodeSink) (*lane.Stack, error) {
 	// compare parent hash of current intermediate node with that of top of the intermediateNodeStack
 	// if equal, push the current node on the stack
 	// if unequal, pop the top
 	// 		if shouldIndex, index the node and set shouldIndex of top to true
 	// 		repeat
 
-	for len(intermediateNodeStack) > 0 && intermediateNodeStack[len(intermediateNodeStack)-1].hash != currParentHash {
+	for intermediateNodeStack.Size() > 0 && intermediateNodeStack.First().(intermediateStateDiffNode).hash != currParentHash {
 		var err error
 		intermediateNodeStack, err = popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack, output)
 		if err != nil {
@@ -327,7 +331,7 @@ func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack []intermedia
 	}
 
 	// push to the stack
-	intermediateNodeStack = append(intermediateNodeStack, intermediateStateDiffNode{
+	intermediateNodeStack.Push(intermediateStateDiffNode{
 		node: types2.StateNode{
 			NodeType:  currNode.NodeType,
 			Path:      currNode.Path,
@@ -339,11 +343,9 @@ func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack []intermedia
 	return intermediateNodeStack, nil
 }
 
-func popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack []intermediateStateDiffNode, output types2.StateNodeSink) ([]intermediateStateDiffNode, error) {
+func popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, output types2.StateNodeSink) (*lane.Stack, error) {
 	// pop from the stack
-	// TODO Use an existing implementation of stack
-	intermediateNode := intermediateNodeStack[len(intermediateNodeStack)-1]
-	intermediateNodeStack = intermediateNodeStack[:len(intermediateNodeStack)-1]
+	intermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
 
 	// index
 	if intermediateNode.shouldIndex {
@@ -351,9 +353,11 @@ func popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack []interm
 			return nil, err
 		}
 
-		// if a child gets indexed, it's parent should get indexed too
-		if len(intermediateNodeStack) > 0 {
-			intermediateNodeStack[len(intermediateNodeStack)-1].shouldIndex = true
+		// when a child gets indexed, it's parent should get indexed too
+		if intermediateNodeStack.Size() > 0 {
+			topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
+			topIntermediateNode.shouldIndex = true
+			intermediateNodeStack.Push(topIntermediateNode)
 		}
 	}
 
@@ -367,7 +371,7 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAt
 	it, _ := trie.NewDifferenceIterator(b, a)
 
 	// stack to hold intermediate nodes into during difference iteration
-	var intermediateNodeStack []intermediateStateDiffNode
+	var intermediateNodeStack *lane.Stack = lane.NewStack()
 
 	for it.Next(true) {
 		// skip value nodes
@@ -391,9 +395,11 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAt
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
 			if isWatchedAddress(watchedAddressesLeafKeys, leafKey) {
-				if shouldIndexIntermediateStateNodes && len(intermediateNodeStack) > 0 {
+				if shouldIndexIntermediateStateNodes && intermediateNodeStack.Size() > 0 {
 					// set shouldIndex of top (if available) of intermediateNodeStack to true
-					intermediateNodeStack[len(intermediateNodeStack)-1].shouldIndex = true
+					topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
+					topIntermediateNode.shouldIndex = true
+					intermediateNodeStack.Push(topIntermediateNode)
 				}
 
 				diffAccountAtA[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
@@ -450,7 +456,7 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAt
 	}
 
 	// process outstanding intermediate nodes
-	for len(intermediateNodeStack) > 0 {
+	for intermediateNodeStack.Size() > 0 {
 		var err error
 		intermediateNodeStack, err = popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, diffPathsAtB, output)
 		if err != nil {
@@ -461,8 +467,8 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAt
 	return diffAccountAtA, it.Error()
 }
 
-func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack []intermediateStateDiffNode, currNode types2.StateNode, currHash, currParentHash common.Hash, diffPathsAtB map[string]bool, output types2.StateNodeSink) ([]intermediateStateDiffNode, error) {
-	for len(intermediateNodeStack) > 0 && intermediateNodeStack[len(intermediateNodeStack)-1].hash != currParentHash {
+func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, currNode types2.StateNode, currHash, currParentHash common.Hash, diffPathsAtB map[string]bool, output types2.StateNodeSink) (*lane.Stack, error) {
+	for intermediateNodeStack.Size() > 0 && intermediateNodeStack.First().(intermediateStateDiffNode).hash != currParentHash {
 		var err error
 		intermediateNodeStack, err = popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, diffPathsAtB, output)
 		if err != nil {
@@ -471,7 +477,7 @@ func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack []intermedia
 	}
 
 	// push to the stack
-	intermediateNodeStack = append(intermediateNodeStack, intermediateStateDiffNode{
+	intermediateNodeStack.Push(intermediateStateDiffNode{
 		node: types2.StateNode{
 			NodeType:  currNode.NodeType,
 			Path:      currNode.Path,
@@ -483,10 +489,9 @@ func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack []intermedia
 	return intermediateNodeStack, nil
 }
 
-func popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack []intermediateStateDiffNode, diffPathsAtB map[string]bool, output types2.StateNodeSink) ([]intermediateStateDiffNode, error) {
+func popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, diffPathsAtB map[string]bool, output types2.StateNodeSink) (*lane.Stack, error) {
 	// pop from the stack
-	intermediateNode := intermediateNodeStack[len(intermediateNodeStack)-1]
-	intermediateNodeStack = intermediateNodeStack[:len(intermediateNodeStack)-1]
+	intermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
 
 	// index
 	if intermediateNode.shouldIndex {
@@ -500,8 +505,10 @@ func popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack []interm
 		}
 
 		// if a child gets indexed, it's parent will get indexed too
-		if len(intermediateNodeStack) > 0 {
-			intermediateNodeStack[len(intermediateNodeStack)-1].shouldIndex = true
+		if intermediateNodeStack.Size() > 0 {
+			topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
+			topIntermediateNode.shouldIndex = true
+			intermediateNodeStack.Push(topIntermediateNode)
 		}
 	}
 
