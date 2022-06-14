@@ -452,7 +452,9 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAt
 			}
 		case types2.Extension, types2.Branch:
 			// process nodes from intermediateNodeStack
-			intermediateNodeStack, err = processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, node, it.Hash(), it.Parent(), diffPathsAtB, output)
+			if shouldIndexIntermediateStateNodes {
+				intermediateNodeStack, err = processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, node, it.Hash(), it.Parent(), diffPathsAtB, output)
+			}
 
 			// fall through, we did everything we need to do with these node types
 		default:
