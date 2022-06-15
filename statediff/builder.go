@@ -185,6 +185,10 @@ func (sdb *StateDiffBuilder) WriteStateDiffObject(args types2.StateRoots, params
 		return fmt.Errorf("error creating trie for newStateRoot: %v", err)
 	}
 
+	// we do two state trie iterations:
+	// 		one for new/updated nodes,
+	// 		one for deleted/updated nodes;
+	// prepare 2 iterator instances for each task
 	iterPairs := []IterPair{
 		{
 			Older: oldTrie.NodeIterator([]byte{}),
@@ -265,8 +269,8 @@ func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watc
 	// used only when len(watchedAddressesLeafKeys) > 0
 	var intermediateNodeStack *lane.Stack = lane.NewStack()
 
-	// is the list of watched addresses empty
-	isWatchedAddressesEmpty := len(watchedAddressesLeafKeys) == 0
+	// do we have watched addresses
+	haveWatchedAddresses := len(watchedAddressesLeafKeys) > 0
 
 	for it.Next(true) {
 		// skip value nodes
@@ -293,10 +297,8 @@ func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watc
 			if isWatchedAddress(watchedAddressesLeafKeys, leafKey) {
 				// if the address at a leaf node is being watched, the intermediate nodes along it's path should be indexed
 				// set shouldIndex of top (if available) of intermediateNodeStack to true
-				if !isWatchedAddressesEmpty && shouldIndexIntermediateStateNodes && intermediateNodeStack.Size() > 0 {
-					topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
-					topIntermediateNode.shouldIndex = true
-					intermediateNodeStack.Push(topIntermediateNode)
+				if haveWatchedAddresses && shouldIndexIntermediateStateNodes && intermediateNodeStack.Size() > 0 {
+					intermediateNodeStack.Head().(*intermediateStateDiffNode).shouldIndex = true
 				}
 
 				diffAcountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
@@ -311,18 +313,18 @@ func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watc
 			if shouldIndexIntermediateStateNodes {
 				// create a diff for any intermediate node that has changed at b
 				// created vs updated makes no difference for intermediate nodes since we do not need to diff storage
-				if isWatchedAddressesEmpty {
+				if haveWatchedAddresses {
+					// process nodes from intermediateNodeStack
+					err = processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack, node, it.Hash(), it.Parent(), output)
+					if err != nil {
+						return nil, nil, err
+					}
+				} else {
 					if err := output(types2.StateNode{
 						NodeType:  node.NodeType,
 						Path:      node.Path,
 						NodeValue: node.NodeValue,
 					}); err != nil {
-						return nil, nil, err
-					}
-				} else {
-					// process nodes from intermediateNodeStack
-					intermediateNodeStack, err = processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack, node, it.Hash(), it.Parent(), output)
-					if err != nil {
 						return nil, nil, err
 					}
 				}
@@ -337,9 +339,8 @@ func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watc
 
 	// after iterating over the diff of state tries, some intermediate nodes might be left to be processed in the stack
 	// process outstanding intermediate nodes
-	for !isWatchedAddressesEmpty && intermediateNodeStack.Size() > 0 {
-		var err error
-		intermediateNodeStack, err = popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack, output)
+	for haveWatchedAddresses && intermediateNodeStack.Size() > 0 {
+		err := popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack, output)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -349,7 +350,7 @@ func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watc
 }
 
 // processCreatedOrUpdatedIntermediateNodes handles created or updated intermediate diff nodes
-func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, currNode types2.StateNode, currHash, currParentHash common.Hash, output types2.StateNodeSink) (*lane.Stack, error) {
+func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, currNode types2.StateNode, currHash, currParentHash common.Hash, output types2.StateNodeSink) error {
 	// 1. compare parenthash of current intermediate node with hash of node at top of the intermediateNodeStack
 	//    if unequal, that means the intermediate node at top of the stack is not a parent of the current node
 	//   		the current node is on a branch different than that of node at the top of the stack
@@ -359,15 +360,14 @@ func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack,
 	//    or if the intermediateNodeStack is empty
 	//    	push the current node to the stack
 
-	for intermediateNodeStack.Size() > 0 && intermediateNodeStack.First().(intermediateStateDiffNode).hash != currParentHash {
-		var err error
-		intermediateNodeStack, err = popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack, output)
+	for intermediateNodeStack.Size() > 0 && intermediateNodeStack.Head().(*intermediateStateDiffNode).hash != currParentHash {
+		err := popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack, output)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	intermediateNodeStack.Push(intermediateStateDiffNode{
+	intermediateNodeStack.Push(&intermediateStateDiffNode{
 		node: types2.StateNode{
 			NodeType:  currNode.NodeType,
 			Path:      currNode.Path,
@@ -376,27 +376,25 @@ func processCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack,
 		hash: currHash,
 	})
 
-	return intermediateNodeStack, nil
+	return nil
 }
 
 // popAndIndexCreatedOrUpdatedIntermediateNodes pops and indexes (if required) the node at top of given intermediateNodeStack
-func popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, output types2.StateNodeSink) (*lane.Stack, error) {
-	intermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
+func popAndIndexCreatedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, output types2.StateNodeSink) error {
+	intermediateNode := intermediateNodeStack.Pop().(*intermediateStateDiffNode)
 
 	if intermediateNode.shouldIndex {
 		if err := output(intermediateNode.node); err != nil {
-			return nil, err
+			return err
 		}
 
 		// if a child gets indexed, it's parent should get indexed too
 		if intermediateNodeStack.Size() > 0 {
-			topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
-			topIntermediateNode.shouldIndex = true
-			intermediateNodeStack.Push(topIntermediateNode)
+			intermediateNodeStack.Head().(*intermediateStateDiffNode).shouldIndex = true
 		}
 	}
 
-	return intermediateNodeStack, nil
+	return nil
 }
 
 // deletedOrUpdatedState returns a slice of all the paths that are emptied at B
@@ -409,8 +407,8 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 	// used only when len(watchedAddressesLeafKeys) > 0
 	var intermediateNodeStack *lane.Stack = lane.NewStack()
 
-	// is the list of watched addresses empty
-	isWatchedAddressesEmpty := len(watchedAddressesLeafKeys) == 0
+	// do we have watched addresses
+	haveWatchedAddresses := len(watchedAddressesLeafKeys) == 0
 
 	for it.Next(true) {
 		// skip value nodes
@@ -436,10 +434,8 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 			if isWatchedAddress(watchedAddressesLeafKeys, leafKey) {
 				// if the address at a leaf node is being watched, the intermediate nodes along it's path should be indexed
 				// set shouldIndex of top (if available) of intermediateNodeStack to true
-				if !isWatchedAddressesEmpty && shouldIndexIntermediateStateNodes && intermediateNodeStack.Size() > 0 {
-					topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
-					topIntermediateNode.shouldIndex = true
-					intermediateNodeStack.Push(topIntermediateNode)
+				if haveWatchedAddresses && shouldIndexIntermediateStateNodes && intermediateNodeStack.Size() > 0 {
+					intermediateNodeStack.Head().(*intermediateStateDiffNode).shouldIndex = true
 				}
 
 				diffAccountAtA[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
@@ -486,12 +482,17 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 				}
 			}
 		case types2.Extension, types2.Branch:
-			// process nodes from intermediateNodeStack
 			if shouldIndexIntermediateStateNodes {
 				// if this node's path did not show up in diffPathsAtB
 				// that means the node at this path was deleted (or moved) in B
 				// emit an empty "removed" diff to signify as such
-				if isWatchedAddressesEmpty {
+				if haveWatchedAddresses {
+					// process nodes from intermediateNodeStack
+					err = processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, node, it.Hash(), it.Parent(), diffPathsAtB, output)
+					if err != nil {
+						return nil, err
+					}
+				} else {
 					if _, ok := diffPathsAtB[common.Bytes2Hex(node.Path)]; !ok {
 						if err := output(types2.StateNode{
 							Path:      node.Path,
@@ -501,8 +502,6 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 							return nil, err
 						}
 					}
-				} else {
-					intermediateNodeStack, err = processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, node, it.Hash(), it.Parent(), diffPathsAtB, output)
 				}
 			}
 
@@ -514,9 +513,8 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 
 	// after iterating over the diff of state tries, some intermediate nodes might be left to be processed in the stack
 	// process outstanding intermediate nodes
-	for !isWatchedAddressesEmpty && intermediateNodeStack.Size() > 0 {
-		var err error
-		intermediateNodeStack, err = popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, diffPathsAtB, output)
+	for haveWatchedAddresses && intermediateNodeStack.Size() > 0 {
+		err := popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, diffPathsAtB, output)
 		if err != nil {
 			return nil, err
 		}
@@ -526,16 +524,15 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 }
 
 // processDeletedOrUpdatedIntermediateNodes handles deleted or updated intermediate diff nodes
-func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, currNode types2.StateNode, currHash, currParentHash common.Hash, diffPathsAtB map[string]bool, output types2.StateNodeSink) (*lane.Stack, error) {
-	for intermediateNodeStack.Size() > 0 && intermediateNodeStack.First().(intermediateStateDiffNode).hash != currParentHash {
-		var err error
-		intermediateNodeStack, err = popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, diffPathsAtB, output)
+func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, currNode types2.StateNode, currHash, currParentHash common.Hash, diffPathsAtB map[string]bool, output types2.StateNodeSink) error {
+	for intermediateNodeStack.Size() > 0 && intermediateNodeStack.Head().(*intermediateStateDiffNode).hash != currParentHash {
+		err := popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack, diffPathsAtB, output)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	intermediateNodeStack.Push(intermediateStateDiffNode{
+	intermediateNodeStack.Push(&intermediateStateDiffNode{
 		node: types2.StateNode{
 			Path:      currNode.Path,
 			NodeValue: []byte{},
@@ -544,30 +541,28 @@ func processDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack,
 		hash: currHash,
 	})
 
-	return intermediateNodeStack, nil
+	return nil
 }
 
 // popAndIndexDeletedOrUpdatedIntermediateNodes pops and indexes (if required) the node at top of given intermediateNodeStack
-func popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, diffPathsAtB map[string]bool, output types2.StateNodeSink) (*lane.Stack, error) {
+func popAndIndexDeletedOrUpdatedIntermediateNodes(intermediateNodeStack *lane.Stack, diffPathsAtB map[string]bool, output types2.StateNodeSink) error {
 	// pop from the stack
-	intermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
+	intermediateNode := intermediateNodeStack.Pop().(*intermediateStateDiffNode)
 
 	if intermediateNode.shouldIndex {
 		if _, ok := diffPathsAtB[common.Bytes2Hex(intermediateNode.node.Path)]; !ok {
 			if err := output(intermediateNode.node); err != nil {
-				return nil, err
+				return err
 			}
 		}
 
 		// if a child gets indexed, it's parent should get indexed too
 		if intermediateNodeStack.Size() > 0 {
-			topIntermediateNode := intermediateNodeStack.Pop().(intermediateStateDiffNode)
-			topIntermediateNode.shouldIndex = true
-			intermediateNodeStack.Push(topIntermediateNode)
+			intermediateNodeStack.Head().(*intermediateStateDiffNode).shouldIndex = true
 		}
 	}
 
-	return intermediateNodeStack, nil
+	return nil
 }
 
 // buildAccountUpdates uses the account diffs maps for A => B and B => A and the known intersection of their leafkeys
