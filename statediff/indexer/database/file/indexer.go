@@ -64,7 +64,6 @@ type StateDiffIndexer struct {
 	chainConfig      *params.ChainConfig
 	nodeID           string
 	wg               *sync.WaitGroup
-	blockNumber      string
 	removedCacheFlag *uint32
 
 	watchedAddressesFilePath string
@@ -111,7 +110,6 @@ func (sdi *StateDiffIndexer) ReportDBMetrics(time.Duration, <-chan bool) {}
 // Returns an initiated DB transaction which must be Closed via defer to commit or rollback
 func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receipts, totalDifficulty *big.Int) (interfaces.Batch, error) {
 	sdi.removedCacheFlag = new(uint32)
-	sdi.blockNumber = block.Number().String()
 	start, t := time.Now(), time.Now()
 	blockHash := block.Hash()
 	blockHashStr := blockHash.String()
@@ -147,7 +145,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	t = time.Now()
 
 	blockTx := &BatchTx{
-		BlockNumber: sdi.blockNumber,
+		BlockNumber: block.Number().String(),
 		submit: func(self *BatchTx, err error) error {
 			tDiff := time.Since(t)
 			indexerMetrics.tStateStoreCodeProcessing.Update(tDiff)
@@ -175,7 +173,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 	t = time.Now()
 
 	// write uncles
-	sdi.processUncles(headerID, height, uncleNodes)
+	sdi.processUncles(headerID, block.Number(), uncleNodes)
 	tDiff = time.Since(t)
 	indexerMetrics.tUncleProcessing.Update(tDiff)
 	traceMsg += fmt.Sprintf("uncle processing time: %s\r\n", tDiff.String())
@@ -209,7 +207,7 @@ func (sdi *StateDiffIndexer) PushBlock(block *types.Block, receipts types.Receip
 // processHeader write a header IPLD insert SQL stmt to a file
 // it returns the headerID
 func (sdi *StateDiffIndexer) processHeader(header *types.Header, headerNode node.Node, reward, td *big.Int) string {
-	sdi.fileWriter.upsertIPLDNode(sdi.blockNumber, headerNode)
+	sdi.fileWriter.upsertIPLDNode(header.Number.String(), headerNode)
 
 	var baseFee *string
 	if header.BaseFee != nil {
@@ -222,7 +220,7 @@ func (sdi *StateDiffIndexer) processHeader(header *types.Header, headerNode node
 		CID:             headerNode.Cid().String(),
 		MhKey:           shared.MultihashKeyFromCID(headerNode.Cid()),
 		ParentHash:      header.ParentHash.String(),
-		BlockNumber:     sdi.blockNumber,
+		BlockNumber:     header.Number.String(),
 		BlockHash:       headerID,
 		TotalDifficulty: td.String(),
 		Reward:          reward.String(),
@@ -238,19 +236,19 @@ func (sdi *StateDiffIndexer) processHeader(header *types.Header, headerNode node
 }
 
 // processUncles writes uncle IPLD insert SQL stmts to a file
-func (sdi *StateDiffIndexer) processUncles(headerID string, blockNumber uint64, uncleNodes []*ipld2.EthHeader) {
+func (sdi *StateDiffIndexer) processUncles(headerID string, blockNumber *big.Int, uncleNodes []*ipld2.EthHeader) {
 	// publish and index uncles
 	for _, uncleNode := range uncleNodes {
-		sdi.fileWriter.upsertIPLDNode(sdi.blockNumber, uncleNode)
+		sdi.fileWriter.upsertIPLDNode(blockNumber.String(), uncleNode)
 		var uncleReward *big.Int
 		// in PoA networks uncle reward is 0
 		if sdi.chainConfig.Clique != nil {
 			uncleReward = big.NewInt(0)
 		} else {
-			uncleReward = shared.CalcUncleMinerReward(blockNumber, uncleNode.Number.Uint64())
+			uncleReward = shared.CalcUncleMinerReward(blockNumber.Uint64(), uncleNode.Number.Uint64())
 		}
 		sdi.fileWriter.upsertUncleCID(models.UncleModel{
-			BlockNumber: sdi.blockNumber,
+			BlockNumber: blockNumber.String(),
 			HeaderID:    headerID,
 			CID:         uncleNode.Cid().String(),
 			MhKey:       shared.MultihashKeyFromCID(uncleNode.Cid()),
@@ -282,10 +280,10 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 	signer := types.MakeSigner(sdi.chainConfig, args.blockNumber)
 	for i, receipt := range args.receipts {
 		for _, logTrieNode := range args.logTrieNodes[i] {
-			sdi.fileWriter.upsertIPLDNode(sdi.blockNumber, logTrieNode)
+			sdi.fileWriter.upsertIPLDNode(args.blockNumber.String(), logTrieNode)
 		}
 		txNode := args.txNodes[i]
-		sdi.fileWriter.upsertIPLDNode(sdi.blockNumber, txNode)
+		sdi.fileWriter.upsertIPLDNode(args.blockNumber.String(), txNode)
 
 		// index tx
 		trx := args.txs[i]
@@ -302,7 +300,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 			return fmt.Errorf("error deriving tx sender: %v", err)
 		}
 		txModel := models.TxModel{
-			BlockNumber: sdi.blockNumber,
+			BlockNumber: args.blockNumber.String(),
 			HeaderID:    args.headerID,
 			Dst:         shared.HandleZeroAddrPointer(trx.To()),
 			Src:         shared.HandleZeroAddr(from),
@@ -323,7 +321,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 				storageKeys[k] = storageKey.Hex()
 			}
 			accessListElementModel := models.AccessListElementModel{
-				BlockNumber: sdi.blockNumber,
+				BlockNumber: args.blockNumber.String(),
 				TxID:        txID,
 				Index:       int64(j),
 				Address:     accessListElement.Address.Hex(),
@@ -345,7 +343,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 		}
 
 		rctModel := &models.ReceiptModel{
-			BlockNumber:  sdi.blockNumber,
+			BlockNumber:  args.blockNumber.String(),
 			TxID:         txID,
 			Contract:     contract,
 			ContractHash: contractHash,
@@ -373,7 +371,7 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 			}
 
 			logDataSet[idx] = &models.LogsModel{
-				BlockNumber: sdi.blockNumber,
+				BlockNumber: args.blockNumber.String(),
 				ReceiptID:   txID,
 				Address:     l.Address.String(),
 				Index:       int64(l.Index),
@@ -391,8 +389,8 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 
 	// publish trie nodes, these aren't indexed directly
 	for i, n := range args.txTrieNodes {
-		sdi.fileWriter.upsertIPLDNode(sdi.blockNumber, n)
-		sdi.fileWriter.upsertIPLDNode(sdi.blockNumber, args.rctTrieNodes[i])
+		sdi.fileWriter.upsertIPLDNode(args.blockNumber.String(), n)
+		sdi.fileWriter.upsertIPLDNode(args.blockNumber.String(), args.rctTrieNodes[i])
 	}
 
 	return nil
@@ -400,15 +398,19 @@ func (sdi *StateDiffIndexer) processReceiptsAndTxs(args processArgs) error {
 
 // PushStateNode writes a state diff node object (including any child storage nodes) IPLD insert SQL stmt to a file
 func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdtypes.StateNode, headerID string) error {
+	tx, ok := batch.(*BatchTx)
+	if !ok {
+		return fmt.Errorf("file: batch is expected to be of type %T, got %T", &BatchTx{}, batch)
+	}
 	// publish the state node
 	var stateModel models.StateNodeModel
 	if stateNode.NodeType == sdtypes.Removed {
 		if atomic.LoadUint32(sdi.removedCacheFlag) == 0 {
 			atomic.StoreUint32(sdi.removedCacheFlag, 1)
-			sdi.fileWriter.upsertIPLDDirect(sdi.blockNumber, shared.RemovedNodeMhKey, []byte{})
+			sdi.fileWriter.upsertIPLDDirect(tx.BlockNumber, shared.RemovedNodeMhKey, []byte{})
 		}
 		stateModel = models.StateNodeModel{
-			BlockNumber: sdi.blockNumber,
+			BlockNumber: tx.BlockNumber,
 			HeaderID:    headerID,
 			Path:        stateNode.Path,
 			StateKey:    common.BytesToHash(stateNode.LeafKey).String(),
@@ -417,12 +419,12 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			NodeType:    stateNode.NodeType.Int(),
 		}
 	} else {
-		stateCIDStr, stateMhKey, err := sdi.fileWriter.upsertIPLDRaw(sdi.blockNumber, ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
+		stateCIDStr, stateMhKey, err := sdi.fileWriter.upsertIPLDRaw(tx.BlockNumber, ipld2.MEthStateTrie, multihash.KECCAK_256, stateNode.NodeValue)
 		if err != nil {
 			return fmt.Errorf("error generating and cacheing state node IPLD: %v", err)
 		}
 		stateModel = models.StateNodeModel{
-			BlockNumber: sdi.blockNumber,
+			BlockNumber: tx.BlockNumber,
 			HeaderID:    headerID,
 			Path:        stateNode.Path,
 			StateKey:    common.BytesToHash(stateNode.LeafKey).String(),
@@ -449,7 +451,7 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			return fmt.Errorf("error decoding state account rlp: %s", err.Error())
 		}
 		accountModel := models.StateAccountModel{
-			BlockNumber: sdi.blockNumber,
+			BlockNumber: tx.BlockNumber,
 			HeaderID:    headerID,
 			StatePath:   stateNode.Path,
 			Balance:     account.Balance.String(),
@@ -465,10 +467,10 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 		if storageNode.NodeType == sdtypes.Removed {
 			if atomic.LoadUint32(sdi.removedCacheFlag) == 0 {
 				atomic.StoreUint32(sdi.removedCacheFlag, 1)
-				sdi.fileWriter.upsertIPLDDirect(sdi.blockNumber, shared.RemovedNodeMhKey, []byte{})
+				sdi.fileWriter.upsertIPLDDirect(tx.BlockNumber, shared.RemovedNodeMhKey, []byte{})
 			}
 			storageModel := models.StorageNodeModel{
-				BlockNumber: sdi.blockNumber,
+				BlockNumber: tx.BlockNumber,
 				HeaderID:    headerID,
 				StatePath:   stateNode.Path,
 				Path:        storageNode.Path,
@@ -480,12 +482,12 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 			sdi.fileWriter.upsertStorageCID(storageModel)
 			continue
 		}
-		storageCIDStr, storageMhKey, err := sdi.fileWriter.upsertIPLDRaw(sdi.blockNumber, ipld2.MEthStorageTrie, multihash.KECCAK_256, storageNode.NodeValue)
+		storageCIDStr, storageMhKey, err := sdi.fileWriter.upsertIPLDRaw(tx.BlockNumber, ipld2.MEthStorageTrie, multihash.KECCAK_256, storageNode.NodeValue)
 		if err != nil {
 			return fmt.Errorf("error generating and cacheing storage node IPLD: %v", err)
 		}
 		storageModel := models.StorageNodeModel{
-			BlockNumber: sdi.blockNumber,
+			BlockNumber: tx.BlockNumber,
 			HeaderID:    headerID,
 			StatePath:   stateNode.Path,
 			Path:        storageNode.Path,
@@ -502,12 +504,16 @@ func (sdi *StateDiffIndexer) PushStateNode(batch interfaces.Batch, stateNode sdt
 
 // PushCodeAndCodeHash writes code and codehash pairs insert SQL stmts to a file
 func (sdi *StateDiffIndexer) PushCodeAndCodeHash(batch interfaces.Batch, codeAndCodeHash sdtypes.CodeAndCodeHash) error {
+	tx, ok := batch.(*BatchTx)
+	if !ok {
+		return fmt.Errorf("file: batch is expected to be of type %T, got %T", &BatchTx{}, batch)
+	}
 	// codec doesn't matter since db key is multihash-based
 	mhKey, err := shared.MultihashKeyFromKeccak256(codeAndCodeHash.Hash)
 	if err != nil {
 		return fmt.Errorf("error deriving multihash key from codehash: %v", err)
 	}
-	sdi.fileWriter.upsertIPLDDirect(sdi.blockNumber, mhKey, codeAndCodeHash.Code)
+	sdi.fileWriter.upsertIPLDDirect(tx.BlockNumber, mhKey, codeAndCodeHash.Code)
 	return nil
 }
 
