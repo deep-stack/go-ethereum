@@ -60,7 +60,7 @@ var (
 
 // StateDiffIndexer satisfies the indexer.StateDiffIndexer interface for ethereum statediff objects on top of a void
 type StateDiffIndexer struct {
-	fileWriter       *CSVWriter
+	fileWriter       FileWriter
 	chainConfig      *params.ChainConfig
 	nodeID           string
 	wg               *sync.WaitGroup
@@ -90,6 +90,7 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 	}
 
 	wg := new(sync.WaitGroup)
+	w.Loop()
 	w.upsertNode(config.NodeInfo)
 	return &StateDiffIndexer{
 		fileWriter:               w,
