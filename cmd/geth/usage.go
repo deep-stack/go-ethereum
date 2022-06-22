@@ -244,6 +244,8 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.StateDiffDBClientNameFlag,
 			utils.StateDiffWritingFlag,
 			utils.StateDiffWorkersFlag,
+			utils.StateDiffFileMode,
+			utils.StateDiffFileCsvOutput,
 			utils.StateDiffFilePath,
 			utils.StateDiffKnownGapsFilePath,
 			utils.StateDiffWaitForSync,

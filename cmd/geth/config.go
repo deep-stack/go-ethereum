@@ -211,8 +211,16 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			}
 			switch dbType {
 			case shared.FILE:
+				fileModeStr := ctx.GlobalString(utils.StateDiffFileMode.Name)
+				fileMode, err := file.ResolveFileMode(fileModeStr)
+				if err != nil {
+					utils.Fatalf("%v", err)
+				}
+
 				indexerConfig = file.Config{
-					OutputDir:                ctx.GlobalString(utils.StateDiffFilePath.Name),
+					Mode:                     fileMode,
+					OutputDir:                ctx.GlobalString(utils.StateDiffFileCsvOutput.Name),
+					FilePath:                 ctx.GlobalString(utils.StateDiffFilePath.Name),
 					WatchedAddressesFilePath: ctx.GlobalString(utils.StateDiffWatchedAddressesFilePath.Name),
 				}
 			case shared.POSTGRES:

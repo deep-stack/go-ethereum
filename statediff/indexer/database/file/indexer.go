@@ -48,6 +48,7 @@ import (
 )
 
 const defaultOutputDir = "./statediff_output"
+const defaultFilePath = "./statediff.sql"
 const defaultWatchedAddressesFilePath = "./statediff-watched-addresses.sql"
 
 const watchedAddressesInsert = "INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ('%s', '%d', '%d') ON CONFLICT (address) DO NOTHING;"
@@ -71,12 +72,39 @@ type StateDiffIndexer struct {
 
 // NewStateDiffIndexer creates a void implementation of interfaces.StateDiffIndexer
 func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, config Config) (*StateDiffIndexer, error) {
-	outputDir := config.OutputDir
-	if outputDir == "" {
-		outputDir = defaultOutputDir
-	}
+	var err error
+	var writer FileWriter
+	switch config.Mode {
+	case CSV:
+		outputDir := config.OutputDir
+		if outputDir == "" {
+			outputDir = defaultOutputDir
+		}
 
-	log.Info("Writing statediff CSV files to directory", "file", outputDir)
+		log.Info("Writing statediff CSV files to directory", "file", outputDir)
+
+		writer, err = NewCSVWriter(outputDir)
+		if err != nil {
+			return nil, err
+		}
+	case SQL:
+		filePath := config.FilePath
+		if filePath == "" {
+			filePath = defaultFilePath
+		}
+		if _, err := os.Stat(filePath); !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("cannot create file, file (%s) already exists", filePath)
+		}
+		file, err := os.Create(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create file (%s), err: %v", filePath, err)
+		}
+		log.Info("Writing statediff SQL statements to file", "file", filePath)
+
+		writer = NewSQLWriter(file)
+	default:
+		return nil, fmt.Errorf("unrecognized file mode: %s", config.Mode)
+	}
 
 	watchedAddressesFilePath := config.WatchedAddressesFilePath
 	if watchedAddressesFilePath == "" {
@@ -84,16 +112,12 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 	}
 	log.Info("Writing watched addresses SQL statements to file", "file", watchedAddressesFilePath)
 
-	w, err := NewCSVWriter(outputDir)
-	if err != nil {
-		return nil, err
-	}
-
 	wg := new(sync.WaitGroup)
-	w.Loop()
-	w.upsertNode(config.NodeInfo)
+	writer.Loop()
+	writer.upsertNode(config.NodeInfo)
+
 	return &StateDiffIndexer{
-		fileWriter:               w,
+		fileWriter:               writer,
 		chainConfig:              chainConfig,
 		nodeID:                   config.NodeInfo.ID,
 		wg:                       wg,

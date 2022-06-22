@@ -122,6 +122,7 @@ func NewCSVWriter(path string) (*CSVWriter, error) {
 	csvWriter := &CSVWriter{
 		writers:       writers,
 		dir:           path,
+		rows:          make(chan tableRow),
 		flushChan:     make(chan struct{}),
 		flushFinished: make(chan struct{}),
 		quitChan:      make(chan struct{}),

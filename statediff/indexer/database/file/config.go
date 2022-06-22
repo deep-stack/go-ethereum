@@ -17,13 +17,39 @@
 package file
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
+// FileMode to explicitly type the mode of file writer we are using
+type FileMode string
+
+const (
+	CSV     FileMode = "CSV"
+	SQL     FileMode = "SQL"
+	Unknown FileMode = "Unknown"
+)
+
+// ResolveFileMode resolves a FileMode from a provided string
+func ResolveFileMode(str string) (FileMode, error) {
+	switch strings.ToLower(str) {
+	case "csv":
+		return CSV, nil
+	case "sql":
+		return SQL, nil
+	default:
+		return Unknown, fmt.Errorf("unrecognized file type string: %s", str)
+	}
+}
+
 // Config holds params for writing CSV files out to a directory
 type Config struct {
+	Mode                     FileMode
 	OutputDir                string
+	FilePath                 string
 	WatchedAddressesFilePath string
 	NodeInfo                 node.Info
 }
@@ -35,7 +61,9 @@ func (c Config) Type() shared.DBType {
 
 // TestConfig config for unit tests
 var TestConfig = Config{
+	Mode:                     CSV,
 	OutputDir:                "./statediffing_test",
+	FilePath:                 "./statediffing_test_file.sql",
 	WatchedAddressesFilePath: "./statediffing_watched_addresses_test_file.sql",
 	NodeInfo: node.Info{
 		GenesisBlock: "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
