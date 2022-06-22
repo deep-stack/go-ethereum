@@ -19,6 +19,7 @@ package file_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -44,8 +45,8 @@ var (
 func setupLegacy(t *testing.T) {
 	mockLegacyBlock = legacyData.MockBlock
 	legacyHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, legacyData.MockHeaderRlp, multihash.KECCAK_256)
-	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
-		err := os.Remove(file.TestConfig.FilePath)
+	if _, err := os.Stat(file.TestConfig.OutputDir); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.OutputDir)
 		require.NoError(t, err)
 	}
 	ind, err := file.NewStateDiffIndexer(context.Background(), legacyData.Config, file.TestConfig)
@@ -81,11 +82,13 @@ func setupLegacy(t *testing.T) {
 }
 
 func dumpFileData(t *testing.T) {
-	sqlFileBytes, err := os.ReadFile(file.TestConfig.FilePath)
-	require.NoError(t, err)
+	pgCopyStatement := `COPY %s FROM '%s' CSV`
 
-	_, err = sqlxdb.Exec(string(sqlFileBytes))
-	require.NoError(t, err)
+	for _, tbl := range file.Tables {
+		stm := fmt.Sprintf(pgCopyStatement, tbl.Name, file.TableFile(file.TestConfig.OutputDir, tbl.Name))
+		_, err = sqlxdb.Exec(stm)
+		require.NoError(t, err)
+	}
 }
 
 func resetAndDumpWatchedAddressesFileData(t *testing.T) {
@@ -111,7 +114,7 @@ func resetDB(t *testing.T) {
 func tearDown(t *testing.T) {
 	file.TearDownDB(t, sqlxdb)
 
-	err := os.Remove(file.TestConfig.FilePath)
+	err := os.RemoveAll(file.TestConfig.OutputDir)
 	require.NoError(t, err)
 
 	if err := os.Remove(file.TestConfig.WatchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {

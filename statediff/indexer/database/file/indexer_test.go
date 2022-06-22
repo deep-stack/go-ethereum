@@ -183,8 +183,8 @@ func init() {
 }
 
 func setupIndexer(t *testing.T) {
-	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
-		err := os.Remove(file.TestConfig.FilePath)
+	if _, err := os.Stat(file.TestConfig.OutputDir); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.OutputDir)
 		require.NoError(t, err)
 	}
 

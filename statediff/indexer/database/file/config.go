@@ -21,9 +21,9 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
-// Config holds params for writing sql statements out to a file
+// Config holds params for writing CSV files out to a directory
 type Config struct {
-	FilePath                 string
+	OutputDir                string
 	WatchedAddressesFilePath string
 	NodeInfo                 node.Info
 }
@@ -35,7 +35,7 @@ func (c Config) Type() shared.DBType {
 
 // TestConfig config for unit tests
 var TestConfig = Config{
-	FilePath:                 "./statediffing_test_file.sql",
+	OutputDir:                "./statediffing_test",
 	WatchedAddressesFilePath: "./statediffing_watched_addresses_test_file.sql",
 	NodeInfo: node.Info{
 		GenesisBlock: "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",

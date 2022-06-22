@@ -212,7 +212,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			switch dbType {
 			case shared.FILE:
 				indexerConfig = file.Config{
-					FilePath:                 ctx.GlobalString(utils.StateDiffFilePath.Name),
+					OutputDir:                ctx.GlobalString(utils.StateDiffFilePath.Name),
 					WatchedAddressesFilePath: ctx.GlobalString(utils.StateDiffWatchedAddressesFilePath.Name),
 				}
 			case shared.POSTGRES:

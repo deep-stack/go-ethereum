@@ -47,7 +47,7 @@ import (
 	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
 
-const defaultFilePath = "./statediff.sql"
+const defaultOutputDir = "./statediff_output"
 const defaultWatchedAddressesFilePath = "./statediff-watched-addresses.sql"
 
 const watchedAddressesInsert = "INSERT INTO eth_meta.watched_addresses (address, created_at, watched_at) VALUES ('%s', '%d', '%d') ON CONFLICT (address) DO NOTHING;"
@@ -60,7 +60,7 @@ var (
 
 // StateDiffIndexer satisfies the indexer.StateDiffIndexer interface for ethereum statediff objects on top of a void
 type StateDiffIndexer struct {
-	fileWriter       *SQLWriter
+	fileWriter       *CSVWriter
 	chainConfig      *params.ChainConfig
 	nodeID           string
 	wg               *sync.WaitGroup
@@ -71,18 +71,12 @@ type StateDiffIndexer struct {
 
 // NewStateDiffIndexer creates a void implementation of interfaces.StateDiffIndexer
 func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, config Config) (*StateDiffIndexer, error) {
-	filePath := config.FilePath
-	if filePath == "" {
-		filePath = defaultFilePath
+	outputDir := config.OutputDir
+	if outputDir == "" {
+		outputDir = defaultOutputDir
 	}
-	if _, err := os.Stat(filePath); !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("cannot create file, file (%s) already exists", filePath)
-	}
-	file, err := os.Create(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create file (%s), err: %v", filePath, err)
-	}
-	log.Info("Writing statediff SQL statements to file", "file", filePath)
+
+	log.Info("Writing statediff CSV files to directory", "file", outputDir)
 
 	watchedAddressesFilePath := config.WatchedAddressesFilePath
 	if watchedAddressesFilePath == "" {
@@ -90,9 +84,12 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 	}
 	log.Info("Writing watched addresses SQL statements to file", "file", watchedAddressesFilePath)
 
-	w := NewSQLWriter(file)
+	w, err := NewCSVWriter(outputDir)
+	if err != nil {
+		return nil, err
+	}
+
 	wg := new(sync.WaitGroup)
-	w.Loop()
 	w.upsertNode(config.NodeInfo)
 	return &StateDiffIndexer{
 		fileWriter:               w,
