@@ -1001,7 +1001,9 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 	block2 = blocks[1]
 	block3 = blocks[2]
 	params := statediff.Params{
-		WatchedAddresses: []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
+		IntermediateStateNodes:   true,
+		IntermediateStorageNodes: true,
+		WatchedAddresses:         []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
 	}
 	params.ComputeWatchedAddressesLeafPaths()
 	builder = statediff.NewBuilder(chain.StateCache())
@@ -1054,6 +1056,12 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 				BlockHash:   block1.Hash(),
 				Nodes: []types2.StateNode{
 					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block1BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
+					{
 						Path:         []byte{'\x0e'},
 						NodeType:     types2.Leaf,
 						LeafKey:      test_helpers.Account1LeafKey,
@@ -1078,11 +1086,22 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 				BlockHash:   block2.Hash(),
 				Nodes: []types2.StateNode{
 					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block2BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
+					{
 						Path:      []byte{'\x06'},
 						NodeType:  types2.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock2LeafNode,
 						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{},
+								NodeType:  types2.Branch,
+								NodeValue: block2StorageBranchRootNode,
+							},
 							{
 								Path:      []byte{'\x02'},
 								NodeType:  types2.Leaf,
@@ -1128,11 +1147,22 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 				BlockHash:   block3.Hash(),
 				Nodes: []types2.StateNode{
 					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block3BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
+					{
 						Path:      []byte{'\x06'},
 						NodeType:  types2.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock3LeafNode,
 						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{},
+								NodeType:  types2.Branch,
+								NodeValue: block3StorageBranchRootNode,
+							},
 							{
 								Path:      []byte{'\x0c'},
 								NodeType:  types2.Leaf,
@@ -1606,7 +1636,9 @@ func TestBuilderWithRemovedNonWatchedAccount(t *testing.T) {
 	block5 = blocks[4]
 	block6 = blocks[5]
 	params := statediff.Params{
-		WatchedAddresses: []common.Address{test_helpers.Account1Addr, test_helpers.Account2Addr},
+		IntermediateStateNodes:   true,
+		IntermediateStorageNodes: true,
+		WatchedAddresses:         []common.Address{test_helpers.Account1Addr, test_helpers.Account2Addr},
 	}
 	params.ComputeWatchedAddressesLeafPaths()
 	builder = statediff.NewBuilder(chain.StateCache())
@@ -1628,6 +1660,12 @@ func TestBuilderWithRemovedNonWatchedAccount(t *testing.T) {
 				BlockNumber: block4.Number(),
 				BlockHash:   block4.Hash(),
 				Nodes: []types2.StateNode{
+					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block4BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
 					{
 						Path:         []byte{'\x0c'},
 						NodeType:     types2.Leaf,
@@ -1651,6 +1689,12 @@ func TestBuilderWithRemovedNonWatchedAccount(t *testing.T) {
 				BlockHash:   block5.Hash(),
 				Nodes: []types2.StateNode{
 					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block5BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
+					{
 						Path:         []byte{'\x0e'},
 						NodeType:     types2.Leaf,
 						LeafKey:      test_helpers.Account1LeafKey,
@@ -1672,6 +1716,12 @@ func TestBuilderWithRemovedNonWatchedAccount(t *testing.T) {
 				BlockNumber: block6.Number(),
 				BlockHash:   block6.Hash(),
 				Nodes: []types2.StateNode{
+					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block6BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
 					{
 						Path:         []byte{'\x0c'},
 						NodeType:     types2.Leaf,
@@ -1724,7 +1774,9 @@ func TestBuilderWithRemovedWatchedAccount(t *testing.T) {
 	block5 = blocks[4]
 	block6 = blocks[5]
 	params := statediff.Params{
-		WatchedAddresses: []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
+		IntermediateStateNodes:   true,
+		IntermediateStorageNodes: true,
+		WatchedAddresses:         []common.Address{test_helpers.Account1Addr, test_helpers.ContractAddr},
 	}
 	params.ComputeWatchedAddressesLeafPaths()
 	builder = statediff.NewBuilder(chain.StateCache())
@@ -1747,11 +1799,22 @@ func TestBuilderWithRemovedWatchedAccount(t *testing.T) {
 				BlockHash:   block4.Hash(),
 				Nodes: []types2.StateNode{
 					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block4BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
+					{
 						Path:      []byte{'\x06'},
 						NodeType:  types2.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock4LeafNode,
 						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{},
+								NodeType:  types2.Branch,
+								NodeValue: block4StorageBranchRootNode,
+							},
 							{
 								Path:      []byte{'\x04'},
 								NodeType:  types2.Leaf,
@@ -1788,11 +1851,22 @@ func TestBuilderWithRemovedWatchedAccount(t *testing.T) {
 				BlockHash:   block5.Hash(),
 				Nodes: []types2.StateNode{
 					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block5BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
+					{
 						Path:      []byte{'\x06'},
 						NodeType:  types2.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock5LeafNode,
 						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{},
+								NodeType:  types2.Branch,
+								NodeValue: block5StorageBranchRootNode,
+							},
 							{
 								Path:      []byte{'\x0c'},
 								NodeType:  types2.Leaf,
@@ -1830,11 +1904,22 @@ func TestBuilderWithRemovedWatchedAccount(t *testing.T) {
 				BlockHash:   block6.Hash(),
 				Nodes: []types2.StateNode{
 					{
+						Path:         []byte{},
+						NodeType:     types2.Branch,
+						NodeValue:    block6BranchRootNode,
+						StorageNodes: emptyStorage,
+					},
+					{
 						Path:      []byte{'\x06'},
 						NodeType:  types2.Removed,
 						LeafKey:   contractLeafKey,
 						NodeValue: []byte{},
 						StorageNodes: []types2.StorageNode{
+							{
+								Path:      []byte{},
+								NodeType:  types2.Removed,
+								NodeValue: []byte{},
+							},
 							{
 								Path:      []byte{'\x02'},
 								NodeType:  types2.Removed,

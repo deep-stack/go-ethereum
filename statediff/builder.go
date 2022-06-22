@@ -300,13 +300,13 @@ func (sdb *StateDiffBuilder) BuildStateDiffWithoutIntermediateStateNodes(iterPai
 // and a slice of the paths for all of the nodes included in both
 func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddressesLeafPaths [][]byte) (types2.AccountMap, map[string]bool, error) {
 	diffPathsAtB := make(map[string]bool)
-	diffAcountsAtB := make(types2.AccountMap)
+	diffAccountsAtB := make(types2.AccountMap)
 	watchingAddresses := len(watchedAddressesLeafPaths) > 0
 
 	it, _ := trie.NewDifferenceIterator(a, b)
 	for it.Next(true) {
 		// ignore node if it is not along paths of interest
-		if watchingAddresses && !isValidPath(watchedAddressesLeafPaths, it.Path()) {
+		if watchingAddresses && !isValidPrefixPath(watchedAddressesLeafPaths, it.Path()) {
 			continue
 		}
 
@@ -336,7 +336,7 @@ func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watc
 
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
-			diffAcountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
+			diffAccountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
 				NodeType:  node.NodeType,
 				Path:      node.Path,
 				NodeValue: node.NodeValue,
@@ -347,7 +347,7 @@ func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watc
 		// add both intermediate and leaf node paths to the list of diffPathsAtB
 		diffPathsAtB[common.Bytes2Hex(node.Path)] = true
 	}
-	return diffAcountsAtB, diffPathsAtB, it.Error()
+	return diffAccountsAtB, diffPathsAtB, it.Error()
 }
 
 // createdAndUpdatedStateWithIntermediateNodes returns
@@ -362,7 +362,7 @@ func (sdb *StateDiffBuilder) createdAndUpdatedStateWithIntermediateNodes(a, b tr
 	it, _ := trie.NewDifferenceIterator(a, b)
 	for it.Next(true) {
 		// ignore node if it is not along paths of interest
-		if watchingAddresses && !isValidPath(watchedAddressesLeafPaths, it.Path()) {
+		if watchingAddresses && !isValidPrefixPath(watchedAddressesLeafPaths, it.Path()) {
 			continue
 		}
 
@@ -427,7 +427,7 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 	it, _ := trie.NewDifferenceIterator(b, a)
 	for it.Next(true) {
 		// ignore node if it is not along paths of interest
-		if watchingAddresses && !isValidPath(watchedAddressesLeafPaths, it.Path()) {
+		if watchingAddresses && !isValidPrefixPath(watchedAddressesLeafPaths, it.Path()) {
 			continue
 		}
 
@@ -864,8 +864,8 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedStorage(a, b trie.NodeIterator, dif
 	return it.Error()
 }
 
-// isValidPath is used to check if a node is a parent | ancestor to one of the addresses the builder is configured to watch
-func isValidPath(watchedAddressesLeafPaths [][]byte, currentPath []byte) bool {
+// isValidPrefixPath is used to check if a node at currentPath is a parent | ancestor to one of the addresses the builder is configured to watch
+func isValidPrefixPath(watchedAddressesLeafPaths [][]byte, currentPath []byte) bool {
 	for _, watchedAddressPath := range watchedAddressesLeafPaths {
 		if bytes.HasPrefix(watchedAddressPath, currentPath) {
 			return true

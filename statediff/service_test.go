@@ -434,7 +434,5 @@ func testGetSyncStatus(t *testing.T) {
 		} else {
 			t.Log("Test Passed!")
 		}
-
 	}
-
 }
