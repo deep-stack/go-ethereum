@@ -380,7 +380,7 @@ func (sds *MockStateDiffService) WatchAddress(operation sdtypes.OperationType, a
 
 		// update in-memory params
 		sds.writeLoopParams.WatchedAddresses = append(sds.writeLoopParams.WatchedAddresses, filteredAddresses...)
-		sds.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+		sds.writeLoopParams.ComputeWatchedAddressesLeafPaths()
 	case sdtypes.Remove:
 		// get addresses from args
 		argAddresses, err := statediff.MapWatchAddressArgsToAddresses(args)
@@ -402,7 +402,7 @@ func (sds *MockStateDiffService) WatchAddress(operation sdtypes.OperationType, a
 
 		// update in-memory params
 		sds.writeLoopParams.WatchedAddresses = addresses
-		sds.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+		sds.writeLoopParams.ComputeWatchedAddressesLeafPaths()
 	case sdtypes.Set:
 		// get addresses from args
 		argAddresses, err := statediff.MapWatchAddressArgsToAddresses(args)
@@ -418,7 +418,7 @@ func (sds *MockStateDiffService) WatchAddress(operation sdtypes.OperationType, a
 
 		// update in-memory params
 		sds.writeLoopParams.WatchedAddresses = argAddresses
-		sds.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+		sds.writeLoopParams.ComputeWatchedAddressesLeafPaths()
 	case sdtypes.Clear:
 		// update the db
 		err := sds.Indexer.ClearWatchedAddresses()
@@ -428,7 +428,7 @@ func (sds *MockStateDiffService) WatchAddress(operation sdtypes.OperationType, a
 
 		// update in-memory params
 		sds.writeLoopParams.WatchedAddresses = []common.Address{}
-		sds.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+		sds.writeLoopParams.ComputeWatchedAddressesLeafPaths()
 
 	default:
 		return fmt.Errorf("%s %s", unexpectedOperation, operation)

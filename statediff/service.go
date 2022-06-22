@@ -477,8 +477,8 @@ func (sds *Service) StateDiffAt(blockNumber uint64, params Params) (*Payload, er
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	log.Info("sending state diff", "block height", blockNumber)
 
-	// compute leaf keys of watched addresses in the params
-	params.ComputeWatchedAddressesLeafKeys()
+	// compute leaf paths of watched addresses in the params
+	params.ComputeWatchedAddressesLeafPaths()
 
 	if blockNumber == 0 {
 		return sds.processStateDiff(currentBlock, common.Hash{}, params)
@@ -493,8 +493,8 @@ func (sds *Service) StateDiffFor(blockHash common.Hash, params Params) (*Payload
 	currentBlock := sds.BlockChain.GetBlockByHash(blockHash)
 	log.Info("sending state diff", "block hash", blockHash)
 
-	// compute leaf keys of watched addresses in the params
-	params.ComputeWatchedAddressesLeafKeys()
+	// compute leaf paths of watched addresses in the params
+	params.ComputeWatchedAddressesLeafPaths()
 
 	if currentBlock.NumberU64() == 0 {
 		return sds.processStateDiff(currentBlock, common.Hash{}, params)
@@ -555,8 +555,8 @@ func (sds *Service) StateTrieAt(blockNumber uint64, params Params) (*Payload, er
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	log.Info("sending state trie", "block height", blockNumber)
 
-	// compute leaf keys of watched addresses in the params
-	params.ComputeWatchedAddressesLeafKeys()
+	// compute leaf paths of watched addresses in the params
+	params.ComputeWatchedAddressesLeafPaths()
 
 	return sds.processStateTrie(currentBlock, params)
 }
@@ -581,8 +581,8 @@ func (sds *Service) Subscribe(id rpc.ID, sub chan<- Payload, quitChan chan<- boo
 		log.Info("State diffing subscription received; beginning statediff processing")
 	}
 
-	// compute leaf keys of watched addresses in the params
-	params.ComputeWatchedAddressesLeafKeys()
+	// compute leaf paths of watched addresses in the params
+	params.ComputeWatchedAddressesLeafPaths()
 
 	// Subscription type is defined as the hash of the rlp-serialized subscription params
 	by, err := rlp.EncodeToBytes(&params)
@@ -777,8 +777,8 @@ func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- typ
 // This operation cannot be performed back past the point of db pruning; it requires an archival node
 // for historical data
 func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
-	// compute leaf keys of watched addresses in the params
-	params.ComputeWatchedAddressesLeafKeys()
+	// compute leaf paths of watched addresses in the params
+	params.ComputeWatchedAddressesLeafPaths()
 
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	parentRoot := common.Hash{}
@@ -793,8 +793,8 @@ func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
 // This operation cannot be performed back past the point of db pruning; it requires an archival node
 // for historical data
 func (sds *Service) WriteStateDiffFor(blockHash common.Hash, params Params) error {
-	// compute leaf keys of watched addresses in the params
-	params.ComputeWatchedAddressesLeafKeys()
+	// compute leaf paths of watched addresses in the params
+	params.ComputeWatchedAddressesLeafPaths()
 
 	currentBlock := sds.BlockChain.GetBlockByHash(blockHash)
 	parentRoot := common.Hash{}
@@ -902,9 +902,7 @@ func (sds *Service) WatchAddress(operation types2.OperationType, args []types2.W
 
 		// update in-memory params
 		writeLoopParams.WatchedAddresses = append(writeLoopParams.WatchedAddresses, filteredAddresses...)
-		funk.ForEach(filteredAddresses, func(address common.Address) {
-			writeLoopParams.watchedAddressesLeafKeys[crypto.Keccak256Hash(address.Bytes())] = struct{}{}
-		})
+		writeLoopParams.ComputeWatchedAddressesLeafPaths()
 	case types2.Remove:
 		// get addresses from args
 		argAddresses, err := MapWatchAddressArgsToAddresses(args)
@@ -926,9 +924,7 @@ func (sds *Service) WatchAddress(operation types2.OperationType, args []types2.W
 
 		// update in-memory params
 		writeLoopParams.WatchedAddresses = addresses
-		funk.ForEach(argAddresses, func(address common.Address) {
-			delete(writeLoopParams.watchedAddressesLeafKeys, crypto.Keccak256Hash(address.Bytes()))
-		})
+		writeLoopParams.ComputeWatchedAddressesLeafPaths()
 	case types2.Set:
 		// get addresses from args
 		argAddresses, err := MapWatchAddressArgsToAddresses(args)
@@ -944,7 +940,7 @@ func (sds *Service) WatchAddress(operation types2.OperationType, args []types2.W
 
 		// update in-memory params
 		writeLoopParams.WatchedAddresses = argAddresses
-		writeLoopParams.ComputeWatchedAddressesLeafKeys()
+		writeLoopParams.ComputeWatchedAddressesLeafPaths()
 	case types2.Clear:
 		// update the db
 		err := sds.indexer.ClearWatchedAddresses()
@@ -954,7 +950,7 @@ func (sds *Service) WatchAddress(operation types2.OperationType, args []types2.W
 
 		// update in-memory params
 		writeLoopParams.WatchedAddresses = []common.Address{}
-		writeLoopParams.ComputeWatchedAddressesLeafKeys()
+		writeLoopParams.ComputeWatchedAddressesLeafPaths()
 
 	default:
 		return fmt.Errorf("%s %s", unexpectedOperation, operation)
@@ -974,7 +970,7 @@ func loadWatchedAddresses(indexer interfaces.StateDiffIndexer) error {
 	defer writeLoopParams.Unlock()
 
 	writeLoopParams.WatchedAddresses = watchedAddresses
-	writeLoopParams.ComputeWatchedAddressesLeafKeys()
+	writeLoopParams.ComputeWatchedAddressesLeafPaths()
 
 	return nil
 }
