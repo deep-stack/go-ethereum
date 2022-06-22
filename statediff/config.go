@@ -48,21 +48,21 @@ type Config struct {
 
 // Params contains config parameters for the state diff builder
 type Params struct {
-	IntermediateStateNodes   bool
-	IntermediateStorageNodes bool
-	IncludeBlock             bool
-	IncludeReceipts          bool
-	IncludeTD                bool
-	IncludeCode              bool
-	WatchedAddresses         []common.Address
-	watchedAddressesLeafKeys map[common.Hash]struct{}
+	IntermediateStateNodes    bool
+	IntermediateStorageNodes  bool
+	IncludeBlock              bool
+	IncludeReceipts           bool
+	IncludeTD                 bool
+	IncludeCode               bool
+	WatchedAddresses          []common.Address
+	watchedAddressesLeafPaths [][]byte
 }
 
-// ComputeWatchedAddressesLeafKeys populates a map with keys (Keccak256Hash) of each of the WatchedAddresses
-func (p *Params) ComputeWatchedAddressesLeafKeys() {
-	p.watchedAddressesLeafKeys = make(map[common.Hash]struct{}, len(p.WatchedAddresses))
-	for _, address := range p.WatchedAddresses {
-		p.watchedAddressesLeafKeys[crypto.Keccak256Hash(address.Bytes())] = struct{}{}
+// ComputeWatchedAddressesLeafPaths populates a slice with paths (hex_encoding(Keccak256)) of each of the WatchedAddresses
+func (p *Params) ComputeWatchedAddressesLeafPaths() {
+	p.watchedAddressesLeafPaths = make([][]byte, len(p.WatchedAddresses))
+	for i, address := range p.WatchedAddresses {
+		p.watchedAddressesLeafPaths[i] = keybytesToHex(crypto.Keccak256(address.Bytes()))
 	}
 }
 
@@ -76,4 +76,16 @@ type ParamsWithMutex struct {
 type Args struct {
 	OldStateRoot, NewStateRoot, BlockHash common.Hash
 	BlockNumber                           *big.Int
+}
+
+// https://github.com/ethereum/go-ethereum/blob/master/trie/encoding.go#L97
+func keybytesToHex(str []byte) []byte {
+	l := len(str)*2 + 1
+	var nibbles = make([]byte, l)
+	for i, b := range str {
+		nibbles[i*2] = b / 16
+		nibbles[i*2+1] = b % 16
+	}
+	nibbles[l-1] = 16
+	return nibbles
 }

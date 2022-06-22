@@ -513,7 +513,7 @@ func testWatchAddressAPI(t *testing.T) {
 		mockService.writeLoopParams = statediff.ParamsWithMutex{
 			Params: test.startingParams,
 		}
-		mockService.writeLoopParams.ComputeWatchedAddressesLeafKeys()
+		mockService.writeLoopParams.ComputeWatchedAddressesLeafPaths()
 
 		// make the API call to change watched addresses
 		err := mockService.WatchAddress(test.operation, test.args)
@@ -530,7 +530,7 @@ func testWatchAddressAPI(t *testing.T) {
 		}
 
 		// check updated indexing params
-		test.expectedParams.ComputeWatchedAddressesLeafKeys()
+		test.expectedParams.ComputeWatchedAddressesLeafPaths()
 		updatedParams := mockService.writeLoopParams.Params
 		if !reflect.DeepEqual(updatedParams, test.expectedParams) {
 			t.Logf("Test failed: %s", test.name)
