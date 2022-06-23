@@ -30,7 +30,7 @@ import (
 
 // BatchTx wraps a void with the state necessary for building the tx concurrently during trie difference iteration
 type BatchTx struct {
-	BlockNumber uint64
+	BlockNumber string
 	dump        io.Writer
 	quit        chan struct{}
 	iplds       chan models.IPLDModel
@@ -68,15 +68,17 @@ func (tx *BatchTx) cache() {
 
 func (tx *BatchTx) cacheDirect(key string, value []byte) {
 	tx.iplds <- models.IPLDModel{
-		Key:  key,
-		Data: value,
+		BlockNumber: tx.BlockNumber,
+		Key:         key,
+		Data:        value,
 	}
 }
 
 func (tx *BatchTx) cacheIPLD(i node.Node) {
 	tx.iplds <- models.IPLDModel{
-		Key:  blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(i.Cid().Hash()).String(),
-		Data: i.RawData(),
+		BlockNumber: tx.BlockNumber,
+		Key:         blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(i.Cid().Hash()).String(),
+		Data:        i.RawData(),
 	}
 }
 
@@ -87,8 +89,9 @@ func (tx *BatchTx) cacheRaw(codec, mh uint64, raw []byte) (string, string, error
 	}
 	prefixedKey := blockstore.BlockPrefix.String() + dshelp.MultihashToDsKey(c.Hash()).String()
 	tx.iplds <- models.IPLDModel{
-		Key:  prefixedKey,
-		Data: raw,
+		BlockNumber: tx.BlockNumber,
+		Key:         prefixedKey,
+		Data:        raw,
 	}
 	return c.String(), prefixedKey, err
 }
