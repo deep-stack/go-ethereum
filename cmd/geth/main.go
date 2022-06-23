@@ -172,7 +172,7 @@ var (
 		utils.StateDiffWritingFlag,
 		utils.StateDiffWorkersFlag,
 		utils.StateDiffFileMode,
-		utils.StateDiffFileCsvOutput,
+		utils.StateDiffFileCsvDir,
 		utils.StateDiffFilePath,
 		utils.StateDiffKnownGapsFilePath,
 		utils.StateDiffWaitForSync,

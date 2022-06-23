@@ -25,14 +25,13 @@ import (
 
 // Writer interface required by the file indexer
 type FileWriter interface {
+	// Methods used to control the writer
 	Loop()
 	Close() error
 	Flush()
+
+	// Methods to write out data to tables
 	upsertNode(node nodeinfo.Info)
-	upsertIPLD(ipld models.IPLDModel)
-	upsertIPLDDirect(blockNumber, key string, value []byte)
-	upsertIPLDNode(blockNumber string, i node.Node)
-	upsertIPLDRaw(blockNumber string, codec, mh uint64, raw []byte) (string, string, error)
 	upsertHeaderCID(header models.HeaderModel)
 	upsertUncleCID(uncle models.UncleModel)
 	upsertTransactionCID(transaction models.TxModel)
@@ -42,4 +41,10 @@ type FileWriter interface {
 	upsertStateCID(stateNode models.StateNodeModel)
 	upsertStateAccount(stateAccount models.StateAccountModel)
 	upsertStorageCID(storageCID models.StorageNodeModel)
+	upsertIPLD(ipld models.IPLDModel)
+
+	// Methods to upsert IPLD in different ways
+	upsertIPLDDirect(blockNumber, key string, value []byte)
+	upsertIPLDNode(blockNumber string, i node.Node)
+	upsertIPLDRaw(blockNumber string, codec, mh uint64, raw []byte) (string, string, error)
 }

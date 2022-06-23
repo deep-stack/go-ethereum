@@ -161,7 +161,7 @@ var TableLog = Table{
 }
 
 var TableStateAccount = Table{
-	"eth.state_account",
+	"eth.state_accounts",
 	[]column{
 		{name: "block_number", typ: bigint},
 		{name: "header_id", typ: varchar},

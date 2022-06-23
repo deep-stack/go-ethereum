@@ -67,6 +67,7 @@ type CSVWriter struct {
 
 type fileWriter struct {
 	*csv.Writer
+	file *os.File
 }
 
 // fileWriters wraps the file writers for each output table
@@ -77,13 +78,13 @@ func newFileWriter(path string) (ret fileWriter, err error) {
 	if err != nil {
 		return
 	}
-	ret = fileWriter{csv.NewWriter(file)}
-	return
-}
 
-func (tx fileWriters) write(tbl *types.Table, args ...interface{}) error {
-	row := tbl.ToCsvRow(args...)
-	return tx[tbl.Name].Write(row)
+	ret = fileWriter{
+		Writer: csv.NewWriter(file),
+		file:   file,
+	}
+
+	return
 }
 
 func makeFileWriters(dir string, tables []*types.Table) (fileWriters, error) {
@@ -99,6 +100,21 @@ func makeFileWriters(dir string, tables []*types.Table) (fileWriters, error) {
 		writers[tbl.Name] = w
 	}
 	return writers, nil
+}
+
+func (tx fileWriters) write(tbl *types.Table, args ...interface{}) error {
+	row := tbl.ToCsvRow(args...)
+	return tx[tbl.Name].Write(row)
+}
+
+func (tx fileWriters) close() error {
+	for _, w := range tx {
+		err := w.file.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (tx fileWriters) flush() error {
@@ -137,10 +153,10 @@ func (csw *CSVWriter) Loop() {
 		for {
 			select {
 			case row := <-csw.rows:
-				// TODO: Check available buffer size and flush
-				csw.writers.flush()
-
-				csw.writers.write(&row.table, row.values...)
+				err := csw.writers.write(&row.table, row.values...)
+				if err != nil {
+					panic(fmt.Sprintf("error writing csv buffer: %v", err))
+				}
 			case <-csw.quitChan:
 				if err := csw.writers.flush(); err != nil {
 					panic(fmt.Sprintf("error writing csv buffer to file: %v", err))
@@ -168,7 +184,7 @@ func TableFile(dir, name string) string { return filepath.Join(dir, name+".csv")
 func (csw *CSVWriter) Close() error {
 	close(csw.quitChan)
 	<-csw.doneChan
-	return nil
+	return csw.writers.close()
 }
 
 func (csw *CSVWriter) upsertNode(node nodeinfo.Info) {

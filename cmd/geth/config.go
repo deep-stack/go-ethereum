@@ -219,7 +219,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 				indexerConfig = file.Config{
 					Mode:                     fileMode,
-					OutputDir:                ctx.GlobalString(utils.StateDiffFileCsvOutput.Name),
+					OutputDir:                ctx.GlobalString(utils.StateDiffFileCsvDir.Name),
 					FilePath:                 ctx.GlobalString(utils.StateDiffFilePath.Name),
 					WatchedAddressesFilePath: ctx.GlobalString(utils.StateDiffWatchedAddressesFilePath.Name),
 				}

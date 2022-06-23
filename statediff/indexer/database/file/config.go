@@ -45,7 +45,7 @@ func ResolveFileMode(str string) (FileMode, error) {
 	}
 }
 
-// Config holds params for writing CSV files out to a directory
+// Config holds params for writing out CSV or SQL files
 type Config struct {
 	Mode                     FileMode
 	OutputDir                string
