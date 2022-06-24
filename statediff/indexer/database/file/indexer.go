@@ -81,6 +81,10 @@ func NewStateDiffIndexer(ctx context.Context, chainConfig *params.ChainConfig, c
 			outputDir = defaultOutputDir
 		}
 
+		if _, err := os.Stat(outputDir); !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("cannot create output directory, directory (%s) already exists", outputDir)
+		}
+
 		log.Info("Writing statediff CSV files to directory", "file", outputDir)
 
 		writer, err = NewCSVWriter(outputDir)

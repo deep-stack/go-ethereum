@@ -1,5 +1,5 @@
 // VulcanizeDB
-// Copyright © 2019 Vulcanize
+// Copyright © 2022 Vulcanize
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
@@ -14,12 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package sql_test
+package file_test
 
 import (
 	"context"
-	"math/big"
+	"errors"
+	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/statediff/indexer/models"
+	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -27,30 +33,40 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
-	"github.com/ethereum/go-ethereum/statediff/indexer/models"
-	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	"github.com/ethereum/go-ethereum/statediff/indexer/test_helpers"
-	sdtypes "github.com/ethereum/go-ethereum/statediff/types"
 )
 
-func setupSQLXIndexer(t *testing.T) {
-	db, err = postgres.SetupSQLXDB()
-	if err != nil {
-		t.Fatal(err)
+func setupCSVIndexer(t *testing.T) {
+	file.TestConfig.Mode = file.CSV
+	file.TestConfig.OutputDir = "./statediffing_test"
+
+	if _, err := os.Stat(file.TestConfig.OutputDir); !errors.Is(err, os.ErrNotExist) {
+		err := os.RemoveAll(file.TestConfig.OutputDir)
+		require.NoError(t, err)
 	}
-	ind, err = sql.NewStateDiffIndexer(context.Background(), mocks.TestConfig, db)
+
+	if _, err := os.Stat(file.TestConfig.WatchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.WatchedAddressesFilePath)
+		require.NoError(t, err)
+	}
+
+	ind, err = file.NewStateDiffIndexer(context.Background(), mocks.TestConfig, file.TestConfig)
 	require.NoError(t, err)
+
+	connStr := postgres.DefaultConfig.DbConnectionString()
+	sqlxdb, err = sqlx.Connect("postgres", connStr)
+	if err != nil {
+		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
+	}
 }
 
-func setupSQLX(t *testing.T) {
-	setupSQLXIndexer(t)
+func setupCSV(t *testing.T) {
+	setupCSVIndexer(t)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
 		mockBlock,
@@ -63,20 +79,23 @@ func setupSQLX(t *testing.T) {
 		if err := tx.Submit(err); err != nil {
 			t.Fatal(err)
 		}
+		if err := ind.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 	for _, node := range mocks.StateDiffs {
 		err = ind.PushStateNode(tx, node, mockBlock.Hash().String())
 		require.NoError(t, err)
 	}
 
-	require.Equal(t, mocks.BlockNumber.String(), tx.(*sql.BatchTx).BlockNumber)
+	require.Equal(t, mocks.BlockNumber.String(), tx.(*file.BatchTx).BlockNumber)
 }
 
-func TestSQLXIndexer(t *testing.T) {
+func TestCSVFileIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
-		defer tearDown(t)
-		defer checkTxClosure(t, 0, 0, 0)
+		setupCSV(t)
+		dumpCSVFileData(t)
+		defer tearDownCSV(t)
 		pgStr := `SELECT cid, td, reward, block_hash, coinbase
 				FROM eth.header_cids
 				WHERE block_number = $1`
@@ -89,10 +108,11 @@ func TestSQLXIndexer(t *testing.T) {
 			Coinbase  string `db:"coinbase"`
 		}
 		header := new(res)
-		err = db.QueryRow(context.Background(), pgStr, mocks.BlockNumber.Uint64()).(*sqlx.Row).StructScan(header)
+		err = sqlxdb.QueryRowx(pgStr, mocks.BlockNumber.Uint64()).StructScan(header)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		require.Equal(t, headerCID.String(), header.CID)
 		require.Equal(t, mocks.MockBlock.Difficulty().String(), header.TD)
 		require.Equal(t, "2000000000000021250", header.Reward)
@@ -104,7 +124,7 @@ func TestSQLXIndexer(t *testing.T) {
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 		var data []byte
-		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -112,14 +132,15 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index transaction IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
-		defer tearDown(t)
-		defer checkTxClosure(t, 0, 0, 0)
+		setupCSV(t)
+		dumpCSVFileData(t)
+		defer tearDownCSV(t)
+
 		// check that txs were properly indexed and published
 		trxs := make([]string, 0)
 		pgStr := `SELECT transaction_cids.cid FROM eth.transaction_cids INNER JOIN eth.header_cids ON (transaction_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1`
-		err = db.Select(context.Background(), &trxs, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&trxs, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -143,7 +164,7 @@ func TestSQLXIndexer(t *testing.T) {
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 			var data []byte
-			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -152,7 +173,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx1CID.String():
 				require.Equal(t, tx1, data)
 				txRes := new(txResult)
-				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -165,7 +186,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx2CID.String():
 				require.Equal(t, tx2, data)
 				txRes := new(txResult)
-				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -178,7 +199,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx3CID.String():
 				require.Equal(t, tx3, data)
 				txRes := new(txResult)
-				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -191,7 +212,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx4CID.String():
 				require.Equal(t, tx4, data)
 				txRes := new(txResult)
-				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -205,7 +226,7 @@ func TestSQLXIndexer(t *testing.T) {
 				pgStr = "SELECT cast(access_list_elements.block_number AS TEXT), access_list_elements.index, access_list_elements.tx_id, " +
 					"access_list_elements.address, access_list_elements.storage_keys FROM eth.access_list_elements " +
 					"INNER JOIN eth.transaction_cids ON (tx_id = transaction_cids.tx_hash) WHERE cid = $1 ORDER BY access_list_elements.index ASC"
-				err = db.Select(context.Background(), &accessListElementModels, pgStr, c)
+				err = sqlxdb.Select(&accessListElementModels, pgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -228,7 +249,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case trx5CID.String():
 				require.Equal(t, tx5, data)
 				txRes := new(txResult)
-				err = db.QueryRow(context.Background(), txTypeAndValueStr, c).(*sqlx.Row).StructScan(txRes)
+				err = sqlxdb.QueryRowx(txTypeAndValueStr, c).StructScan(txRes)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -243,24 +264,19 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index log IPLDs for multiple receipt of a specific block", func(t *testing.T) {
-		setupSQLX(t)
-		defer tearDown(t)
-		defer checkTxClosure(t, 0, 0, 0)
+		setupCSV(t)
+		dumpCSVFileData(t)
+		defer tearDownCSV(t)
 
 		rcts := make([]string, 0)
-		rctsPgStr := `SELECT receipt_cids.leaf_cid FROM eth.receipt_cids, eth.transaction_cids, eth.header_cids
+		pgStr := `SELECT receipt_cids.leaf_cid FROM eth.receipt_cids, eth.transaction_cids, eth.header_cids
 				WHERE receipt_cids.tx_id = transaction_cids.tx_hash
 				AND transaction_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
 				ORDER BY transaction_cids.index`
-		logsPgStr := `SELECT log_cids.index, log_cids.address, log_cids.topic0, log_cids.topic1, data FROM eth.log_cids
-    				INNER JOIN eth.receipt_cids ON (log_cids.rct_id = receipt_cids.tx_id)
-					INNER JOIN public.blocks ON (log_cids.leaf_mh_key = blocks.key)
-					WHERE receipt_cids.leaf_cid = $1 ORDER BY eth.log_cids.index ASC`
-		err = db.Select(context.Background(), &rcts, rctsPgStr, mocks.BlockNumber.Uint64())
-		require.NoError(t, err)
-		if len(rcts) != len(mocks.MockReceipts) {
-			t.Fatalf("expected %d receipts, got %d", len(mocks.MockReceipts), len(rcts))
+		err = sqlxdb.Select(&rcts, pgStr, mocks.BlockNumber.Uint64())
+		if err != nil {
+			t.Fatal(err)
 		}
 
 		type logIPLD struct {
@@ -272,9 +288,14 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 		for i := range rcts {
 			results := make([]logIPLD, 0)
-			err = db.Select(context.Background(), &results, logsPgStr, rcts[i])
+			pgStr = `SELECT log_cids.index, log_cids.address, log_cids.topic0, log_cids.topic1, data FROM eth.log_cids
+    				INNER JOIN eth.receipt_cids ON (log_cids.rct_id = receipt_cids.tx_id)
+					INNER JOIN public.blocks ON (log_cids.leaf_mh_key = blocks.key)
+					WHERE receipt_cids.leaf_cid = $1 ORDER BY eth.log_cids.index ASC`
+			err = sqlxdb.Select(&results, pgStr, rcts[i])
 			require.NoError(t, err)
 
+			// expecting MockLog1 and MockLog2 for mockReceipt4
 			expectedLogs := mocks.MockReceipts[i].Logs
 			require.Equal(t, len(expectedLogs), len(results))
 
@@ -284,12 +305,12 @@ func TestSQLXIndexer(t *testing.T) {
 				err = rlp.DecodeBytes(r.Data, &nodeElements)
 				require.NoError(t, err)
 				if len(nodeElements) == 2 {
-					logRaw, err := rlp.EncodeToBytes(&expectedLogs[idx])
+					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
 					require.NoError(t, err)
 					// 2nd element of the leaf node contains the encoded log data.
 					require.Equal(t, nodeElements[1].([]byte), logRaw)
 				} else {
-					logRaw, err := rlp.EncodeToBytes(&expectedLogs[idx])
+					logRaw, err := rlp.EncodeToBytes(expectedLogs[idx])
 					require.NoError(t, err)
 					// raw log was IPLDized
 					require.Equal(t, r.Data, logRaw)
@@ -299,9 +320,9 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index receipt IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
-		defer tearDown(t)
-		defer checkTxClosure(t, 0, 0, 0)
+		setupCSV(t)
+		dumpCSVFileData(t)
+		defer tearDownCSV(t)
 
 		// check receipts were properly indexed and published
 		rcts := make([]string, 0)
@@ -309,7 +330,7 @@ func TestSQLXIndexer(t *testing.T) {
 				WHERE receipt_cids.tx_id = transaction_cids.tx_hash
 				AND transaction_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1 order by transaction_cids.index`
-		err = db.Select(context.Background(), &rcts, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&rcts, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -326,7 +347,7 @@ func TestSQLXIndexer(t *testing.T) {
 					FROM eth.receipt_cids
 					INNER JOIN public.blocks ON (receipt_cids.leaf_mh_key = public.blocks.key)
 					WHERE receipt_cids.leaf_cid = $1`
-			err = db.Select(context.Background(), &result, pgStr, c)
+			err = sqlxdb.Select(&result, pgStr, c)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -339,7 +360,7 @@ func TestSQLXIndexer(t *testing.T) {
 			expectedRct, err := mocks.MockReceipts[idx].MarshalBinary()
 			require.NoError(t, err)
 
-			require.Equal(t, nodeElements[1].([]byte), expectedRct)
+			require.Equal(t, expectedRct, nodeElements[1].([]byte))
 
 			dc, err := cid.Decode(c)
 			if err != nil {
@@ -348,7 +369,7 @@ func TestSQLXIndexer(t *testing.T) {
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 			var data []byte
-			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -358,7 +379,7 @@ func TestSQLXIndexer(t *testing.T) {
 				require.Equal(t, rctLeaf1, data)
 				var postStatus uint64
 				pgStr = `SELECT post_status FROM eth.receipt_cids WHERE leaf_cid = $1`
-				err = db.Get(context.Background(), &postStatus, pgStr, c)
+				err = sqlxdb.Get(&postStatus, pgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -366,7 +387,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct2CID.String():
 				require.Equal(t, rctLeaf2, data)
 				var postState string
-				err = db.Get(context.Background(), &postState, postStatePgStr, c)
+				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -374,7 +395,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct3CID.String():
 				require.Equal(t, rctLeaf3, data)
 				var postState string
-				err = db.Get(context.Background(), &postState, postStatePgStr, c)
+				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -382,7 +403,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct4CID.String():
 				require.Equal(t, rctLeaf4, data)
 				var postState string
-				err = db.Get(context.Background(), &postState, postStatePgStr, c)
+				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -390,7 +411,7 @@ func TestSQLXIndexer(t *testing.T) {
 			case rct5CID.String():
 				require.Equal(t, rctLeaf5, data)
 				var postState string
-				err = db.Get(context.Background(), &postState, postStatePgStr, c)
+				err = sqlxdb.Get(&postState, postStatePgStr, c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -400,15 +421,16 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index state IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
-		defer tearDown(t)
-		defer checkTxClosure(t, 0, 0, 0)
+		setupCSV(t)
+		dumpCSVFileData(t)
+		defer tearDownCSV(t)
+
 		// check that state nodes were properly indexed and published
 		stateNodes := make([]models.StateNodeModel, 0)
 		pgStr := `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type != 3`
-		err = db.Select(context.Background(), &stateNodes, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&stateNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -421,13 +443,13 @@ func TestSQLXIndexer(t *testing.T) {
 			}
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
-			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
 			if err != nil {
 				t.Fatal(err)
 			}
-			pgStr = `SELECT * from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
+			pgStr = `SELECT cast(block_number AS TEXT), header_id, state_path, cast(balance AS TEXT), nonce, code_hash, storage_root from eth.state_accounts WHERE header_id = $1 AND state_path = $2`
 			var account models.StateAccountModel
-			err = db.Get(context.Background(), &account, pgStr, stateNode.HeaderID, stateNode.Path)
+			err = sqlxdb.Get(&account, pgStr, stateNode.HeaderID, stateNode.Path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -468,7 +490,7 @@ func TestSQLXIndexer(t *testing.T) {
 		pgStr = `SELECT state_cids.cid, state_cids.state_leaf_key, state_cids.node_type, state_cids.state_path, state_cids.header_id
 				FROM eth.state_cids INNER JOIN eth.header_cids ON (state_cids.header_id = header_cids.block_hash)
 				WHERE header_cids.block_number = $1 AND node_type = 3`
-		err = db.Select(context.Background(), &stateNodes, pgStr, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Select(&stateNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -482,7 +504,7 @@ func TestSQLXIndexer(t *testing.T) {
 			mhKey := dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
 			require.Equal(t, shared.RemovedNodeMhKey, prefixedKey)
-			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -503,9 +525,10 @@ func TestSQLXIndexer(t *testing.T) {
 	})
 
 	t.Run("Publish and index storage IPLDs in a single tx", func(t *testing.T) {
-		setupSQLX(t)
-		defer tearDown(t)
-		defer checkTxClosure(t, 0, 0, 0)
+		setupCSV(t)
+		dumpCSVFileData(t)
+		defer tearDownCSV(t)
+
 		// check that storage nodes were properly indexed
 		storageNodes := make([]models.StorageNodeWithStateKeyModel, 0)
 		pgStr := `SELECT cast(storage_cids.block_number AS TEXT), storage_cids.cid, state_cids.state_leaf_key, storage_cids.storage_leaf_key, storage_cids.node_type, storage_cids.storage_path
@@ -513,9 +536,8 @@ func TestSQLXIndexer(t *testing.T) {
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
 				AND state_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
-				AND storage_cids.node_type != 3
-				ORDER BY storage_path`
-		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())
+				AND storage_cids.node_type != 3`
+		err = sqlxdb.Select(&storageNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -535,7 +557,7 @@ func TestSQLXIndexer(t *testing.T) {
 		}
 		mhKey := dshelp.MultihashToDsKey(dc.Hash())
 		prefixedKey := blockstore.BlockPrefix.String() + mhKey.String()
-		err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+		err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -548,8 +570,9 @@ func TestSQLXIndexer(t *testing.T) {
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
 				AND state_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
-				AND storage_cids.node_type = 3`
-		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())
+				AND storage_cids.node_type = 3
+				ORDER BY storage_path`
+		err = sqlxdb.Select(&storageNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -588,343 +611,12 @@ func TestSQLXIndexer(t *testing.T) {
 			}
 			mhKey = dshelp.MultihashToDsKey(dc.Hash())
 			prefixedKey = blockstore.BlockPrefix.String() + mhKey.String()
-			require.Equal(t, shared.RemovedNodeMhKey, prefixedKey)
-			err = db.Get(context.Background(), &data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
+			require.Equal(t, shared.RemovedNodeMhKey, prefixedKey, mocks.BlockNumber.Uint64())
+			err = sqlxdb.Get(&data, ipfsPgGet, prefixedKey, mocks.BlockNumber.Uint64())
 			if err != nil {
 				t.Fatal(err)
 			}
 			require.Equal(t, []byte{}, data)
-		}
-	})
-}
-
-func TestSQLXWatchAddressMethods(t *testing.T) {
-	setupSQLXIndexer(t)
-	defer tearDown(t)
-	defer checkTxClosure(t, 0, 0, 0)
-
-	type res struct {
-		Address      string `db:"address"`
-		CreatedAt    uint64 `db:"created_at"`
-		WatchedAt    uint64 `db:"watched_at"`
-		LastFilledAt uint64 `db:"last_filled_at"`
-	}
-	pgStr := "SELECT * FROM eth_meta.watched_addresses"
-
-	t.Run("Load watched addresses (empty table)", func(t *testing.T) {
-		expectedData := []common.Address{}
-
-		rows, err := ind.LoadWatchedAddresses()
-		require.NoError(t, err)
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Insert watched addresses", func(t *testing.T) {
-		args := []sdtypes.WatchAddressArg{
-			{
-				Address:   contract1Address,
-				CreatedAt: contract1CreatedAt,
-			},
-			{
-				Address:   contract2Address,
-				CreatedAt: contract2CreatedAt,
-			},
-		}
-		expectedData := []res{
-			{
-				Address:      contract1Address,
-				CreatedAt:    contract1CreatedAt,
-				WatchedAt:    watchedAt1,
-				LastFilledAt: lastFilledAt,
-			},
-			{
-				Address:      contract2Address,
-				CreatedAt:    contract2CreatedAt,
-				WatchedAt:    watchedAt1,
-				LastFilledAt: lastFilledAt,
-			},
-		}
-
-		err = ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt1)))
-		require.NoError(t, err)
-
-		rows := []res{}
-		err = db.Select(context.Background(), &rows, pgStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Insert watched addresses (some already watched)", func(t *testing.T) {
-		args := []sdtypes.WatchAddressArg{
-			{
-				Address:   contract3Address,
-				CreatedAt: contract3CreatedAt,
-			},
-			{
-				Address:   contract2Address,
-				CreatedAt: contract2CreatedAt,
-			},
-		}
-		expectedData := []res{
-			{
-				Address:      contract1Address,
-				CreatedAt:    contract1CreatedAt,
-				WatchedAt:    watchedAt1,
-				LastFilledAt: lastFilledAt,
-			},
-			{
-				Address:      contract2Address,
-				CreatedAt:    contract2CreatedAt,
-				WatchedAt:    watchedAt1,
-				LastFilledAt: lastFilledAt,
-			},
-			{
-				Address:      contract3Address,
-				CreatedAt:    contract3CreatedAt,
-				WatchedAt:    watchedAt2,
-				LastFilledAt: lastFilledAt,
-			},
-		}
-
-		err = ind.InsertWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
-		require.NoError(t, err)
-
-		rows := []res{}
-		err = db.Select(context.Background(), &rows, pgStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Remove watched addresses", func(t *testing.T) {
-		args := []sdtypes.WatchAddressArg{
-			{
-				Address:   contract3Address,
-				CreatedAt: contract3CreatedAt,
-			},
-			{
-				Address:   contract2Address,
-				CreatedAt: contract2CreatedAt,
-			},
-		}
-		expectedData := []res{
-			{
-				Address:      contract1Address,
-				CreatedAt:    contract1CreatedAt,
-				WatchedAt:    watchedAt1,
-				LastFilledAt: lastFilledAt,
-			},
-		}
-
-		err = ind.RemoveWatchedAddresses(args)
-		require.NoError(t, err)
-
-		rows := []res{}
-		err = db.Select(context.Background(), &rows, pgStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Remove watched addresses (some non-watched)", func(t *testing.T) {
-		args := []sdtypes.WatchAddressArg{
-			{
-				Address:   contract1Address,
-				CreatedAt: contract1CreatedAt,
-			},
-			{
-				Address:   contract2Address,
-				CreatedAt: contract2CreatedAt,
-			},
-		}
-		expectedData := []res{}
-
-		err = ind.RemoveWatchedAddresses(args)
-		require.NoError(t, err)
-
-		rows := []res{}
-		err = db.Select(context.Background(), &rows, pgStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Set watched addresses", func(t *testing.T) {
-		args := []sdtypes.WatchAddressArg{
-			{
-				Address:   contract1Address,
-				CreatedAt: contract1CreatedAt,
-			},
-			{
-				Address:   contract2Address,
-				CreatedAt: contract2CreatedAt,
-			},
-			{
-				Address:   contract3Address,
-				CreatedAt: contract3CreatedAt,
-			},
-		}
-		expectedData := []res{
-			{
-				Address:      contract1Address,
-				CreatedAt:    contract1CreatedAt,
-				WatchedAt:    watchedAt2,
-				LastFilledAt: lastFilledAt,
-			},
-			{
-				Address:      contract2Address,
-				CreatedAt:    contract2CreatedAt,
-				WatchedAt:    watchedAt2,
-				LastFilledAt: lastFilledAt,
-			},
-			{
-				Address:      contract3Address,
-				CreatedAt:    contract3CreatedAt,
-				WatchedAt:    watchedAt2,
-				LastFilledAt: lastFilledAt,
-			},
-		}
-
-		err = ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt2)))
-		require.NoError(t, err)
-
-		rows := []res{}
-		err = db.Select(context.Background(), &rows, pgStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Set watched addresses (some already watched)", func(t *testing.T) {
-		args := []sdtypes.WatchAddressArg{
-			{
-				Address:   contract4Address,
-				CreatedAt: contract4CreatedAt,
-			},
-			{
-				Address:   contract2Address,
-				CreatedAt: contract2CreatedAt,
-			},
-			{
-				Address:   contract3Address,
-				CreatedAt: contract3CreatedAt,
-			},
-		}
-		expectedData := []res{
-			{
-				Address:      contract4Address,
-				CreatedAt:    contract4CreatedAt,
-				WatchedAt:    watchedAt3,
-				LastFilledAt: lastFilledAt,
-			},
-			{
-				Address:      contract2Address,
-				CreatedAt:    contract2CreatedAt,
-				WatchedAt:    watchedAt3,
-				LastFilledAt: lastFilledAt,
-			},
-			{
-				Address:      contract3Address,
-				CreatedAt:    contract3CreatedAt,
-				WatchedAt:    watchedAt3,
-				LastFilledAt: lastFilledAt,
-			},
-		}
-
-		err = ind.SetWatchedAddresses(args, big.NewInt(int64(watchedAt3)))
-		require.NoError(t, err)
-
-		rows := []res{}
-		err = db.Select(context.Background(), &rows, pgStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Load watched addresses", func(t *testing.T) {
-		expectedData := []common.Address{
-			common.HexToAddress(contract4Address),
-			common.HexToAddress(contract2Address),
-			common.HexToAddress(contract3Address),
-		}
-
-		rows, err := ind.LoadWatchedAddresses()
-		require.NoError(t, err)
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Clear watched addresses", func(t *testing.T) {
-		expectedData := []res{}
-
-		err = ind.ClearWatchedAddresses()
-		require.NoError(t, err)
-
-		rows := []res{}
-		err = db.Select(context.Background(), &rows, pgStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
-		}
-	})
-
-	t.Run("Clear watched addresses (empty table)", func(t *testing.T) {
-		expectedData := []res{}
-
-		err = ind.ClearWatchedAddresses()
-		require.NoError(t, err)
-
-		rows := []res{}
-		err = db.Select(context.Background(), &rows, pgStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		expectTrue(t, len(rows) == len(expectedData))
-		for idx, row := range rows {
-			require.Equal(t, expectedData[idx], row)
 		}
 	})
 }

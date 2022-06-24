@@ -19,34 +19,26 @@ package file_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 
-	"github.com/ipfs/go-cid"
 	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
-)
-
-var (
-	legacyData      = mocks.NewLegacyData()
-	mockLegacyBlock *types.Block
-	legacyHeaderCID cid.Cid
 )
 
 func setupLegacy(t *testing.T) {
 	mockLegacyBlock = legacyData.MockBlock
 	legacyHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, legacyData.MockHeaderRlp, multihash.KECCAK_256)
-	if _, err := os.Stat(file.TestConfig.OutputDir); !errors.Is(err, os.ErrNotExist) {
-		err := os.Remove(file.TestConfig.OutputDir)
+	file.TestConfig.Mode = file.SQL
+
+	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.TestConfig.FilePath)
 		require.NoError(t, err)
 	}
 	ind, err := file.NewStateDiffIndexer(context.Background(), legacyData.Config, file.TestConfig)
@@ -82,39 +74,17 @@ func setupLegacy(t *testing.T) {
 }
 
 func dumpFileData(t *testing.T) {
-	pgCopyStatement := `COPY %s FROM '%s' CSV`
-
-	for _, tbl := range file.Tables {
-		stm := fmt.Sprintf(pgCopyStatement, tbl.Name, file.TableFile(file.TestConfig.OutputDir, tbl.Name))
-		_, err = sqlxdb.Exec(stm)
-		require.NoError(t, err)
-	}
-}
-
-func resetAndDumpWatchedAddressesFileData(t *testing.T) {
-	resetDB(t)
-
-	sqlFileBytes, err := os.ReadFile(file.TestConfig.WatchedAddressesFilePath)
+	sqlFileBytes, err := os.ReadFile(file.TestConfig.FilePath)
 	require.NoError(t, err)
 
 	_, err = sqlxdb.Exec(string(sqlFileBytes))
 	require.NoError(t, err)
 }
 
-func resetDB(t *testing.T) {
-	file.TearDownDB(t, sqlxdb)
-
-	connStr := postgres.DefaultConfig.DbConnectionString()
-	sqlxdb, err = sqlx.Connect("postgres", connStr)
-	if err != nil {
-		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
-	}
-}
-
 func tearDown(t *testing.T) {
 	file.TearDownDB(t, sqlxdb)
 
-	err := os.RemoveAll(file.TestConfig.OutputDir)
+	err := os.Remove(file.TestConfig.FilePath)
 	require.NoError(t, err)
 
 	if err := os.Remove(file.TestConfig.WatchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {
@@ -125,13 +95,7 @@ func tearDown(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func expectTrue(t *testing.T, value bool) {
-	if !value {
-		t.Fatalf("Assertion failed")
-	}
-}
-
-func TestFileIndexerLegacy(t *testing.T) {
+func TestSQLFileIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs", func(t *testing.T) {
 		setupLegacy(t)
 		dumpFileData(t)

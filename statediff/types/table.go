@@ -60,6 +60,18 @@ func (tbl *Table) ToCsvRow(args ...interface{}) []string {
 	return row
 }
 
+func (tbl *Table) VarcharColumns() []string {
+	columns := funk.Filter(tbl.Columns, func(col column) bool {
+		return col.typ == varchar
+	}).([]column)
+
+	columnNames := funk.Map(columns, func(col column) string {
+		return col.name
+	}).([]string)
+
+	return columnNames
+}
+
 type colfmt = func(interface{}) string
 
 func sprintf(f string) colfmt {
