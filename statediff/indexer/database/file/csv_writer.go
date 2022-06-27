@@ -18,7 +18,9 @@ package file
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,7 +28,9 @@ import (
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
 	node "github.com/ipfs/go-ipld-format"
+	"github.com/thoas/go-funk"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/indexer/models"
 	nodeinfo "github.com/ethereum/go-ethereum/statediff/indexer/node"
@@ -46,6 +50,7 @@ var (
 		&types.TableReceipt,
 		&types.TableLog,
 		&types.TableStateAccount,
+		&types.TableWatchedAddresses,
 	}
 )
 
@@ -307,4 +312,128 @@ func (csw *CSVWriter) upsertStorageCID(storageCID models.StorageNodeModel) {
 	values = append(values, storageCID.BlockNumber, storageCID.HeaderID, storageCID.StatePath, storageKey, storageCID.CID,
 		storageCID.Path, storageCID.NodeType, true, storageCID.MhKey)
 	csw.rows <- tableRow{types.TableStorageNode, values}
+}
+
+// LoadWatchedAddresses loads watched addresses from a file
+func (csw *CSVWriter) loadWatchedAddresses() ([]common.Address, error) {
+	watchedAddressesFilePath := TableFile(csw.dir, types.TableWatchedAddresses.Name)
+	// load csv rows from watched addresses file
+	rows, err := loadWatchedAddressesRows(watchedAddressesFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// extract addresses from the csv rows
+	watchedAddresses := funk.Map(rows, func(row []string) common.Address {
+		// first column is for address in eth_meta.watched_addresses
+		addressString := row[0]
+
+		return common.HexToAddress(addressString)
+	}).([]common.Address)
+
+	return watchedAddresses, nil
+}
+
+// InsertWatchedAddresses inserts the given addresses in a file
+func (csw *CSVWriter) insertWatchedAddresses(args []types.WatchAddressArg, currentBlockNumber *big.Int) error {
+	// load csv rows from watched addresses file
+	watchedAddresses, err := csw.loadWatchedAddresses()
+	if err != nil {
+		return err
+	}
+
+	// append rows for new addresses to existing csv file
+	for _, arg := range args {
+		// ignore if already watched
+		if funk.Contains(watchedAddresses, common.HexToAddress(arg.Address)) {
+			continue
+		}
+
+		var values []interface{}
+		values = append(values, arg.Address, strconv.FormatUint(arg.CreatedAt, 10), currentBlockNumber.String(), "0")
+		fmt.Println("insert", values)
+		csw.rows <- tableRow{types.TableWatchedAddresses, values}
+	}
+
+	fmt.Println("writing to file", csw.writers[types.TableWatchedAddresses.Name].file.Name())
+	csw.writers[types.TableWatchedAddresses.Name].Flush()
+	err = csw.writers[types.TableWatchedAddresses.Name].Error()
+	fmt.Println("error", err)
+
+	return nil
+}
+
+// RemoveWatchedAddresses removes the given watched addresses from a file
+func (csw *CSVWriter) removeWatchedAddresses(args []types.WatchAddressArg) error {
+	// load csv rows from watched addresses file
+	watchedAddressesFilePath := TableFile(csw.dir, types.TableWatchedAddresses.Name)
+	// load csv rows from watched addresses file
+	rows, err := loadWatchedAddressesRows(watchedAddressesFilePath)
+	if err != nil {
+		return err
+	}
+
+	// get rid of rows having addresses to be removed
+	filteredRows := funk.Filter(rows, func(row []string) bool {
+		return !funk.Contains(args, func(arg types.WatchAddressArg) bool {
+			// Compare first column in table for address
+			return arg.Address == row[0]
+		})
+	}).([][]string)
+
+	return dumpWatchedAddressesRows(csw.writers, filteredRows)
+}
+
+// SetWatchedAddresses clears and inserts the given addresses in a file
+func (csw *CSVWriter) setWatchedAddresses(args []types.WatchAddressArg, currentBlockNumber *big.Int) error {
+	var rows [][]string
+	for _, arg := range args {
+		row := types.TableWatchedAddresses.ToCsvRow(arg.Address, strconv.FormatUint(arg.CreatedAt, 10), currentBlockNumber.String(), "0")
+		rows = append(rows, row)
+	}
+
+	return dumpWatchedAddressesRows(csw.writers, rows)
+}
+
+// loadCSVWatchedAddresses loads csv rows from the given file
+func loadWatchedAddressesRows(filePath string) ([][]string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return [][]string{}, nil
+		}
+
+		return nil, fmt.Errorf("error opening watched addresses file: %v", err)
+	}
+
+	defer file.Close()
+	reader := csv.NewReader(file)
+
+	return reader.ReadAll()
+}
+
+// dumpWatchedAddressesRows dumps csv rows to the given file
+func dumpWatchedAddressesRows(writers fileWriters, filteredRows [][]string) error {
+	file := writers[types.TableWatchedAddresses.Name].file
+	file.Close()
+
+	file, err := os.Create(file.Name())
+	if err != nil {
+		return fmt.Errorf("error creating watched addresses file: %v", err)
+	}
+
+	writer := fileWriter{
+		Writer: csv.NewWriter(file),
+		file:   file,
+	}
+
+	writers[types.TableWatchedAddresses.Name] = writer
+
+	for _, row := range filteredRows {
+		writer.Write(row)
+	}
+
+	writer.Flush()
+
+	return nil
 }

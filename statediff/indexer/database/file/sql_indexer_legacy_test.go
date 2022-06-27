@@ -95,7 +95,7 @@ func tearDown(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestSQLFileIndexerLegacy(t *testing.T) {
+func XTestSQLFileIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs", func(t *testing.T) {
 		setupLegacy(t)
 		dumpFileData(t)

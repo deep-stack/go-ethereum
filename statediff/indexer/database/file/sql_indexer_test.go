@@ -92,7 +92,7 @@ func setup(t *testing.T) {
 	require.Equal(t, mocks.BlockNumber.String(), tx.(*file.BatchTx).BlockNumber)
 }
 
-func TestSQLFileIndexer(t *testing.T) {
+func XTestSQLFileIndexer(t *testing.T) {
 	t.Run("Publish and index header IPLDs in a single tx", func(t *testing.T) {
 		setup(t)
 		dumpFileData(t)
@@ -621,7 +621,7 @@ func TestSQLFileIndexer(t *testing.T) {
 	})
 }
 
-func TestFileWatchAddressMethods(t *testing.T) {
+func XTestSQLFileWatchAddressMethods(t *testing.T) {
 	setupIndexer(t)
 	defer tearDown(t)
 
