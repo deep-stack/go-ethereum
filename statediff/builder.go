@@ -198,8 +198,7 @@ func (sdb *StateDiffBuilder) WriteStateDiffObject(args types2.StateRoots, params
 		},
 	}
 
-	if !params.IntermediateStateNodes || len(params.WatchedAddresses) > 0 {
-		// if we are watching only specific accounts then we are only diffing leaf nodes
+	if !params.IntermediateStateNodes {
 		return sdb.BuildStateDiffWithoutIntermediateStateNodes(iterPairs, params, output, codeOutput)
 	} else {
 		return sdb.BuildStateDiffWithIntermediateStateNodes(iterPairs, params, output, codeOutput)
@@ -211,7 +210,7 @@ func (sdb *StateDiffBuilder) BuildStateDiffWithIntermediateStateNodes(iterPairs 
 	// a map of their leafkey to all the accounts that were touched and exist at B
 	// and a slice of all the paths for the nodes in both of the above sets
 	diffAccountsAtB, diffPathsAtB, err := sdb.createdAndUpdatedStateWithIntermediateNodes(
-		iterPairs[0].Older, iterPairs[0].Newer, output)
+		iterPairs[0].Older, iterPairs[0].Newer, params.watchedAddressesLeafPaths, output)
 	if err != nil {
 		return fmt.Errorf("error collecting createdAndUpdatedNodes: %v", err)
 	}
@@ -220,7 +219,7 @@ func (sdb *StateDiffBuilder) BuildStateDiffWithIntermediateStateNodes(iterPairs 
 	// a map of their leafkey to all the accounts that were touched and exist at A
 	diffAccountsAtA, err := sdb.deletedOrUpdatedState(
 		iterPairs[1].Older, iterPairs[1].Newer,
-		diffAccountsAtB, diffPathsAtB, params.watchedAddressesLeafKeys,
+		diffAccountsAtB, diffPathsAtB, params.watchedAddressesLeafPaths,
 		params.IntermediateStateNodes, params.IntermediateStorageNodes, output)
 	if err != nil {
 		return fmt.Errorf("error collecting deletedOrUpdatedNodes: %v", err)
@@ -256,7 +255,7 @@ func (sdb *StateDiffBuilder) BuildStateDiffWithoutIntermediateStateNodes(iterPai
 	// and a slice of all the paths for the nodes in both of the above sets
 	diffAccountsAtB, diffPathsAtB, err := sdb.createdAndUpdatedState(
 		iterPairs[0].Older, iterPairs[0].Newer,
-		params.watchedAddressesLeafKeys)
+		params.watchedAddressesLeafPaths)
 	if err != nil {
 		return fmt.Errorf("error collecting createdAndUpdatedNodes: %v", err)
 	}
@@ -265,7 +264,7 @@ func (sdb *StateDiffBuilder) BuildStateDiffWithoutIntermediateStateNodes(iterPai
 	// a map of their leafkey to all the accounts that were touched and exist at A
 	diffAccountsAtA, err := sdb.deletedOrUpdatedState(
 		iterPairs[1].Older, iterPairs[1].Newer,
-		diffAccountsAtB, diffPathsAtB, params.watchedAddressesLeafKeys,
+		diffAccountsAtB, diffPathsAtB, params.watchedAddressesLeafPaths,
 		params.IntermediateStateNodes, params.IntermediateStorageNodes, output)
 	if err != nil {
 		return fmt.Errorf("error collecting deletedOrUpdatedNodes: %v", err)
@@ -299,11 +298,18 @@ func (sdb *StateDiffBuilder) BuildStateDiffWithoutIntermediateStateNodes(iterPai
 // createdAndUpdatedState returns
 // a mapping of their leafkeys to all the accounts that exist in a different state at B than A
 // and a slice of the paths for all of the nodes included in both
-func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddressesLeafKeys map[common.Hash]struct{}) (types2.AccountMap, map[string]bool, error) {
+func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddressesLeafPaths [][]byte) (types2.AccountMap, map[string]bool, error) {
 	diffPathsAtB := make(map[string]bool)
-	diffAcountsAtB := make(types2.AccountMap)
+	diffAccountsAtB := make(types2.AccountMap)
+	watchingAddresses := len(watchedAddressesLeafPaths) > 0
+
 	it, _ := trie.NewDifferenceIterator(a, b)
 	for it.Next(true) {
+		// ignore node if it is not along paths of interest
+		if watchingAddresses && !isValidPrefixPath(watchedAddressesLeafPaths, it.Path()) {
+			continue
+		}
+
 		// skip value nodes
 		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
 			continue
@@ -322,33 +328,44 @@ func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watc
 			}
 			partialPath := trie.CompactToHex(nodeElements[0].([]byte))
 			valueNodePath := append(node.Path, partialPath...)
+
+			// ignore leaf node if it is not a watched address
+			if !isWatchedAddress(watchedAddressesLeafPaths, valueNodePath) {
+				continue
+			}
+
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
-			if isWatchedAddress(watchedAddressesLeafKeys, leafKey) {
-				diffAcountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
-					NodeType:  node.NodeType,
-					Path:      node.Path,
-					NodeValue: node.NodeValue,
-					LeafKey:   leafKey,
-					Account:   &account,
-				}
+			diffAccountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
+				NodeType:  node.NodeType,
+				Path:      node.Path,
+				NodeValue: node.NodeValue,
+				LeafKey:   leafKey,
+				Account:   &account,
 			}
 		}
 		// add both intermediate and leaf node paths to the list of diffPathsAtB
 		diffPathsAtB[common.Bytes2Hex(node.Path)] = true
 	}
-	return diffAcountsAtB, diffPathsAtB, it.Error()
+	return diffAccountsAtB, diffPathsAtB, it.Error()
 }
 
 // createdAndUpdatedStateWithIntermediateNodes returns
 // a slice of all the intermediate nodes that exist in a different state at B than A
 // a mapping of their leafkeys to all the accounts that exist in a different state at B than A
 // and a slice of the paths for all of the nodes included in both
-func (sdb *StateDiffBuilder) createdAndUpdatedStateWithIntermediateNodes(a, b trie.NodeIterator, output types2.StateNodeSink) (types2.AccountMap, map[string]bool, error) {
+func (sdb *StateDiffBuilder) createdAndUpdatedStateWithIntermediateNodes(a, b trie.NodeIterator, watchedAddressesLeafPaths [][]byte, output types2.StateNodeSink) (types2.AccountMap, map[string]bool, error) {
 	diffPathsAtB := make(map[string]bool)
-	diffAcountsAtB := make(types2.AccountMap)
+	diffAccountsAtB := make(types2.AccountMap)
+	watchingAddresses := len(watchedAddressesLeafPaths) > 0
+
 	it, _ := trie.NewDifferenceIterator(a, b)
 	for it.Next(true) {
+		// ignore node if it is not along paths of interest
+		if watchingAddresses && !isValidPrefixPath(watchedAddressesLeafPaths, it.Path()) {
+			continue
+		}
+
 		// skip value nodes
 		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
 			continue
@@ -367,9 +384,15 @@ func (sdb *StateDiffBuilder) createdAndUpdatedStateWithIntermediateNodes(a, b tr
 			}
 			partialPath := trie.CompactToHex(nodeElements[0].([]byte))
 			valueNodePath := append(node.Path, partialPath...)
+
+			// ignore leaf node if it is not a watched address
+			if !isWatchedAddress(watchedAddressesLeafPaths, valueNodePath) {
+				continue
+			}
+
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
-			diffAcountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
+			diffAccountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
 				NodeType:  node.NodeType,
 				Path:      node.Path,
 				NodeValue: node.NodeValue,
@@ -392,15 +415,22 @@ func (sdb *StateDiffBuilder) createdAndUpdatedStateWithIntermediateNodes(a, b tr
 		// add both intermediate and leaf node paths to the list of diffPathsAtB
 		diffPathsAtB[common.Bytes2Hex(node.Path)] = true
 	}
-	return diffAcountsAtB, diffPathsAtB, it.Error()
+	return diffAccountsAtB, diffPathsAtB, it.Error()
 }
 
 // deletedOrUpdatedState returns a slice of all the pathes that are emptied at B
 // and a mapping of their leafkeys to all the accounts that exist in a different state at A than B
-func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAtB types2.AccountMap, diffPathsAtB map[string]bool, watchedAddressesLeafKeys map[common.Hash]struct{}, intermediateStateNodes, intermediateStorageNodes bool, output types2.StateNodeSink) (types2.AccountMap, error) {
+func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffAccountsAtB types2.AccountMap, diffPathsAtB map[string]bool, watchedAddressesLeafPaths [][]byte, intermediateStateNodes, intermediateStorageNodes bool, output types2.StateNodeSink) (types2.AccountMap, error) {
 	diffAccountAtA := make(types2.AccountMap)
+	watchingAddresses := len(watchedAddressesLeafPaths) > 0
+
 	it, _ := trie.NewDifferenceIterator(b, a)
 	for it.Next(true) {
+		// ignore node if it is not along paths of interest
+		if watchingAddresses && !isValidPrefixPath(watchedAddressesLeafPaths, it.Path()) {
+			continue
+		}
+
 		// skip value nodes
 		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
 			continue
@@ -419,50 +449,54 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 			}
 			partialPath := trie.CompactToHex(nodeElements[0].([]byte))
 			valueNodePath := append(node.Path, partialPath...)
+
+			// ignore leaf node if it is not a watched address
+			if !isWatchedAddress(watchedAddressesLeafPaths, valueNodePath) {
+				continue
+			}
+
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
-			if isWatchedAddress(watchedAddressesLeafKeys, leafKey) {
-				diffAccountAtA[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
-					NodeType:  node.NodeType,
-					Path:      node.Path,
-					NodeValue: node.NodeValue,
-					LeafKey:   leafKey,
-					Account:   &account,
+			diffAccountAtA[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
+				NodeType:  node.NodeType,
+				Path:      node.Path,
+				NodeValue: node.NodeValue,
+				LeafKey:   leafKey,
+				Account:   &account,
+			}
+			// if this node's path did not show up in diffPathsAtB
+			// that means the node at this path was deleted (or moved) in B
+			if _, ok := diffPathsAtB[common.Bytes2Hex(node.Path)]; !ok {
+				var diff types2.StateNode
+				// if this node's leaf key also did not show up in diffAccountsAtB
+				// that means the node was deleted
+				// in that case, emit an empty "removed" diff state node
+				// include empty "removed" diff storage nodes for all the storage slots
+				if _, ok := diffAccountsAtB[common.Bytes2Hex(leafKey)]; !ok {
+					diff = types2.StateNode{
+						NodeType:  types2.Removed,
+						Path:      node.Path,
+						LeafKey:   leafKey,
+						NodeValue: []byte{},
+					}
+
+					var storageDiffs []types2.StorageNode
+					err := sdb.buildRemovedAccountStorageNodes(account.Root, intermediateStorageNodes, StorageNodeAppender(&storageDiffs))
+					if err != nil {
+						return nil, fmt.Errorf("failed building storage diffs for removed node %x\r\nerror: %v", node.Path, err)
+					}
+					diff.StorageNodes = storageDiffs
+				} else {
+					// emit an empty "removed" diff with empty leaf key if the account was moved
+					diff = types2.StateNode{
+						NodeType:  types2.Removed,
+						Path:      node.Path,
+						NodeValue: []byte{},
+					}
 				}
-				// if this node's path did not show up in diffPathsAtB
-				// that means the node at this path was deleted (or moved) in B
-				if _, ok := diffPathsAtB[common.Bytes2Hex(node.Path)]; !ok {
-					var diff types2.StateNode
-					// if this node's leaf key also did not show up in diffAccountsAtB
-					// that means the node was deleted
-					// in that case, emit an empty "removed" diff state node
-					// include empty "removed" diff storage nodes for all the storage slots
-					if _, ok := diffAccountsAtB[common.Bytes2Hex(leafKey)]; !ok {
-						diff = types2.StateNode{
-							NodeType:  types2.Removed,
-							Path:      node.Path,
-							LeafKey:   leafKey,
-							NodeValue: []byte{},
-						}
 
-						var storageDiffs []types2.StorageNode
-						err := sdb.buildRemovedAccountStorageNodes(account.Root, intermediateStorageNodes, StorageNodeAppender(&storageDiffs))
-						if err != nil {
-							return nil, fmt.Errorf("failed building storage diffs for removed node %x\r\nerror: %v", node.Path, err)
-						}
-						diff.StorageNodes = storageDiffs
-					} else {
-						// emit an empty "removed" diff with empty leaf key if the account was moved
-						diff = types2.StateNode{
-							NodeType:  types2.Removed,
-							Path:      node.Path,
-							NodeValue: []byte{},
-						}
-					}
-
-					if err := output(diff); err != nil {
-						return nil, err
-					}
+				if err := output(diff); err != nil {
+					return nil, err
 				}
 			}
 		case types2.Extension, types2.Branch:
@@ -830,13 +864,29 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedStorage(a, b trie.NodeIterator, dif
 	return it.Error()
 }
 
+// isValidPrefixPath is used to check if a node at currentPath is a parent | ancestor to one of the addresses the builder is configured to watch
+func isValidPrefixPath(watchedAddressesLeafPaths [][]byte, currentPath []byte) bool {
+	for _, watchedAddressPath := range watchedAddressesLeafPaths {
+		if bytes.HasPrefix(watchedAddressPath, currentPath) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // isWatchedAddress is used to check if a state account corresponds to one of the addresses the builder is configured to watch
-func isWatchedAddress(watchedAddressesLeafKeys map[common.Hash]struct{}, stateLeafKey []byte) bool {
+func isWatchedAddress(watchedAddressesLeafPaths [][]byte, valueNodePath []byte) bool {
 	// If we aren't watching any specific addresses, we are watching everything
-	if len(watchedAddressesLeafKeys) == 0 {
+	if len(watchedAddressesLeafPaths) == 0 {
 		return true
 	}
 
-	_, ok := watchedAddressesLeafKeys[common.BytesToHash(stateLeafKey)]
-	return ok
+	for _, watchedAddressPath := range watchedAddressesLeafPaths {
+		if bytes.Equal(watchedAddressPath, valueNodePath) {
+			return true
+		}
+	}
+
+	return false
 }

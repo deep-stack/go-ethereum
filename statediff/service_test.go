@@ -146,7 +146,7 @@ func testErrorInChainEventLoop(t *testing.T) {
 		}
 	}
 
-	defaultParams.ComputeWatchedAddressesLeafKeys()
+	defaultParams.ComputeWatchedAddressesLeafPaths()
 	if !reflect.DeepEqual(builder.Params, defaultParams) {
 		t.Error("Test failure:", t.Name())
 		t.Logf("Actual params does not equal expected.\nactual:%+v\nexpected: %+v", builder.Params, defaultParams)
@@ -199,7 +199,7 @@ func testErrorInBlockLoop(t *testing.T) {
 	}()
 	service.Loop(eventsChannel)
 
-	defaultParams.ComputeWatchedAddressesLeafKeys()
+	defaultParams.ComputeWatchedAddressesLeafPaths()
 	if !reflect.DeepEqual(builder.Params, defaultParams) {
 		t.Error("Test failure:", t.Name())
 		t.Logf("Actual params does not equal expected.\nactual:%+v\nexpected: %+v", builder.Params, defaultParams)
@@ -274,7 +274,7 @@ func testErrorInStateDiffAt(t *testing.T) {
 		t.Error(err)
 	}
 
-	defaultParams.ComputeWatchedAddressesLeafKeys()
+	defaultParams.ComputeWatchedAddressesLeafPaths()
 	if !reflect.DeepEqual(builder.Params, defaultParams) {
 		t.Error("Test failure:", t.Name())
 		t.Logf("Actual params does not equal expected.\nactual:%+v\nexpected: %+v", builder.Params, defaultParams)
@@ -434,7 +434,5 @@ func testGetSyncStatus(t *testing.T) {
 		} else {
 			t.Log("Test Passed!")
 		}
-
 	}
-
 }
