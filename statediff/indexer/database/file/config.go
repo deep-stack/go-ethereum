@@ -17,12 +17,38 @@
 package file
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 )
 
-// Config holds params for writing sql statements out to a file
+// FileMode to explicitly type the mode of file writer we are using
+type FileMode string
+
+const (
+	CSV     FileMode = "CSV"
+	SQL     FileMode = "SQL"
+	Unknown FileMode = "Unknown"
+)
+
+// ResolveFileMode resolves a FileMode from a provided string
+func ResolveFileMode(str string) (FileMode, error) {
+	switch strings.ToLower(str) {
+	case "csv":
+		return CSV, nil
+	case "sql":
+		return SQL, nil
+	default:
+		return Unknown, fmt.Errorf("unrecognized file type string: %s", str)
+	}
+}
+
+// Config holds params for writing out CSV or SQL files
 type Config struct {
+	Mode                     FileMode
+	OutputDir                string
 	FilePath                 string
 	WatchedAddressesFilePath string
 	NodeInfo                 node.Info
@@ -33,15 +59,26 @@ func (c Config) Type() shared.DBType {
 	return shared.FILE
 }
 
-// TestConfig config for unit tests
-var TestConfig = Config{
+var nodeInfo = node.Info{
+	GenesisBlock: "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
+	NetworkID:    "1",
+	ChainID:      1,
+	ID:           "mockNodeID",
+	ClientName:   "go-ethereum",
+}
+
+// CSVTestConfig config for unit tests
+var CSVTestConfig = Config{
+	Mode:                     CSV,
+	OutputDir:                "./statediffing_test",
+	WatchedAddressesFilePath: "./statediffing_watched_addresses_test_file.csv",
+	NodeInfo:                 nodeInfo,
+}
+
+// SQLTestConfig config for unit tests
+var SQLTestConfig = Config{
+	Mode:                     SQL,
 	FilePath:                 "./statediffing_test_file.sql",
 	WatchedAddressesFilePath: "./statediffing_watched_addresses_test_file.sql",
-	NodeInfo: node.Info{
-		GenesisBlock: "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
-		NetworkID:    "1",
-		ChainID:      1,
-		ID:           "mockNodeID",
-		ClientName:   "go-ethereum",
-	},
+	NodeInfo:                 nodeInfo,
 }

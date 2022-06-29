@@ -22,33 +22,25 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ipfs/go-cid"
 	"github.com/jmoiron/sqlx"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/file"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/interfaces"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-	"github.com/ethereum/go-ethereum/statediff/indexer/mocks"
-)
-
-var (
-	legacyData      = mocks.NewLegacyData()
-	mockLegacyBlock *types.Block
-	legacyHeaderCID cid.Cid
 )
 
 func setupLegacy(t *testing.T) {
 	mockLegacyBlock = legacyData.MockBlock
 	legacyHeaderCID, _ = ipld.RawdataToCid(ipld.MEthHeader, legacyData.MockHeaderRlp, multihash.KECCAK_256)
-	if _, err := os.Stat(file.TestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
-		err := os.Remove(file.TestConfig.FilePath)
+
+	if _, err := os.Stat(file.SQLTestConfig.FilePath); !errors.Is(err, os.ErrNotExist) {
+		err := os.Remove(file.SQLTestConfig.FilePath)
 		require.NoError(t, err)
 	}
-	ind, err := file.NewStateDiffIndexer(context.Background(), legacyData.Config, file.TestConfig)
+	ind, err := file.NewStateDiffIndexer(context.Background(), legacyData.Config, file.SQLTestConfig)
 	require.NoError(t, err)
 	var tx interfaces.Batch
 	tx, err = ind.PushBlock(
@@ -65,6 +57,7 @@ func setupLegacy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+
 	for _, node := range legacyData.StateDiffs {
 		err = ind.PushStateNode(tx, node, legacyData.MockBlock.Hash().String())
 		require.NoError(t, err)
@@ -73,7 +66,6 @@ func setupLegacy(t *testing.T) {
 	require.Equal(t, legacyData.BlockNumber.String(), tx.(*file.BatchTx).BlockNumber)
 
 	connStr := postgres.DefaultConfig.DbConnectionString()
-
 	sqlxdb, err = sqlx.Connect("postgres", connStr)
 	if err != nil {
 		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
@@ -81,7 +73,7 @@ func setupLegacy(t *testing.T) {
 }
 
 func dumpFileData(t *testing.T) {
-	sqlFileBytes, err := os.ReadFile(file.TestConfig.FilePath)
+	sqlFileBytes, err := os.ReadFile(file.SQLTestConfig.FilePath)
 	require.NoError(t, err)
 
 	_, err = sqlxdb.Exec(string(sqlFileBytes))
@@ -91,30 +83,20 @@ func dumpFileData(t *testing.T) {
 func resetAndDumpWatchedAddressesFileData(t *testing.T) {
 	resetDB(t)
 
-	sqlFileBytes, err := os.ReadFile(file.TestConfig.WatchedAddressesFilePath)
+	sqlFileBytes, err := os.ReadFile(file.SQLTestConfig.WatchedAddressesFilePath)
 	require.NoError(t, err)
 
 	_, err = sqlxdb.Exec(string(sqlFileBytes))
 	require.NoError(t, err)
 }
 
-func resetDB(t *testing.T) {
-	file.TearDownDB(t, sqlxdb)
-
-	connStr := postgres.DefaultConfig.DbConnectionString()
-	sqlxdb, err = sqlx.Connect("postgres", connStr)
-	if err != nil {
-		t.Fatalf("failed to connect to db with connection string: %s err: %v", connStr, err)
-	}
-}
-
 func tearDown(t *testing.T) {
 	file.TearDownDB(t, sqlxdb)
 
-	err := os.Remove(file.TestConfig.FilePath)
+	err := os.Remove(file.SQLTestConfig.FilePath)
 	require.NoError(t, err)
 
-	if err := os.Remove(file.TestConfig.WatchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(file.SQLTestConfig.WatchedAddressesFilePath); !errors.Is(err, os.ErrNotExist) {
 		require.NoError(t, err)
 	}
 
@@ -122,36 +104,11 @@ func tearDown(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func expectTrue(t *testing.T, value bool) {
-	if !value {
-		t.Fatalf("Assertion failed")
-	}
-}
-
-func TestFileIndexerLegacy(t *testing.T) {
+func TestSQLFileIndexerLegacy(t *testing.T) {
 	t.Run("Publish and index header IPLDs", func(t *testing.T) {
 		setupLegacy(t)
 		dumpFileData(t)
 		defer tearDown(t)
-		pgStr := `SELECT cid, td, reward, block_hash, coinbase
-				FROM eth.header_cids
-				WHERE block_number = $1`
-		// check header was properly indexed
-		type res struct {
-			CID       string
-			TD        string
-			Reward    string
-			BlockHash string `db:"block_hash"`
-			Coinbase  string `db:"coinbase"`
-		}
-		header := new(res)
-		err = sqlxdb.QueryRowx(pgStr, legacyData.BlockNumber.Uint64()).StructScan(header)
-		require.NoError(t, err)
-
-		require.Equal(t, legacyHeaderCID.String(), header.CID)
-		require.Equal(t, legacyData.MockBlock.Difficulty().String(), header.TD)
-		require.Equal(t, "5000000000000011250", header.Reward)
-		require.Equal(t, legacyData.MockBlock.Coinbase().String(), header.Coinbase)
-		require.Nil(t, legacyData.MockHeader.BaseFee)
+		testLegacyPublishAndIndexHeaderIPLDs(t)
 	})
 }

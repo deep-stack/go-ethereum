@@ -902,9 +902,18 @@ var (
 		Name:  "statediff.db.nodeid",
 		Usage: "Node ID to use when writing state diffs to database",
 	}
+	StateDiffFileMode = cli.StringFlag{
+		Name:  "statediff.file.mode",
+		Usage: "Statediff file writing mode (current options: csv, sql)",
+		Value: "csv",
+	}
+	StateDiffFileCsvDir = cli.StringFlag{
+		Name:  "statediff.file.csvdir",
+		Usage: "Full path of output directory to write statediff data out to when operating in csv file mode",
+	}
 	StateDiffFilePath = cli.StringFlag{
 		Name:  "statediff.file.path",
-		Usage: "Full path (including filename) to write statediff data out to when operating in file mode",
+		Usage: "Full path (including filename) to write statediff data out to when operating in sql file mode",
 	}
 	StateDiffKnownGapsFilePath = cli.StringFlag{
 		Name:  "statediff.knowngapsfile.path",

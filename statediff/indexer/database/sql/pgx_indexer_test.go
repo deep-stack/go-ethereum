@@ -520,7 +520,8 @@ func TestPGXIndexer(t *testing.T) {
 				WHERE (storage_cids.state_path, storage_cids.header_id) = (state_cids.state_path, state_cids.header_id)
 				AND state_cids.header_id = header_cids.block_hash
 				AND header_cids.block_number = $1
-				AND storage_cids.node_type != 3`
+				AND storage_cids.node_type != 3
+				ORDER BY storage_path`
 		err = db.Select(context.Background(), &storageNodes, pgStr, mocks.BlockNumber.Uint64())
 		if err != nil {
 			t.Fatal(err)
