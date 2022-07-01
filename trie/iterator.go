@@ -584,11 +584,11 @@ func (it *differenceIterator) AddResolver(resolver ethdb.KeyValueReader) {
 	panic("not implemented")
 }
 
-func (it *differenceIterator) Next(bool) bool {
+func (it *differenceIterator) Next(descend bool) bool {
 	// Invariants:
 	// - We always advance at least one element in b.
 	// - At the start of this function, a's path is lexically greater than b's.
-	if !it.b.Next(true) {
+	if !it.b.Next(descend) {
 		return false
 	}
 	it.count++
@@ -601,8 +601,7 @@ func (it *differenceIterator) Next(bool) bool {
 	for {
 		switch compareNodes(it.a, it.b) {
 		case -1:
-			// b jumped past a; advance a
-			if !it.a.Next(true) {
+			if !it.a.Next(descend) {
 				it.eof = true
 				return true
 			}
@@ -613,11 +612,11 @@ func (it *differenceIterator) Next(bool) bool {
 		case 0:
 			// a and b are identical; skip this whole subtree if the nodes have hashes
 			hasHash := it.a.Hash() == common.Hash{}
-			if !it.b.Next(hasHash) {
+			if !it.b.Next(hasHash && descend) {
 				return false
 			}
 			it.count++
-			if !it.a.Next(hasHash) {
+			if !it.a.Next(hasHash && descend) {
 				it.eof = true
 				return true
 			}

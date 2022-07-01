@@ -181,7 +181,7 @@ func (lt *localTrie) getLeafKeys() ([]*nodeKey, error) {
 			continue
 		}
 
-		node, nodeElements, err := sdtrie.ResolveNode(it, lt.trieDB)
+		node, nodeElements, err := sdtrie.ResolveNode(it.Path(), it, lt.trieDB)
 		if err != nil {
 			return nil, err
 		}

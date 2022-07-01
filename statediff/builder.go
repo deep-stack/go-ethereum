@@ -110,7 +110,7 @@ func (sdb *StateDiffBuilder) buildStateTrie(it trie.NodeIterator) ([]types2.Stat
 		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
 			continue
 		}
-		node, nodeElements, err := trie_helpers.ResolveNode(it, sdb.StateCache.TrieDB())
+		node, nodeElements, err := trie_helpers.ResolveNode(it.Path(), it, sdb.StateCache.TrieDB())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -187,7 +187,7 @@ func (sdb *StateDiffBuilder) WriteStateDiffObject(args types2.StateRoots, params
 	// 		one for new/updated nodes,
 	// 		one for deleted/updated nodes;
 	// prepare 2 iterator instances for each task
-	iterPairs := []IterPair{
+	iterPair := []IterPair{
 		{
 			Older: oldTrie.NodeIterator([]byte{}),
 			Newer: newTrie.NodeIterator([]byte{}),
@@ -198,14 +198,14 @@ func (sdb *StateDiffBuilder) WriteStateDiffObject(args types2.StateRoots, params
 		},
 	}
 
-	return sdb.BuildStateDiff(iterPairs, params, output, codeOutput)
+	return sdb.BuildStateDiff(iterPair, params, output, codeOutput)
 }
 
 func (sdb *StateDiffBuilder) BuildStateDiff(iterPairs []IterPair, params Params, output types2.StateNodeSink, codeOutput types2.CodeSink) error {
 	// collect a slice of all the nodes that were touched and exist at B (B-A)
 	// a map of their leafkey to all the accounts that were touched and exist at B
 	// and a slice of all the paths for the nodes in both of the above sets
-	diffAccountsAtB, diffPathsAtB, err := sdb.createdAndUpdatedState(
+	diffAccountsAtB, diffPathsAtB, err := sdb.createdOrUpdatedState(
 		iterPairs[0].Older, iterPairs[0].Newer, params.watchedAddressesLeafPaths, params.IntermediateStateNodes, output)
 	if err != nil {
 		return fmt.Errorf("error collecting createdAndUpdatedNodes: %v", err)
@@ -246,74 +246,144 @@ func (sdb *StateDiffBuilder) BuildStateDiff(iterPairs []IterPair, params Params,
 	return nil
 }
 
-// createdAndUpdatedState returns
+// createdOrUpdatedState returns
 // a slice of all the nodes (optionally including intermediate nodes) that exist in a different state at B than A
 // a mapping of their leafkeys to all the accounts that exist in a different state at B than A
 // and a slice of the paths for all of the nodes included in both
-func (sdb *StateDiffBuilder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddressesLeafPaths [][]byte, intermediateStateNodes bool, output types2.StateNodeSink) (types2.AccountMap, map[string]bool, error) {
+func (sdb *StateDiffBuilder) createdOrUpdatedState(a, b trie.NodeIterator, watchedAddressesLeafPaths [][]byte, intermediateStateNodes bool, output types2.StateNodeSink) (types2.AccountMap, map[string]bool, error) {
 	diffPathsAtB := make(map[string]bool)
 	diffAccountsAtB := make(types2.AccountMap)
 	watchingAddresses := len(watchedAddressesLeafPaths) > 0
 
 	it, _ := trie.NewDifferenceIterator(a, b)
+
 	for it.Next(true) {
+	if it.Path() == nil {
+		it.Next(true)
+		// process root node
+	}
+
+	var descend bool
+	if bytes.Equal(it.Path(), []byte{}) {
+		descend = true
+	}
+	for it.Next(descend) {
+		descend = false
+
 		// ignore node if it is not along paths of interest
 		if watchingAddresses && !isValidPrefixPath(watchedAddressesLeafPaths, it.Path()) {
 			continue
 		}
 
-		// skip value nodes
-		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
-			continue
-		}
-		node, nodeElements, err := trie_helpers.ResolveNode(it, sdb.StateCache.TrieDB())
-		if err != nil {
+		// index node
+		// createdOrUpdatedNodeState
+		if err := sdb.createdOrUpdatedNodeState(it.Path(), it, diffAccountsAtB, diffPathsAtB, watchedAddressesLeafPaths, intermediateStateNodes, output); err != nil {
 			return nil, nil, err
 		}
-		switch node.NodeType {
-		case types2.Leaf:
-			// created vs updated is important for leaf nodes since we need to diff their storage
-			// so we need to map all changed accounts at B to their leafkey, since account can change paths but not leafkey
-			var account types.StateAccount
-			if err := rlp.DecodeBytes(nodeElements[1].([]byte), &account); err != nil {
-				return nil, nil, fmt.Errorf("error decoding account for leaf node at path %x nerror: %v", node.Path, err)
-			}
-			partialPath := trie.CompactToHex(nodeElements[0].([]byte))
-			valueNodePath := append(node.Path, partialPath...)
 
-			// ignore leaf node if it is not a watched address
-			if !isWatchedAddress(watchedAddressesLeafPaths, valueNodePath) {
-				continue
-			}
+		// traverse and process the next level of this diff subTrie
+		// createdOrUpdatedSubTrieState
+		if err := sdb.createdOrUpdatedSubTrieState(a, it.Path(), it.Hash(), diffAccountsAtB, diffPathsAtB, watchedAddressesLeafPaths, intermediateStateNodes, output); err != nil {
+			return nil, nil, err
+		}
+	}
+	return diffAccountsAtB, diffPathsAtB, it.Error()
+}
 
-			encodedPath := trie.HexToCompact(valueNodePath)
-			leafKey := encodedPath[1:]
-			diffAccountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
+func (sdb *StateDiffBuilder) createdOrUpdatedSubTrieState(a trie.NodeIterator, prefixPath []byte, hash common.Hash, diffAccountsAtB types2.AccountMap, diffPathsAtB map[string]bool, watchedAddressesLeafPaths [][]byte, intermediateStateNodes bool, output types2.StateNodeSink) error {
+	watchingAddresses := len(watchedAddressesLeafPaths) > 0
+	// create subTrie iterator for this node
+	newSubTrie, err := sdb.StateCache.OpenTrie(hash)
+	if err != nil {
+		return err
+	}
+	b := newSubTrie.NodeIterator(nil)
+	subTrieIt, _ := trie.NewDifferenceIterator(a, b)
+	// move on to the subtrie root node
+	// subtrie root node assumed to be already indexed at a higher level
+	subTrieIt.Next(true)
+
+	// descend in the first loop iteration to reach first child node
+	descend := true
+	for subTrieIt.Next(descend) {
+		// to avoid descending further
+		descend = false
+
+		// create the full node path as it.Path() doesn't include the path before subtrie root
+		nodePath := append(prefixPath, subTrieIt.Path()...)
+		// ignore node if it is not along paths of interest
+		if watchingAddresses && !isValidPrefixPath(watchedAddressesLeafPaths, subTrieIt.Path()) {
+			continue
+		}
+
+		// index node
+		// createdOrUpdatedNodeState
+		if err := sdb.createdOrUpdatedNodeState(nodePath, subTrieIt, diffAccountsAtB, diffPathsAtB, watchedAddressesLeafPaths, intermediateStateNodes, output); err != nil {
+			return err
+		}
+
+		// traverse and process the next level of this diff subTrie
+		// createdOrUpdatedSubTrieState
+		if err := sdb.createdOrUpdatedSubTrieState(a, nodePath, subTrieIt.Hash(), diffAccountsAtB, diffPathsAtB, watchedAddressesLeafPaths, intermediateStateNodes, output); err != nil {
+			return err
+		}
+	}
+	return subTrieIt.Error()
+}
+
+func (sdb *StateDiffBuilder) createdOrUpdatedNodeState(path []byte, it trie.NodeIterator, diffAccountsAtB types2.AccountMap, diffPathsAtB map[string]bool, watchedAddressesLeafPaths [][]byte, intermediateStateNodes bool, output types2.StateNodeSink) error {
+	// skip value nodes
+	if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
+		return nil
+	}
+	node, nodeElements, err := trie_helpers.ResolveNode(path, it, sdb.StateCache.TrieDB())
+	if err != nil {
+		return err
+	}
+	switch node.NodeType {
+	case types2.Leaf:
+		// created vs updated is important for leaf nodes since we need to diff their storage
+		// so we need to map all changed accounts at B to their leafkey, since account can change paths but not leafkey
+		var account types.StateAccount
+		if err := rlp.DecodeBytes(nodeElements[1].([]byte), &account); err != nil {
+			return fmt.Errorf("error decoding account for leaf node at path %x nerror: %v", node.Path, err)
+		}
+		partialPath := trie.CompactToHex(nodeElements[0].([]byte))
+		valueNodePath := append(node.Path, partialPath...)
+
+		// ignore leaf node if it is not a watched address
+		if !isWatchedAddress(watchedAddressesLeafPaths, valueNodePath) {
+			return nil
+		}
+
+		encodedPath := trie.HexToCompact(valueNodePath)
+		leafKey := encodedPath[1:]
+		diffAccountsAtB[common.Bytes2Hex(leafKey)] = types2.AccountWrapper{
+			NodeType:  node.NodeType,
+			Path:      node.Path,
+			NodeValue: node.NodeValue,
+			LeafKey:   leafKey,
+			Account:   &account,
+		}
+	case types2.Extension, types2.Branch:
+		// create a diff for any intermediate node that has changed at b
+		// created vs updated makes no difference for intermediate nodes since we do not need to diff storage
+		if intermediateStateNodes {
+			if err := output(types2.StateNode{
 				NodeType:  node.NodeType,
 				Path:      node.Path,
 				NodeValue: node.NodeValue,
-				LeafKey:   leafKey,
-				Account:   &account,
+			}); err != nil {
+				return err
 			}
-		case types2.Extension, types2.Branch:
-			// create a diff for any intermediate node that has changed at b
-			// created vs updated makes no difference for intermediate nodes since we do not need to diff storage
-			if intermediateStateNodes {
-				if err := output(types2.StateNode{
-					NodeType:  node.NodeType,
-					Path:      node.Path,
-					NodeValue: node.NodeValue,
-				}); err != nil {
-					return nil, nil, err
-				}
-			}
-		default:
-			return nil, nil, fmt.Errorf("unexpected node type %s", node.NodeType)
 		}
-		// add both intermediate and leaf node paths to the list of diffPathsAtB
-		diffPathsAtB[common.Bytes2Hex(node.Path)] = true
+	default:
+		return fmt.Errorf("unexpected node type %s", node.NodeType)
 	}
-	return diffAccountsAtB, diffPathsAtB, it.Error()
+	// add both intermediate and leaf node paths to the list of diffPathsAtB
+	diffPathsAtB[common.Bytes2Hex(node.Path)] = true
+
+	return it.Error()
 }
 
 // deletedOrUpdatedState returns a slice of all the pathes that are emptied at B
@@ -334,7 +404,7 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedState(a, b trie.NodeIterator, diffA
 			continue
 		}
 
-		node, nodeElements, err := trie_helpers.ResolveNode(it, sdb.StateCache.TrieDB())
+		node, nodeElements, err := trie_helpers.ResolveNode(it.Path(), it, sdb.StateCache.TrieDB())
 		if err != nil {
 			return nil, err
 		}
@@ -523,7 +593,7 @@ func (sdb *StateDiffBuilder) buildStorageNodesFromTrie(it trie.NodeIterator, int
 		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
 			continue
 		}
-		node, nodeElements, err := trie_helpers.ResolveNode(it, sdb.StateCache.TrieDB())
+		node, nodeElements, err := trie_helpers.ResolveNode(it.Path(), it, sdb.StateCache.TrieDB())
 		if err != nil {
 			return err
 		}
@@ -585,7 +655,7 @@ func (sdb *StateDiffBuilder) buildRemovedStorageNodesFromTrie(it trie.NodeIterat
 		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
 			continue
 		}
-		node, nodeElements, err := trie_helpers.ResolveNode(it, sdb.StateCache.TrieDB())
+		node, nodeElements, err := trie_helpers.ResolveNode(it.Path(), it, sdb.StateCache.TrieDB())
 		if err != nil {
 			return err
 		}
@@ -658,7 +728,7 @@ func (sdb *StateDiffBuilder) createdAndUpdatedStorage(a, b trie.NodeIterator, in
 		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
 			continue
 		}
-		node, nodeElements, err := trie_helpers.ResolveNode(it, sdb.StateCache.TrieDB())
+		node, nodeElements, err := trie_helpers.ResolveNode(it.Path(), it, sdb.StateCache.TrieDB())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -702,7 +772,7 @@ func (sdb *StateDiffBuilder) deletedOrUpdatedStorage(a, b trie.NodeIterator, dif
 		if it.Leaf() || bytes.Equal(nullHashBytes, it.Hash().Bytes()) {
 			continue
 		}
-		node, nodeElements, err := trie_helpers.ResolveNode(it, sdb.StateCache.TrieDB())
+		node, nodeElements, err := trie_helpers.ResolveNode(it.Path(), it, sdb.StateCache.TrieDB())
 		if err != nil {
 			return err
 		}

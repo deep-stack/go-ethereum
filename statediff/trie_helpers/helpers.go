@@ -52,9 +52,9 @@ func CheckKeyType(elements []interface{}) (types.NodeType, error) {
 }
 
 // ResolveNode return the state diff node pointed by the iterator.
-func ResolveNode(it trie.NodeIterator, trieDB *trie.Database) (types.StateNode, []interface{}, error) {
-	nodePath := make([]byte, len(it.Path()))
-	copy(nodePath, it.Path())
+func ResolveNode(path []byte, it trie.NodeIterator, trieDB *trie.Database) (types.StateNode, []interface{}, error) {
+	nodePath := make([]byte, len(path))
+	copy(nodePath, path)
 	node, err := trieDB.Node(it.Hash())
 	if err != nil {
 		return types.StateNode{}, nil, err
