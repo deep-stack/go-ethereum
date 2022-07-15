@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/shared"
 	types2 "github.com/ethereum/go-ethereum/statediff/types"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/sirupsen/logrus"
 	"github.com/thoas/go-funk"
 )
 
@@ -777,6 +778,8 @@ func (sds *Service) StreamCodeAndCodeHash(blockNumber uint64, outChan chan<- typ
 // This operation cannot be performed back past the point of db pruning; it requires an archival node
 // for historical data
 func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
+	logrus.Info("Serving WriteStateDiffAt call for block number", strconv.FormatUint(blockNumber, 10))
+	logrus.Info("WriteStateDiffAt params", params)
 	// compute leaf paths of watched addresses in the params
 	params.ComputeWatchedAddressesLeafPaths()
 
@@ -786,13 +789,21 @@ func (sds *Service) WriteStateDiffAt(blockNumber uint64, params Params) error {
 		parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
 		parentRoot = parentBlock.Root()
 	}
-	return sds.writeStateDiffWithRetry(currentBlock, parentRoot, params)
+	err := sds.writeStateDiffWithRetry(currentBlock, parentRoot, params)
+
+	logrus.Info("Completed WriteStateDiffAt call for block number", strconv.FormatUint(blockNumber, 10))
+	if err != nil {
+		logrus.Info("err", err.Error())
+	}
+	return err
 }
 
 // WriteStateDiffFor writes a state diff for the specific blockhash directly to the database
 // This operation cannot be performed back past the point of db pruning; it requires an archival node
 // for historical data
 func (sds *Service) WriteStateDiffFor(blockHash common.Hash, params Params) error {
+	logrus.Info("Serving WriteStateDiffFor call for block hash", blockHash.String())
+	logrus.Info("WriteStateDiffFor params", params)
 	// compute leaf paths of watched addresses in the params
 	params.ComputeWatchedAddressesLeafPaths()
 
@@ -802,7 +813,13 @@ func (sds *Service) WriteStateDiffFor(blockHash common.Hash, params Params) erro
 		parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
 		parentRoot = parentBlock.Root()
 	}
-	return sds.writeStateDiffWithRetry(currentBlock, parentRoot, params)
+	err := sds.writeStateDiffWithRetry(currentBlock, parentRoot, params)
+
+	logrus.Info("Completed WriteStateDiffFor call for block hash", blockHash.String())
+	if err != nil {
+		logrus.Info("err", err.Error())
+	}
+	return err
 }
 
 // Writes a state diff from the current block, parent state root, and provided params
